@@ -1,52 +1,33 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { fetchMe, type MeResult } from "@/lib/api/backend";
+import { ServiceUnavailable } from "@/components/onboarding/service-unavailable";
+import { fetchMe, fetchMyConsent } from "@/lib/api/backend";
 import { signOut } from "@/lib/auth/actions";
-import { createClient } from "@/lib/supabase/server";
+import { getVerifiedSession } from "@/lib/auth/session";
+import { requiredOnboardingStep } from "@/lib/onboarding/steps";
 
 export const metadata: Metadata = { title: "Dashboard · AI Wellness Egypt" };
 
-function ApiStatus({ result }: { result: MeResult }) {
-  if (result.status === "ok") {
-    return (
-      <p role="status" className="text-sm">
-        ✓ Your session was verified by the AI Wellness Egypt API.
-      </p>
-    );
-  }
-  if (result.status === "unauthorized") {
-    return (
-      <p role="alert" className="text-sm text-red-800">
-        The API could not verify your session. Please sign out and sign in again.
-      </p>
-    );
-  }
-  return (
-    <p role="status" className="text-sm text-calm-700">
-      The API server can&apos;t be reached right now, so your session couldn&apos;t be checked
-      there. You&apos;re still signed in.
-    </p>
-  );
-}
-
 export default async function DashboardPage() {
-  const supabase = await createClient();
   // The proxy already guards this route; check again here in case the
   // proxy is bypassed or misconfigured.
-  const { data } = supabase ? await supabase.auth.getClaims() : { data: null };
-  const claims = data?.claims;
-  if (!supabase || typeof claims?.sub !== "string") {
-    redirect("/sign-in?next=/dashboard");
-  }
+  const session = await getVerifiedSession();
+  if (!session) redirect("/sign-in?next=/dashboard");
 
-  // getClaims() has verified the session, so its access token can be
-  // forwarded to the API, which verifies it again independently.
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const api: MeResult = session ? await fetchMe(session.access_token) : { status: "unauthorized" };
-  const email = api.status === "ok" ? api.me.email : typeof claims.email === "string" ? claims.email : null;
+  // Consent gate: nothing below is shown until the API confirms that the
+  // current consent version has been accepted. Fails closed.
+  const consent = await fetchMyConsent(session.accessToken);
+  if (!consent.ok) {
+    if (consent.status === 401) redirect("/sign-in?next=/dashboard");
+    return <ServiceUnavailable />;
+  }
+  const step = requiredOnboardingStep(consent.data.status);
+  if (step) redirect(step);
+
+  const me = await fetchMe(session.accessToken);
+  if (me.status !== "ok") return <ServiceUnavailable />;
+  const name = me.me.display_name;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-8 px-6 py-16">
@@ -55,16 +36,24 @@ export default async function DashboardPage() {
         <h1 className="text-3xl font-bold">أهلاً بيك</h1>
       </header>
 
-      <section lang="en" dir="ltr" className="space-y-3 rounded-lg border border-calm-100 bg-white p-5 text-left">
-        <h2 className="text-xl font-semibold">Welcome</h2>
-        {email ? (
+      <section
+        lang="en"
+        dir="ltr"
+        className="space-y-3 rounded-lg border border-calm-100 bg-white p-5 text-left"
+      >
+        <h2 className="text-xl font-semibold">
+          Welcome{name ? <span dir="auto">, {name}</span> : null}
+        </h2>
+        {me.me.email ? (
           <p>
-            You&apos;re signed in as <span className="font-medium">{email}</span>.
+            You&apos;re signed in as <span className="font-medium">{me.me.email}</span>.
           </p>
         ) : (
           <p>You&apos;re signed in.</p>
         )}
-        <ApiStatus result={api} />
+        <p role="status" className="text-sm">
+          ✓ Your session was verified by the AI Wellness Egypt API.
+        </p>
         <p className="text-sm text-calm-700">
           This is a placeholder. Wellness features will appear here in later releases.
         </p>

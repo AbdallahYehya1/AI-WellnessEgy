@@ -19,6 +19,21 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: wellness_test
+          POSTGRES_USER: wellness
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wellness -d wellness_test"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      # Throwaway CI database; the tests run the real Alembic migrations on it.
+      TEST_DATABASE_URL: postgresql://wellness:ci-only-password@localhost:5432/wellness_test
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -95,10 +110,14 @@ jobs:
       - name: Validate Compose file
         run: docker compose config --quiet
       - name: Build and start API
-        run: docker compose up --build --detach --wait --wait-timeout 60
+        run: docker compose up --build --detach --wait --wait-timeout 180
       - name: Health check
         run: |
           test "$(curl --fail --silent http://127.0.0.1:8000/health)" = '{"status":"ok"}'
+      - name: Migration ran and public consent version is served
+        run: |
+          test "$(docker compose ps -a --format '{{.Service}} {{.ExitCode}}' | grep '^migrate ')" = "migrate 0"
+          curl --fail --silent http://127.0.0.1:8000/consents/current | grep -q '"version"'
       - name: Protected endpoint rejects anonymous calls and fails closed without Supabase
         run: |
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \

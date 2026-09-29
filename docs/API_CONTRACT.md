@@ -1,6 +1,8 @@
 # API Contract (Phase 1 / Validation Slice) — Mental Health & Wellness Platform
 
-> **Imported source document (2026-09-29), updated for M2.** Copied from the pre-repository planning pass. The **Health** and **Identity** sections were updated in M2 to match the implementation. As of M2, only `GET /health` and `GET /me` are implemented; every other endpoint below is a planned contract, not working code.
+> **Imported source document (2026-09-29), updated for M2 and M3.** Copied from the pre-repository planning pass. The **Health**, **Identity**, **Profile** and **Consents** sections now match the implementation. Implemented as of M3: `GET /health`, `GET /me`, `GET/PATCH /profile`, `GET /consents/current`, `GET /consents/me` and `POST /consents`. Every other endpoint below is a planned contract, not working code.
+>
+> **Validation errors (M3):** `422` with `{"error": {"code": "validation_failed", "message": ..., "fields": [{"field": ..., "message": ...}]}}`. Submitted values are never echoed back. `503 service_unavailable` means the database is not configured or not reachable.
 
 **Depends on:** `ARCHITECTURE.md`, `DATA_MODEL.md`, `Architecture_V2_Phase_1_Build_Spec` §13
 (this document's endpoint list and naming now matches V2 §13 exactly — see
@@ -27,11 +29,12 @@ must match, not a replacement for it.
 
 ## Identity
 
-### GET /me  *(implemented in M2)*
-- **Response 200:** `{ "user_id": uuid, "email": str | null }`
-  - `user_id` is the Supabase Auth user id (the token's `sub`). M2 has no application
-    `users` table, so profile fields (`display_name`, `created_at`, …) arrive with the
-    profile milestone.
+### GET /me  *(implemented in M2, extended in M3)*
+- **Response 200:** `{ "user_id": uuid, "supabase_user_id": uuid, "email": str | null, "display_name": str | null, "created_at": datetime }`
+  - `user_id` is the app-side profile id (`app.users.id`). `supabase_user_id` is the token's
+    `sub`. `email` comes from the verified token and is **not** stored by this service.
+  - The first authenticated call creates the profile row (audited as `user.created`).
+    Consent is **not** recorded by this.
 - **Auth:** required: `Authorization: Bearer <supabase_access_token>`. Identity comes only
   from the verified token. Any user id sent in the query, body or headers is ignored.
 - **Token checks:** signature (ES256/RS256 via the project JWKS at
@@ -52,32 +55,75 @@ must match, not a replacement for it.
 
 ## Profile
 
+*Implemented in M3. Both endpoints are self-only by construction: the profile is always
+the one belonging to the verified token's `sub`, and there is no user id in the path,
+query or body.*
+
 ### GET /profile
-- **Response 200:** `{ user_id, display_name, goals: [str], preferences: {...}, created_at }`
-- **Auth:** required (self only)
+- **Response 200:** `{ user_id, display_name: str | null, goals: [str], preferences: {...}, created_at, updated_at }`
+- **Auth:** required (self only). Creates the profile on first use, as `/me` does.
+- **Errors:** `401 unauthorized`, `403 account_unavailable` (profile soft-deleted),
+  `503 auth_unavailable | service_unavailable`
 
 ### PATCH /profile
-- **Request:** `{ display_name?: str, goals?: [str], preferences?: {...} }`
-- **Response 200:** updated profile
+- **Request:** `{ display_name?: str | null, goals?: [str], preferences?: {...} }`. Omitted
+  fields are unchanged. **Unknown fields are rejected (422)**, including `user_id`,
+  `supabase_user_id` and `email`.
+  - `display_name`: trimmed, 1–50 characters, no control or format characters. `null`
+    clears it.
+  - `goals`: must come from the controlled vocabulary. **No vocabulary is approved yet
+    (OPEN_DECISIONS D-22)**, so only `[]` is accepted.
+  - `preferences`: **no keys are defined yet (D-23)**, so only `{}` is accepted.
+- **Response 200:** the updated profile. A change is audited as `user.profile_updated`,
+  with the changed field **names** only.
 - **Auth:** required (self only)
+- **Errors:** `401`, `403 account_unavailable`, `422 validation_failed`, `503`
 
 ---
 
 ## Consents
 
+*Implemented in M3.* Consent is only ever an explicit user decision; creating an account
+records nothing. A decision applies to exactly one published version.
+
 ### GET /consents/current
-- **Response 200:** `{ version: str, published_at: datetime, summary_url: str }`
-- **Auth:** none
+- **Response 200:** `{ version: str, consent_type: "required", published_at: datetime, summary_url: str, pending_legal_review: bool }`
+- **Auth:** none (contains no user data)
+- The current version is `2026-09-29.draft-1`, a **placeholder** with
+  `pending_legal_review: true`. No legal text exists yet (D-11, D-24).
+
+### GET /consents/me  *(added in M3)*
+- **Response 200:** `{ current_version: str, status: "missing" | "granted" | "declined" | "outdated", recorded_version: str | null, recorded_at: datetime | null }`
+  - `missing`: no decision recorded.
+  - `granted` / `declined`: the latest decision is for the current version.
+  - `outdated`: the latest decision is for an older version. It is **never** carried over to
+    the current version; the user must accept the new version explicitly.
+- **Auth:** required (self only)
+- This was added because the frontend needs the caller's own status to gate the app. The
+  imported contract listed no read endpoint (see the note it carried about M3).
 
 ### POST /consents
-- **Request:** `{ version: str, granted: bool, consent_type: "required" | "optional" }`
-- **Response 201:** `{ consent_id: uuid, recorded_at: datetime }`
+- **Request:** `{ version: str, granted: bool, consent_type: "required" | "optional" }`.
+  `granted` must be a real JSON boolean ("yes" or 1 are rejected). Unknown fields are
+  rejected.
+- **Response 201:** `{ consent_id: uuid, version: str, granted: bool, recorded_at: datetime }`.
+  A new append-only record, audited as `consent.recorded` (metadata: version, type, granted).
+- **Response 200:** same body, returned when the submission repeats the caller's latest
+  decision for that version. Nothing new is stored or audited (idempotent). Concurrent
+  duplicates are serialised per user.
 - **Auth:** required
-- **Errors:** `401 unauthorized`, `422 unknown_version`
+- **Errors:** `401 unauthorized`; `422 unknown_version` (never published, or an `optional`
+  consent, since none is published yet: D-25); `422 consent_version_not_current` (a
+  superseded version); `422 validation_failed`; `503`.
+- Withdrawal applies only to `optional` consents, of which none exist yet, so there is no
+  withdrawal endpoint in M3 (D-25). Declining the required consent is recorded as
+  `granted: false`.
 
-*(Listing a user's own consent history and withdrawing an optional consent are needed before
-Milestone 3 ships but aren't in V2 §13's initial endpoint list — flagged for confirmation
-during Milestone 3 planning rather than added here speculatively.)*
+### Consent gate (server-side)
+- Endpoints that need consent depend on `app.consent.dependencies.ConsentedUser`, which
+  returns **`403 consent_required`** unless the caller's latest required decision is
+  `granted` for the **current** version. M3 has no such feature endpoints yet; the gate is
+  covered by tests, and the frontend applies the same rule before showing the dashboard.
 
 ---
 

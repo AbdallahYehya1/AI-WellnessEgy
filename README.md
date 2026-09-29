@@ -15,8 +15,9 @@ planned for later.
 > ([docs/OPEN_DECISIONS.md](docs/OPEN_DECISIONS.md)). The service is for **adults (18+)
 > only**.
 
-**Current status:** Milestone 2 (Supabase email/password authentication). No wellness
-features exist yet. See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+**Current status:** Milestone 3 (consent and user-profile foundation). Built on M2 (Supabase
+email/password authentication). No wellness features exist yet. See
+[docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
 ---
 
@@ -27,13 +28,14 @@ The system is a **modular monolith**: no microservices and no multi-agent AI.
 | Layer | Stack |
 |---|---|
 | Frontend | Next.js 16 (App Router), TypeScript (strict), Tailwind CSS 4, `@supabase/ssr` |
-| Backend | Python 3.12, FastAPI, Pydantic, PyJWT |
+| Backend | Python 3.12, FastAPI, Pydantic, PyJWT, SQLAlchemy 2 + Alembic, psycopg 3 |
 | Auth | Supabase Auth (email/password, required email confirmation) |
-| Planned | Supabase PostgreSQL, SQLAlchemy + Alembic, pgvector (approved knowledge only), Redis only when there is a real need |
+| Database | PostgreSQL 17: Supabase in the cloud, a local container for dev, test and CI. App tables live in schema `app`. |
+| Planned | pgvector (approved knowledge only), Redis only when there is a real need |
 | Ops | Docker, Docker Compose, GitHub Actions |
 
-Backend modules live in `backend/app/`. `core`, `common`, `auth` and `users` contain code;
-the rest are boundaries only:
+Backend modules live in `backend/app/`. `core`, `common`, `auth`, `users`, `consent` and
+`audit` contain code; the rest are boundaries only:
 
 ```text
 core  auth  users  consent  conversations
@@ -42,7 +44,9 @@ safety  knowledge  memory  mood  wellness  journal  analytics  audit  common
 ```
 
 Every future chat message must pass through this pipeline, in this order. There is never a
-direct `request → LLM` path. M2 implements the first step, authentication.
+direct `request → LLM` path. M2 implemented authentication and authorisation (identity
+from the verified token). M3 adds the consent check (`ConsentedUser`, which answers 403
+until the current consent version is accepted).
 
 ```text
 request → authentication → authorization → consent/policy checks
@@ -74,14 +78,36 @@ Sign out ──(Server Action: signOut)──▶ cookies cleared ──▶ /sign
   token-derived identity. Every failure is a uniform `401`; if Supabase isn't configured,
   it fails closed with `503`.
 
+## Onboarding, profile and consent (M3)
+
+```text
+sign-in / email confirmation ─▶ /dashboard ─(GET /consents/me)─▶ status?
+   missing  ─▶ /onboarding          (optional display name, can be skipped)
+            ─▶ /onboarding/consent  (read, tick the box, "Agree and continue")
+   declined / outdated ─▶ /onboarding/consent
+   granted  ─▶ dashboard
+```
+
+- **Profile** (`GET/PATCH /profile`) is created on the first authenticated request and is
+  keyed only on the verified Supabase `sub`. There is no way to address another user's
+  profile.
+- **Consent is always explicit.** Creating an account records nothing. The user must tick a
+  box and press "Agree"; declining is recorded too. A decision covers exactly one version.
+  When a new version is published, everyone's status becomes `outdated` until they
+  accept again.
+- **Audit:** profile creation, profile changes (field names only) and every consent
+  decision are written to the append-only `audit_events` table, in the same transaction.
+- The current consent text is a **draft placeholder** pending legal review (OPEN_DECISIONS
+  D-24), shown with a prominent "DRAFT, NOT FINAL" notice.
+
 ## Repository layout
 
 ```text
-backend/     FastAPI app (app/), tests (tests/), pyproject.toml, Dockerfile
+backend/     FastAPI app (app/), Alembic (alembic.ini, migrations/), tests/, Dockerfile
 frontend/    Next.js app (app/, components/, lib/, proxy.ts), Vitest tests (*.test.ts[x])
 docs/        Architecture, contracts, open decisions, implementation status
 .github/     CI workflow
-docker-compose.yml   Local dev: API only
+docker-compose.yml   Local dev: Postgres 17, one-shot migrations, API
 .env.example         Server-only settings (backend / Compose)
 ```
 
@@ -127,16 +153,24 @@ source .venv/bin/activate          # Windows (Git Bash): source .venv/Scripts/ac
 pip install -e ".[dev]"
 cp ../.env.example .env            # then set SUPABASE_URL
 
+# Database: start the local Postgres, then apply migrations
+docker compose up -d db            # from the repository root
+# in backend/.env: DATABASE_URL=postgresql://wellness:local-dev-only@127.0.0.1:5432/wellness
+alembic upgrade head
+
 uvicorn app.main:app --reload      # add --port 8001 if 8000 is taken
 
-python -m pytest -q                # tests + coverage (no network, no real credentials)
+python -m pytest -q                # starts a throwaway Postgres 17 via Docker (testcontainers),
+                                   # or uses TEST_DATABASE_URL if set; no real credentials needed
 ruff check .
 ruff format --check .
 mypy app --show-error-codes        # strict (CI also checks tests/)
 ```
 
 - `GET /health` returns exactly `{"status": "ok"}`.
-- `GET /me` needs `Authorization: Bearer <Supabase access token>`.
+- `GET /me`, `/profile` and `/consents/me` need `Authorization: Bearer <Supabase access token>`.
+  `GET /consents/current` is public.
+- Without `DATABASE_URL`, profile and consent endpoints return `503` (fail closed).
 - Interactive API docs are turned off when `ENVIRONMENT=production`.
 
 ## Frontend
@@ -162,16 +196,19 @@ docker compose up --build        # API on http://127.0.0.1:8000
 API_PORT=8001 docker compose up  # if port 8000 is already taken
 ```
 
-Compose runs the API only and reads `SUPABASE_URL` from the root `.env`.
+Compose runs Postgres, applies migrations once (`migrate` service), then starts the API.
+It reads `SUPABASE_URL` from the root `.env`. The local database password is a
+development-only value (`LOCAL_DB_PASSWORD`), and Postgres binds to `127.0.0.1`.
 
 ## CI
 
 `.github/workflows/ci.yml` runs on every pull request and on every push to `main`:
 
-- **backend:** ruff lint, ruff format check, mypy (strict), pytest, all on Python 3.12
+- **backend:** ruff lint, ruff format check, mypy (strict), pytest against a Postgres 17
+  service container, all on Python 3.12
 - **frontend:** `npm ci`, lint, typecheck, Vitest, production build, on Node 22
 - **guards:** no tracked `.env` files; no server-only secret names in `frontend/`; no
   secret-looking `NEXT_PUBLIC_` variables
-- **docker:** `docker compose config`, image build, container start, `/health` returns
-  exactly `{"status":"ok"}`, and `/me` returns 401 anonymously and 503 without Supabase
-  configuration
+- **docker:** `docker compose config`, image build, Postgres, migrations (must exit 0),
+  API start, `/health` returns exactly `{"status":"ok"}`, `/consents/current` is served,
+  and `/me` returns 401 anonymously and 503 without Supabase configuration

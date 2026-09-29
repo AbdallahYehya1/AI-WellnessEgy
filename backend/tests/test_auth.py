@@ -79,7 +79,10 @@ def test_valid_token_resolves_expected_principal(key: SigningKey) -> None:
 def test_me_returns_identity_from_token() -> None:
     response = get_me(make_token())
     assert response.status_code == 200
-    assert response.json() == {"user_id": USER_ID, "email": EMAIL}
+    body = response.json()
+    assert body["supabase_user_id"] == USER_ID
+    assert body["email"] == EMAIL
+    assert body["user_id"] != USER_ID  # app profile id, distinct from the Supabase id
 
 
 def test_me_ignores_client_supplied_identity() -> None:
@@ -90,19 +93,21 @@ def test_me_ignores_client_supplied_identity() -> None:
         headers={"X-User-Id": other, "X-Supabase-User": other},
     )
     assert response.status_code == 200
-    assert response.json()["user_id"] == USER_ID
+    assert response.json()["supabase_user_id"] == USER_ID
 
 
 def test_me_for_a_different_user_returns_that_users_identity() -> None:
     other = new_uuid()
     response = get_me(make_token(sub=other, email="other@example.com"))
-    assert response.json() == {"user_id": other, "email": "other@example.com"}
+    body = response.json()
+    assert (body["supabase_user_id"], body["email"]) == (other, "other@example.com")
 
 
 def test_token_without_email_is_accepted() -> None:
     response = get_me(make_token(email=None))
     assert response.status_code == 200
-    assert response.json() == {"user_id": USER_ID, "email": None}
+    assert response.json()["supabase_user_id"] == USER_ID
+    assert response.json()["email"] is None
 
 
 def test_small_clock_skew_is_tolerated() -> None:
@@ -118,7 +123,7 @@ def test_legacy_hs256_token_accepted_only_when_secret_configured() -> None:
     settings = auth_settings(supabase_jwt_secret=LEGACY_SECRET)
     response = get_me(make_hs256_token(), client_for(settings))
     assert response.status_code == 200
-    assert response.json()["user_id"] == USER_ID
+    assert response.json()["supabase_user_id"] == USER_ID
 
 
 # --- Missing / malformed ------------------------------------------------------

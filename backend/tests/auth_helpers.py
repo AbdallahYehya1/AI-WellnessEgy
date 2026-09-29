@@ -6,17 +6,21 @@ No network access and no real Supabase credentials are involved.
 from __future__ import annotations
 
 import json
+import os
 import time
 import uuid
 from typing import Any
 
 import jwt
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from fastapi.testclient import TestClient
 from jwt import PyJWK, PyJWKSet
 from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 
 from app.auth.tokens import SupabaseTokenVerifier
+from app.consent.catalog import ConsentCatalog
 from app.core.config import Settings
+from app.main import create_app
 
 SUPABASE_URL = "https://test-project.supabase.co"
 ISSUER = f"{SUPABASE_URL}/auth/v1"
@@ -99,7 +103,12 @@ def make_hs256_token(secret: str = LEGACY_SECRET, **overrides: Any) -> str:
 
 
 def auth_settings(**overrides: Any) -> Settings:
-    values: dict[str, Any] = {"environment": "test", "supabase_url": SUPABASE_URL}
+    """Settings for an app with Supabase auth and the test database configured."""
+    values: dict[str, Any] = {
+        "environment": "test",
+        "supabase_url": SUPABASE_URL,
+        "database_url": os.environ["TEST_DATABASE_URL"],
+    }
     values.update(overrides)
     return Settings(**values)
 
@@ -112,3 +121,21 @@ def fake_verifier(settings: Settings | None = None, *keys: SigningKey) -> Supaba
 
 def new_uuid() -> str:
     return str(uuid.uuid4())
+
+
+USER_B_ID = "2c4e6a80-1b3d-4f5a-8c7e-9d0f1a2b3c4d"
+EMAIL_B = "other-person@example.com"
+
+
+def bearer(sub: str = USER_ID, email: str | None = EMAIL, **overrides: Any) -> dict[str, str]:
+    """Authorization header for a valid token belonging to `sub`."""
+    return {"Authorization": f"Bearer {make_token(sub=sub, email=email, **overrides)}"}
+
+
+def api_client(
+    settings: Settings | None = None, consent_catalog: ConsentCatalog | None = None
+) -> TestClient:
+    settings = settings or auth_settings()
+    return TestClient(
+        create_app(settings, fake_verifier(settings), consent_catalog=consent_catalog)
+    )

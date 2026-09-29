@@ -13,6 +13,8 @@ RUN useradd --create-home --uid 10001 appuser
 COPY pyproject.toml ./
 COPY app ./app
 RUN pip install .
+COPY alembic.ini ./
+COPY migrations ./migrations
 
 USER appuser
 

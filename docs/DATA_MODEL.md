@@ -1,6 +1,16 @@
 # Data Model — Mental Health & Wellness Platform
 
-> **Imported source document (2026-09-29).** Copied unchanged from the pre-repository planning pass, apart from this note. Planned model only. No database models or migrations exist as of Milestone 1. Retention values are pending legal/clinical review (`OPEN_DECISIONS.md`).
+> **Imported source document (2026-09-29), updated for M3.** Copied from the pre-repository planning pass. Retention values are pending legal/clinical review (`OPEN_DECISIONS.md`).
+>
+> **Implemented in M3** (Alembic revision `0001`, all in the dedicated Postgres schema **`app`**, with RLS enabled): `users`, `consents` and `audit_events`, with exactly the fields below. Implementation details that go beyond this document:
+> - `users.display_name` is at most 50 characters (DB check).
+> - `goals` must be a JSON array and `preferences` a JSON object (DB checks). The application allows only `[]` and `{}` until the vocabulary and keys are decided (D-22, D-23).
+> - `consents.consent_type` is a text column with a check constraint (`required`/`optional`). `withdrawn_at` is only allowed for `optional`. `recorded_at` uses `clock_timestamp()`.
+> - `audit_events` is append-only **in the database** (a trigger rejects UPDATE and DELETE). Its metadata is restricted in code to reference tokens (versions, enum values, field names, UUIDs, booleans, integers).
+> - Foreign keys to `users` are `ON DELETE RESTRICT`; users are soft-deleted (`deleted_at`), never hard-deleted by the app.
+> - `users.supabase_user_id` has no database FK to Supabase's `auth.users`, so the same migration also runs on plain Postgres (D-27).
+>
+> Every other table below is still a plan.
 
 **Depends on:** `ARCHITECTURE.md` §5 (Database Overview), `Architecture_V2_Phase_1_Build_Spec`
 §7 (Core Data Model) — this document is the field-level detail for V2's entity list, kept

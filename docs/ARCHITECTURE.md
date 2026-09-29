@@ -1,6 +1,6 @@
 # Architecture — Mental Health & Wellness Platform
 
-> **Imported source document (2026-09-29).** Copied unchanged from the pre-repository planning pass, apart from this note. Where this document shows Redis, Celery workers, or a Postgres/Redis/worker Compose stack as part of Phase 1, the approved architecture overrides it: Redis only when there is a real need, no background workers yet, and Supabase PostgreSQL rather than a local database container. Milestone 1's Compose file runs the API only. See `OPEN_DECISIONS.md` (D-1).
+> **Imported source document (2026-09-29).** Copied unchanged from the pre-repository planning pass, apart from this note. Where this document shows Redis, Celery workers, or a Postgres/Redis/worker Compose stack as part of Phase 1, the approved architecture overrides it: Redis only when there is a real need, no background workers yet, and Supabase PostgreSQL rather than a local database container. Milestone 1's Compose file ran the API only. Since M3 it also runs a local Postgres 17 (a stand-in for Supabase Postgres, D-4) and a one-shot migration step. See `OPEN_DECISIONS.md` (D-1).
 
 **Depends on:** `SME_COUNCIL_DECISIONS.md`, `PHASE_1_IMPLEMENTATION_PLAN.md`
 

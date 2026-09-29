@@ -63,6 +63,16 @@ describe("updateSession (proxy)", () => {
     expect(target?.searchParams.get("next")).toBe("/dashboard");
   });
 
+  it("protects the onboarding steps too", async () => {
+    for (const path of ["/onboarding", "/onboarding/consent"]) {
+      const target = location(await updateSession(request(path)));
+      expect(target?.pathname).toBe("/sign-in");
+      expect(target?.searchParams.get("next")).toBe(path);
+    }
+    auth = createFakeAuth({ signedIn: true });
+    expect(location(await updateSession(request("/onboarding/consent")))).toBeNull();
+  });
+
   it("keeps the requested path and query in `next`", async () => {
     const target = location(await updateSession(request("/dashboard/week?view=1")));
     expect(target?.searchParams.get("next")).toBe("/dashboard/week?view=1");

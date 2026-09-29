@@ -1,21 +1,59 @@
-# Local development only. Milestone 1 runs just the API: no database,
-# Redis, workers or AI services are added until something needs them.
-# The frontend runs with `npm run dev` (see README.md).
+# Local development only. Runs Postgres, a one-shot migration step, and the
+# API. The frontend runs with `npm run dev` (see README.md). Redis, workers
+# and AI services are not added until a milestone needs them.
+#
+# The local database is a stand-in for Supabase Postgres (OPEN_DECISIONS D-4).
+# Its password is a local-only development value, not a secret; the port is
+# bound to 127.0.0.1.
 name: ai-wellness-egypt
 
+x-api-environment: &api-environment
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  DATABASE_URL: postgresql://wellness:${LOCAL_DB_PASSWORD:-local-dev-only}@db:5432/wellness
+  # Without SUPABASE_URL, authenticated endpoints fail closed (503).
+  SUPABASE_URL: ${SUPABASE_URL:-}
+  SUPABASE_JWT_AUDIENCE: ${SUPABASE_JWT_AUDIENCE:-authenticated}
+  # Legacy HS256 projects only; empty means unset.
+  SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
+
 services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: wellness
+      POSTGRES_USER: wellness
+      POSTGRES_PASSWORD: ${LOCAL_DB_PASSWORD:-local-dev-only}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wellness -d wellness"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    build:
+      context: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment: *api-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   api:
     build:
       context: ./backend
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
-    environment:
-      # Allowlist only what the API uses today.
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      # Without SUPABASE_URL, authenticated endpoints fail closed (503).
-      SUPABASE_URL: ${SUPABASE_URL:-}
-      SUPABASE_JWT_AUDIENCE: ${SUPABASE_JWT_AUDIENCE:-authenticated}
-      # Legacy HS256 projects only; empty means unset.
-      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
+    environment: *api-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+volumes:
+  db-data:

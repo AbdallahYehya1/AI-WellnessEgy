@@ -7,377 +7,403 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 
 | Milestone | Status |
 |---|---|
-| **M1: Repository and engineering foundation** | **COMPLETE — VERIFIED.** Committed as `d525820` on branch `m1-foundation`. The M1 gap "backend not run on Python 3.12" was closed in this pass (§3.4). GitHub CI has still not run, because nothing has been pushed. |
-| **M2: Supabase authentication** | **IMPLEMENTED — VERIFIED LOCALLY; real-Supabase verification PARTIAL.** All automated checks, the Docker checks and a 21/21 browser E2E run against a local Supabase Auth stand-in pass (§3.3). Against the **real project**, sign-up, email confirmation, the dashboard and backend `/me` verification of a real ES256 token are verified, as are the anonymous redirect and the wrong-password message (§3.5). Successful sign-in, reload persistence and sign-out have **not** yet been exercised against the real project. |
-| M3 and later | Not started. Awaiting approval. |
+| **M1: Repository and engineering foundation** | **COMPLETE — VERIFIED** (`d525820`). |
+| **M2: Supabase authentication** | **IMPLEMENTED; verified locally; real-Supabase verification PARTIAL** (`9474bbf`, plus evidence in `207fc13`). Against the real project, sign-up, email confirmation, dashboard access, backend verification of a real ES256 token, the anonymous redirect and the wrong-password message are all verified. A successful sign-in, reload persistence and sign-out have not been run against the real project (§9). |
+| **M3: Consent and user-profile foundation** | **COMPLETE — VERIFIED against local Postgres 17.** All 21 DoD items are met with evidence (§5). **Not yet applied to the real Supabase database:** no `DATABASE_URL` was provided (§7, OPEN_DECISIONS D-26). |
+| M4 and later | Not started. Awaiting approval. |
 
-M2 code is committed as `9474bbf` on `m2-supabase-auth` and pushed. The live-verification evidence in §3.5 was added in a follow-up commit.
+M3 work is on branch `m3-consent-profile`, created from `m2-supabase-auth` at `207fc13`.
 
 ---
 
-## 1. Decisions applied in M2
+## 1. Step 1 of this pass: closing M2 operations
 
-These are recorded in [OPEN_DECISIONS.md](OPEN_DECISIONS.md):
+| Item | Result |
+|---|---|
+| Repository and branch state | `m2-supabase-auth` at `9474bbf`, pushed, working tree clean. `m1-foundation` and `m2-supabase-auth` are on GitHub; there is no `main` branch, so CI has never run. |
+| Node ≥ 22.23.3 | Used via a portable Node 22.23.3 put first on `PATH`. The system Node is still 22.9.0. With it, `npm test` runs directly: **87/87** (M2 suite). |
+| Full M2 verification suite, re-run | Backend 106 passed; ruff, format and mypy clean; frontend lint, typecheck, test (87/87) and build pass; `docker compose config` OK. |
+| Live Supabase checklist | Credentials are in local, git-ignored env files; **no secret was printed**. Evidence from the founder's own browser run: sign-up → check-email → confirmation link (307) → dashboard (200) → API `/me` 200. The agent's inbox-free live checks: 3/3. See §9. |
+| M2 commit | M2 code was already committed (`9474bbf`). The live evidence was committed as `207fc13` (`docs(auth): record live Supabase verification evidence for milestone 2`). Not pushed. |
 
-- **D-0:** the imported docs are the source of truth.
-- **D-2:** M2 is auth only.
-- **D-3:** email/password with required confirmation.
-- **D-12:** adults 18+ only.
-- **D-15:** `/health` returns exactly `{"status":"ok"}`.
+---
 
-## 2. Files changed in M2
+## 2. What M3 adds
+
+**Backend: database foundation**
+- SQLAlchemy 2 with psycopg 3 and Alembic.
+- All tables live in the Postgres schema **`app`**.
+- One engine per database URL; one transaction per request, committed on success and
+  rolled back on any error.
+- Without `DATABASE_URL`, the endpoints return `503 service_unavailable` (fail closed).
+
+**Migration `0001`** creates:
+- `app.users`: the profile, exactly the `DATA_MODEL.md` fields.
+- `app.consents`: append-only consent history.
+- `app.audit_events`: append-only; a DB trigger rejects UPDATE and DELETE.
+
+It also enables RLS on all three tables, revokes Supabase's `anon` and `authenticated`
+roles when they exist, and has a working `downgrade`.
+
+**Profile** (`users` module)
+- `GET /me` and `GET /profile` create the profile on first use, race-safely.
+- `PATCH /profile` updates `display_name` (validated), plus `goals` and `preferences`,
+  which stay empty until decided (D-22, D-23).
+- Unknown fields are rejected, so there is no way to send `user_id`.
+- Ownership is structural: every lookup is keyed on the verified token's `sub`.
+
+**Consent** (`consent` module)
+- A catalog of published versions; the current one is a clearly flagged placeholder (D-24).
+- `GET /consents/current` (public) and `GET /consents/me` (the caller's own status:
+  `missing`, `granted`, `declined` or `outdated`).
+- `POST /consents`:
+  - strict boolean;
+  - append-only;
+  - idempotent for repeats, returning 200;
+  - serialised per user with a row lock;
+  - rejects unknown or superseded versions.
+- `ConsentedUser` is the server-side gate for future feature endpoints (`403
+  consent_required`).
+
+**Audit** (`audit` module)
+- `record_event` writes in the same transaction as the change.
+- Metadata is restricted to reference tokens (versions, enum values, field names, UUIDs,
+  booleans, integers), so free text, emails or tokens can't be stored.
+- Actions: `user.created`, `user.profile_updated` (field names only), `consent.recorded`
+  (version, type, granted).
+
+**Errors:** validation errors use the standard error body with a `fields` list and never
+echo submitted values.
+
+**Frontend: onboarding**
+- The flow is: authenticated user → `/onboarding` (optional display name, skippable) →
+  `/onboarding/consent` (the draft notice, the version, an unticked "I have read and agree"
+  box, then "Agree and continue" or "I don't agree") → `/dashboard`.
+- The dashboard is gated on `GET /consents/me`:
+  - `missing` → profile step;
+  - `declined` or `outdated` → consent step;
+  - API unavailable → an "unavailable" page, never the dashboard.
+- The proxy protects `/onboarding/*`.
+- The Server Actions use `getVerifiedSession()` (`getClaims()` first) and forward the token
+  server-side only.
+
+**Ops:**
+- Compose runs `db` (Postgres 17), then `migrate` (`alembic upgrade head`, one-shot), then
+  `api`.
+- The Docker image ships `alembic.ini` and `migrations/`.
+- CI's backend job gets a Postgres 17 service container.
+- CI's Docker job checks that the migration exited 0 and that `/consents/current` is
+  served.
+
+## 3. Files changed in M3
+
+58 paths, relative to the repository root.
 
 **Backend: new**
-- `backend/app/auth/tokens.py`: `SupabaseTokenVerifier`, which checks the JWKS (ES256/RS256)
-  and the legacy HS256 secret, plus expiry, issuer, audience, subject and role, and maps
-  each rejection to a reason.
-- `backend/app/auth/dependencies.py`: bearer extraction, uniform 401/503 errors, and the
-  `CurrentPrincipal` dependency.
-- `backend/app/auth/principal.py`: the `AuthenticatedPrincipal` model.
-- `backend/app/users/router.py`: `GET /me`.
-- `backend/app/common/errors.py`: `ApiError` and the `{"error":{code,message}}` handler.
-- `backend/tests/test_auth.py` (54 tests) and `backend/tests/auth_helpers.py` (in-process
-  ES256/RS256 keys, fake JWKS, token minting).
+- App code:
+  - `app/core/db.py`;
+  - `app/users/models.py`, `app/users/schemas.py`, `app/users/service.py`;
+  - `app/consent/catalog.py`, `models.py`, `schemas.py`, `service.py`, `router.py`,
+    `dependencies.py`;
+  - `app/audit/models.py`, `app/audit/service.py`.
+- Migrations: `alembic.ini`, `migrations/env.py`, `migrations/script.py.mako`,
+  `migrations/versions/0001_profile_consent_audit.py`.
+- Tests: `tests/test_profile.py` (30), `tests/test_consent.py` (26),
+  `tests/test_audit_and_migrations.py` (14).
 
 **Backend: changed**
-- `app/core/config.py`: Supabase URL, audience and JWKS settings; derived issuer and JWKS
-  URLs; strict URL validation; blank secrets count as unset; minimum length for the
-  legacy secret.
-- `app/core/health.py`: returns `{"status":"ok"}` only.
-- `app/main.py`: token verifier held on `app.state`, error handlers, the users router, and
-  an `auth_configured` flag in the startup log.
-- `app/auth/__init__.py` and `app/users/__init__.py`: docstrings.
-- `pyproject.toml`: adds `pyjwt[crypto]>=2.15,<3`.
-- Tests: `tests/conftest.py`, `test_app_startup.py`, `test_config.py`, `test_health.py`,
-  `test_sensitive_data.py`.
+- `app/main.py`: session factory, consent catalog, consent router, `database_configured`
+  flag in the startup log.
+- `app/users/router.py`: `/me` now uses the profile; adds `/profile`.
+- `app/common/errors.py`: validation error handler with a `fields` list.
+- `pyproject.toml`: adds sqlalchemy, alembic, psycopg[binary], and testcontainers[postgres]
+  (dev).
+- `Dockerfile`: copies the migrations.
+- Tests: `tests/conftest.py` (migrated test database, truncation between tests),
+  `tests/auth_helpers.py`, `tests/test_auth.py` (`/me` now returns `supabase_user_id`),
+  `tests/test_app_startup.py` (route list).
 
 **Frontend: new**
-- `proxy.ts` and `lib/supabase/proxy.ts`: session refresh and route protection.
-- `lib/supabase/server.ts` and `lib/supabase/env.ts`: the Supabase SSR client and public
-  env.
-- `lib/auth/actions.ts`: the `signUp`, `signIn` and `signOut` Server Actions.
-- `lib/auth/validation.ts`, `lib/auth/errors.ts`, `lib/auth/site-url.ts`.
-- `lib/api/backend.ts`: server-side `fetchMe`.
-- `app/(auth)/sign-in/page.tsx`, `app/(auth)/sign-up/page.tsx`,
-  `app/auth/check-email/page.tsx`, `app/auth/confirm/route.ts`, `app/dashboard/page.tsx`.
-- `components/auth/form-parts.tsx`, `sign-in-form.tsx`, `sign-up-form.tsx`.
-- Tests: `lib/supabase/proxy.test.ts`, `lib/auth/actions.test.ts`,
-  `lib/auth/validation.test.ts`, `lib/auth/errors.test.ts`, `app/auth/confirm/route.test.ts`,
-  `app/dashboard/page.test.tsx`, `app/(auth)/pages.test.tsx`,
-  `components/auth/auth-forms.test.tsx`.
-- Test support: `vitest.config.mts`, `test/setup.ts`, `test/supabase-mock.ts`,
-  `test/server-only-stub.ts`.
-- `AGENTS.md` and `CLAUDE.md`: **generated by `next dev`**, not written by hand. They point
-  coding agents at `node_modules/next/dist/docs/`, and `next dev` recreates them if
-  removed.
+- Pages: `app/onboarding/page.tsx`, `app/onboarding/consent/page.tsx`.
+- Components: `components/onboarding/profile-form.tsx`, `consent-form.tsx`,
+  `service-unavailable.tsx`.
+- Lib: `lib/auth/session.ts`, `lib/onboarding/actions.ts`, `steps.ts`, `validation.ts`.
+- Tests: `app/onboarding/onboarding-pages.test.tsx` (11),
+  `components/onboarding/onboarding-forms.test.tsx` (6), `lib/onboarding/actions.test.ts`
+  (14), `lib/onboarding/onboarding-lib.test.ts` (11), `lib/api/backend.test.ts` (7), and
+  `test/backend-mock.ts` (test support).
 
 **Frontend: changed**
-- `app/page.tsx`: sign-up and sign-in links.
-- `next.config.ts`: Server Action dev logging switched off (§6).
-- `package.json` and `package-lock.json`:
-  - adds `@supabase/ssr`, `@supabase/supabase-js`, `server-only`, and the Vitest and
-    Testing Library dev dependencies;
-  - adds a `test` script;
-  - raises `engines.node` to `>=22.22.2`.
-- `.env.example`: `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SITE_URL`, `API_BASE_URL`.
+- `app/dashboard/page.tsx`: the consent gate.
+- `lib/api/backend.ts`: a typed client for the profile and consent endpoints.
+- `lib/supabase/proxy.ts`: protects `/onboarding`.
+- Tests: `app/dashboard/page.test.tsx` (rewritten, 7), `lib/supabase/proxy.test.ts` (+1).
 
-**Repository**
-- `.env.example`: `SUPABASE_URL`, `SUPABASE_JWT_AUDIENCE`, and notes on the legacy secret.
-- `docker-compose.yml`: passes the Supabase settings through the allowlist.
-- `.github/workflows/ci.yml`: adds the frontend test step, a `sb_secret_` guard, a guard
-  against secret-looking `NEXT_PUBLIC_` names, an exact `/health` body check, and `/me`
-  401/503 checks.
-- `README.md`, `docs/API_CONTRACT.md`, `docs/OPEN_DECISIONS.md`, and this file.
+**Repository and docs**
+- `docker-compose.yml`, `.github/workflows/ci.yml`, `.env.example`, `README.md`.
+- `docs/API_CONTRACT.md`, `docs/DATA_MODEL.md`, `docs/ARCHITECTURE.md`,
+  `docs/OPEN_DECISIONS.md`, and this file.
 
-## 3. Verification
+## 4. Migration
 
-### 3.1 Required commands: final run (real output, abridged)
+`backend/migrations/versions/0001_profile_consent_audit.py` (revision `0001`):
 
-Environment: Windows 11, Git Bash. Local Python 3.13.6 (and 3.12.14 in Docker, §3.4).
-Local Node v22.9.0 (and 22.23.3 via `npx node@22`). Docker 29.8.0.
+| Object | Details |
+|---|---|
+| schema `app` | Created by `env.py` before migrations run. It also holds `alembic_version`. |
+| `app.users` | `id` PK, `supabase_user_id` UNIQUE, `display_name` (1–50 characters check), `goals` jsonb (array check), `preferences` jsonb (object check), `created_at`, `updated_at`, `deleted_at` |
+| `app.consents` | `id`, `user_id` FK → users (RESTRICT), `version`, `consent_type` (check `required`/`optional`), `granted`, `recorded_at` (`clock_timestamp()`), `withdrawn_at` (check: optional only); index on (user_id, consent_type, recorded_at) |
+| `app.audit_events` | `id`, `actor_user_id` FK → users (RESTRICT), `action`, `target_type`, `target_id`, `metadata` jsonb, `created_at`; index on (actor_user_id, created_at); **trigger rejects UPDATE and DELETE** |
+| Security | RLS enabled on all three tables with no policies. `REVOKE ALL` on the schema and its tables from `anon`/`authenticated` if those roles exist. |
+
+**Verified by tests:**
+- the models and the migration match (Alembic autogenerate diff is empty);
+- downgrade to base and upgrade again works;
+- RLS is on and nothing is in `public`;
+- with simulated Supabase roles that had been granted `USAGE`, the roles have no schema or
+  table privileges after migrating;
+- UPDATE and DELETE on `audit_events` fail with "append-only".
+
+**Also verified on:** the Compose `migrate` service (exit 0) and a Python 3.12 container.
+
+**Not yet run on:** the real Supabase database (D-26).
+
+## 5. M3 Definition of Done
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Profile model implemented | COMPLETE — VERIFIED | `app/users/models.py`; autogenerate diff is empty (`test_models_match_the_migration`) |
+| Profile migration implemented | COMPLETE — VERIFIED | `0001`: upgrade, downgrade and re-upgrade tested; Compose `migrate` exit 0 |
+| Profile API implemented | COMPLETE — VERIFIED | `GET/PATCH /profile` and `/me`: 30 profile tests (create/sync, retrieve, update, invalid input, concurrency) |
+| Profile authorisation implemented | COMPLETE — VERIFIED | 401 without or with an invalid token; lookups keyed on the verified `sub`; extra fields → 422; soft-deleted → 403 |
+| Cross-user isolation tested | COMPLETE — VERIFIED | `test_users_only_see_their_own_profile`, `test_client_supplied_user_id_cannot_select_another_profile`, `test_another_users_update_cannot_change_my_profile`, `test_consent_is_per_user`, `test_client_supplied_user_id_cannot_read_or_record_for_someone_else`. All five failed when the ownership filter was removed (mutation check, §6.2). |
+| Consent model implemented | COMPLETE — VERIFIED | `app/consent/models.py` and DB checks; covered by the model/migration diff test |
+| Consent migration implemented | COMPLETE — VERIFIED | `0001` (as above) |
+| Consent API implemented | COMPLETE — VERIFIED | `GET /consents/current`, `GET /consents/me`, `POST /consents`: 26 consent tests |
+| Current consent retrieval works | COMPLETE — VERIFIED | `test_current_consent_is_public_and_flags_pending_review`, `test_new_account_has_no_consent`, `test_grant_current_version` |
+| Consent versioning works | COMPLETE — VERIFIED | `test_new_version_does_not_inherit_old_consent` (outdated; old version rejected; the new acceptance is a new row; the old row is untouched), `test_unknown_version_is_rejected`. It failed when the version check was removed (§6.2). |
+| Consent changes are auditable | COMPLETE — VERIFIED | `test_consent_change_is_audited_with_minimal_metadata`, `test_every_decision_change_is_audited`, append-only trigger tests; E2E audit trail |
+| Required consent gates the application flow | COMPLETE — VERIFIED | Server side: `ConsentedUser` tests (blocked before consent, after a decline and after a version change; allowed after acceptance). Frontend: dashboard gate tests, which failed when the gate was removed (§6.2); E2E: dashboard blocked before consent and after a decline. |
+| Frontend onboarding works | COMPLETE — VERIFIED (local stand-in auth) | 38 onboarding and gate unit tests; browser E2E 18/18 (§6.3) |
+| Backend tests pass | COMPLETE — VERIFIED | 176 passed (Python 3.13.6 and 3.12.14) |
+| Frontend tests pass | COMPLETE — VERIFIED | 138 passed (Node 22.23.3) |
+| Ruff passes | COMPLETE — VERIFIED | `ruff check .` and `ruff format --check .` (54 files) |
+| Mypy passes | COMPLETE — VERIFIED | `mypy app` (41 files) and `mypy app tests` (52 files), strict |
+| Typecheck passes | COMPLETE — VERIFIED | `npm run typecheck` |
+| Production build passes | COMPLETE — VERIFIED | `npm run build`; `/onboarding` and `/onboarding/consent` are dynamic (`ƒ`) |
+| Documentation matches implementation | COMPLETE — VERIFIED | API_CONTRACT (profile, consents, error shape), DATA_MODEL, ARCHITECTURE note, README, OPEN_DECISIONS D-22 to D-28, and this file |
+| No secrets committed | COMPLETE — VERIFIED | `.env` and `.env.local` are git-ignored (checked with `git check-ignore`); scan in §8 |
+
+## 6. Verification
+
+### 6.1 Required commands: final run (real output, abridged)
+
+Environment: Windows 11, Git Bash. Python 3.13.6 (the venv); Node **v22.23.3** on `PATH`;
+Docker 29.8.0. The backend tests start `postgres:17-alpine` via testcontainers.
 
 ```text
 $ cd backend
 $ python -m pytest -q
-106 passed in 1.88s        TOTAL 321 stmts, 4 missed, 99% coverage     [exit 0]
-  (uncovered: tokens.py 110, 130-131 and errors.py 43, all defensive error branches)
-$ ruff check .                 All checks passed!                       [exit 0]
-$ ruff format --check .        37 files already formatted               [exit 0]
-$ mypy app --show-error-codes  Success: no issues found in 29 source files [exit 0]
-$ mypy app tests --show-error-codes  Success: no issues found in 37 source files [exit 0]
+176 passed in 12.57s        TOTAL 716 stmts, 11 missed, 98% coverage       [exit 0]
+$ ruff check .                 All checks passed!                           [exit 0]
+$ ruff format --check .        54 files already formatted                   [exit 0]
+$ mypy app --show-error-codes        Success: no issues found in 41 source files [exit 0]
+$ mypy app tests --show-error-codes  Success: no issues found in 52 source files [exit 0]
 
 $ cd ../frontend
-$ npm install
-  EBADENGINE warnings: local Node v22.9.0 is older than several packages require
-  (jsdom, vitest, vite, undici …; see §5)
-  up to date, audited 453 packages; found 0 vulnerabilities           [exit 0]
-$ npm run lint                 eslint . --max-warnings=0 (no findings)  [exit 0]
-$ npm run typecheck            next typegen && tsc --noEmit ✓           [exit 0]
-$ npm run build
-  ▲ Next.js 16.3.6 (Turbopack)  ✓ Compiled successfully
-  Route (app): ○ /  ○ /_not-found  ○ /auth/check-email  ƒ /auth/confirm
-               ƒ /dashboard  ƒ /sign-in  ○ /sign-up   ƒ Proxy (Middleware)   [exit 0]
-$ npm test                     (local Node v22.9.0)
-  Test Files 2 passed (2), Tests 19 passed (19), plus 6 "Failed to start forks worker"
-  errors: ERR_REQUIRE_ESM in html-encoding-sniffer → @exodus/bytes (jsdom needs
-  Node ≥22.22.2)                                                       [exit 1]
-$ npx -y -p node@22 -- node node_modules/vitest/vitest.mjs run   (Node v22.23.3)
-  Test Files 8 passed (8), Tests 87 passed (87)                        [exit 0]
+$ node --version               v22.23.3
+$ npm install                  0 vulnerabilities (EBADENGINE warnings come from npm itself,
+                               which still runs on the system Node 22.9)       [exit 0]
+$ npm run lint                 eslint . --max-warnings=0, no findings          [exit 0]
+$ npm run typecheck            next typegen && tsc --noEmit ✓                  [exit 0]
+$ npm test                     Test Files 13 passed (13), Tests 138 passed (138) [exit 0]
+$ npm run build                ✓ Compiled successfully
+  Route (app): ○ /  ○ /auth/check-email  ƒ /auth/confirm  ƒ /dashboard
+               ƒ /onboarding  ƒ /onboarding/consent  ƒ /sign-in  ○ /sign-up   [exit 0]
 
 $ cd ..
-$ docker compose config        valid; api service with ENVIRONMENT, LOG_LEVEL,
-                               SUPABASE_URL, SUPABASE_JWT_AUDIENCE, SUPABASE_JWT_SECRET [exit 0]
+$ docker compose config --quiet                                              [exit 0]
 ```
 
-### 3.2 Failures found and fixed during M2
+**Coverage gaps (11 lines):**
+- `users/service.py` 60-61 and 65-66: the goals/preferences change branches, which can't
+  be reached until D-22/D-23 define values;
+- defensive error branches in `tokens.py`, `errors.py` and `users/schemas.py`.
+
+### 6.2 Additional checks
+
+- **Python 3.12.14** (`python:3.12-slim` container, against the Compose Postgres): 176
+  passed; ruff and mypy clean.
+- **Docker stack** (`API_PORT=8001 docker compose up --build --wait`):
+  - `db` becomes healthy, `migrate` runs `0001` and exits 0, and `api` becomes healthy;
+  - `/health` → `{"status":"ok"}`;
+  - `/me`, `/profile` and `/consents/me` without a token → 401;
+  - `/consents/current` → 200 with `pending_legal_review: true`;
+  - `/me` with `Bearer a.b.c` and no `SUPABASE_URL` → 503;
+  - `app` schema tables: `alembic_version`, `audit_events`, `consents`, `users`.
+  - The two new CI shell checks (migrate exit code, consent version served) were dry-run
+    locally and pass.
+- **Mutation checks** (restored afterwards; the suites were re-run green). Two backend bugs
+  were planted together:
+  - consent status ignoring the version;
+  - the profile lookup ignoring who is calling.
+
+  Result: **7 backend tests failed**:
+  - `test_new_version_does_not_inherit_old_consent`;
+  - `test_feature_is_blocked_again_when_a_new_version_is_published`;
+  - `test_consent_is_per_user`;
+  - `test_client_supplied_user_id_cannot_read_or_record_for_someone_else`;
+  - the three profile isolation tests.
+
+  A third planted bug, the dashboard skipping its consent gate, made **3 frontend tests
+  fail**.
+
+### 6.3 End-to-end browser run (M3)
+
+Headless Edge ran against the real Next.js app, the real FastAPI backend and the Compose
+**Postgres 17**. Auth came from the local Supabase Auth stand-in, because the real project
+needs an inbox. Afterwards, the database was inspected with `psql`.
+
+```text
+PASS  after confirmation, a new user lands on profile setup (not the dashboard)
+PASS  no consent was assumed at account creation
+PASS  dashboard redirects to onboarding before consent
+PASS  profile saved, moved on to the consent step            (Arabic display name stored)
+PASS  consent page shows the DRAFT / pending legal review notice
+PASS  confirmation checkbox is not pre-ticked
+PASS  agreeing without ticking the box records nothing
+PASS  decline is recorded as granted=false
+PASS  after declining, the dashboard is still blocked
+PASS  after agreeing, the dashboard opens and greets the user by name
+PASS  consent history is append-only: decline then grant, same version
+PASS  consented user visiting the consent page goes to the dashboard
+PASS  onboarding is protected when signed out
+PASS  returning user goes straight to the dashboard
+PASS  audit trail: user.created, profile update, two consent decisions
+PASS  audit rows contain no email, name, token or JWT
+PASS  profile row holds no email
+PASS  API ignores a client-supplied user id without a token (401)
+18/18 checks passed
+
+Log leak scan (API log / Next log): email 0/0, display name 0/0, "eyJ" 0/0,
+"Bearer " 0/0, password 0/0
+```
+
+### 6.4 Failures found and fixed during M3
 
 No test, lint rule or type setting was weakened.
 
-1. **`/dashboard` was being prerendered.** The build output showed it as static (`○`):
-   with no Supabase env at build time, `createClient()` returned before reading cookies,
-   so Next rendered a fixed redirect. It was safe (it failed closed) but wrong for a
-   protected page. Fix: read cookies first; the build now shows `ƒ /dashboard`.
-2. **A blank `SUPABASE_JWT_SECRET=` (as shipped in `.env.example`) became an empty
-   `SecretStr`.** That would have enabled the HS256 path with an empty key, and PyJWT's
-   `InvalidKeyError` would then have produced a 500. Fix: blank secrets count as unset,
-   short legacy secrets are rejected at startup, and any other `PyJWTError` maps to 401.
-3. **The `SUPABASE_URL` check accepted `http://localhost.evil.example`.** It was a prefix
-   match. Fix: parse the hostname; `http` is allowed only for `localhost` and
-   `127.0.0.1`.
-4. **An unreachable branch in the verifier** (no key source while an issuer is set) was
-   folded into the main condition.
-5. **Ruff N818:** the exceptions were renamed `TokenRejectedError` and
-   `AuthUnavailableError`.
-6. **Bandit S105/S106 in tests:** the error-message constant was renamed (it only tripped
-   on the word "TOKEN"), and the two deliberately fake secrets got an inline
-   `# noqa: S105 - fake`. No per-file ignore was added.
-7. **Strict mypy** caught `jwt.encode(key=None)` in the `alg: none` test. That token, and
-   the algorithm-confusion token, are now built by hand, because PyJWT refuses to create
-   them.
-8. **ESLint** caught unused variables in two new test files; fixed in the tests.
-9. **The Next dev server logged Server Action arguments and return values, including
-   users' emails** (dev only). Fixed with `logging.serverFunctions: false`. Re-checked in
-   the E2E logs: 0 emails.
-10. **One test expectation was wrong:** a percent-encoded local path such as `/%0d%0a…` is
-    a safe redirect target. The case was removed.
+1. **The testcontainers import was deprecated.** `filterwarnings = error` caught it; the
+   import was moved to `testcontainers.community.postgres`.
+2. **A test read an expired ORM object after commit.** It was test code; the test session
+   now uses `expire_on_commit=False`.
+3. **Bandit S608 flagged f-string SQL** in the migration's role-revoke block and in a test.
+   The inputs were constants, but both were rewritten as literal SQL rather than
+   suppressed.
+4. **Strict mypy flagged loose typing in two test assertions.** Fixed with typed helpers.
+5. **The M2 `/me` assertions changed deliberately:** `user_id` is now the app profile id,
+   and the token identity moved to `supabase_user_id`. The token-identity checks were
+   kept, just moved to the new field.
 
-Mutation checks confirmed the tests can fail. Removing `/dashboard` protection and leaking
-raw sign-in errors made 6 frontend tests fail. Dropping the issuer and audience checks made
-4 backend tests fail. Both were restored and re-run green.
+## 7. Blockers
 
-### 3.3 End-to-end browser run (local Supabase Auth stand-in)
-
-There are no real Supabase credentials here, so the **whole flow was run in headless
-Microsoft Edge (Playwright)** against the real Next.js app and the real FastAPI backend.
-Both were pointed at a small local stand-in for the Supabase Auth API. It covers
-sign-up with a PKCE confirmation email, the verify link, password, PKCE and refresh grants,
-logout, and an ES256 JWKS. The stand-in and the script are in the session scratchpad, not
-the repo.
-
-```text
-21/21 checks passed
-PASS  landing page links to sign-up
-PASS  sign-up validation shows field errors
-PASS  sign-up shows the confirmation-pending page
-PASS  unconfirmed sign-in explains email confirmation
-PASS  confirmation email was sent with a redirect to /auth/confirm
-PASS  confirmation link signs in and lands on the dashboard
-PASS  dashboard shows the API-verified identity
-PASS  session survives a reload
-PASS  session is shared with a new tab
-PASS  session is stored in sb-*-auth-token cookies (SameSite=Lax, HttpOnly=false; see D-20)
-PASS  dashboard HTML does not contain the access token
-PASS  signed-in user visiting /sign-in is sent to the dashboard
-PASS  sign-out shows the signed-out notice
-PASS  sign-out clears the auth cookies (0 left)
-PASS  dashboard redirects to sign-in after sign-out
-PASS  wrong password shows a safe message
-PASS  password is not kept in the form after an error
-PASS  sign-in returns to the dashboard with API verification
-PASS  backend /me rejects anonymous requests with 401
-PASS  backend /me rejects a forged token with 401
-PASS  backend /health is exactly {status: ok}
-
-Log leak scan after the run (API log / Next log):
-  "eyJ" (JWTs)            0 / 0
-  passwords used          0 / 0
-  "@example.com" emails   0 / 0
-  "Bearer "               0 / 0
-```
-
-This proves the integration against Supabase's HTTP protocol as implemented by
-`@supabase/supabase-js`. **It does not prove the founder's real project is configured
-correctly**, which is why the live-project items in §4 stay IMPLEMENTED — NOT VERIFIED.
-
-### 3.5 Live verification against the real Supabase project (2026-09-29)
-
-Credentials were supplied by the founder and kept only in the git-ignored
-`frontend/.env.local` and `backend/.env`. The project signs tokens with an **ES256** key
-(JWKS checked), so no legacy JWT secret is configured. The project's public
-`/auth/v1/settings` shows: email provider on, sign-ups open, **`mailer_autoconfirm: false`**
-(confirmation required), and anonymous users off.
-
-**Founder's browser session** (evidence from the server logs; query strings and all
-personal data redacted):
-
-```text
-POST /sign-up 200                  → GET /auth/check-email 200
-GET  /auth/confirm?<redacted> 307  → GET /dashboard 200
-API: GET /me 200                   (real Supabase ES256 access token verified by the backend)
-Log scan: "@" 0, "eyJ" 0, "Bearer " 0 in both the API and Next logs
-```
-
-**Checks run by the agent that need no inbox** (headless Edge against the real project;
-the sign-in used a random, non-existent address, so no account was created and no email
-sent):
-
-```text
-PASS  live: anonymous /dashboard redirects to /sign-in?next=/dashboard
-PASS  live: real Supabase invalid_credentials maps to the safe message
-PASS  live: still on /sign-in, no session created
-PASS  live: forged token (real kid, wrong key) → 401, reason invalid_signature (JWKS fetched)
-```
-
-**Not yet exercised against the real project:** a successful email/password sign-in,
-reload persistence, and sign-out. These need the founder's own account and password.
-
-### 3.4 Other checks
-
-- **Backend on Python 3.12 (closes the M1 deviation):** the full suite ran in a
-  `python:3.12-slim` container (Python 3.12.14): 106 passed, ruff clean, format clean,
-  mypy clean. The first attempt had 1 failure because only `backend/` was mounted and a
-  test reads the repo-root `.env.example`. With the repo root mounted it passed; the test
-  was not changed.
-- **Production server smoke test (`next start`, no Supabase configured):**
-  - `/`, `/sign-up`, `/sign-in` and `/auth/check-email` return 200;
-  - `/dashboard` → 307 to `/sign-in` (fails closed);
-  - `/auth/confirm?code=x` → `/sign-in?status=confirmation-failed`;
-  - an injected `?status=<script>` value is not rendered;
-  - no `X-Powered-By` header.
-- **Docker** (`API_PORT=8001`, because port 8000 is taken by a local Apache):
-  - the container becomes `healthy` and runs Python 3.12.14 with PyJWT 2.15.1;
-  - `/health` → `{"status":"ok"}`;
-  - `/me` with no token → 401 `{"error":{"code":"unauthorized","message":"Authentication is required."}}`;
-  - `/me` with `Bearer a.b.c` and no `SUPABASE_URL` → 503 `auth_unavailable`.
-- **Secrets:** a pattern scan of every changed or new file (for `sb_secret_…`, JWTs, `sk-…`
-  keys and private keys) found nothing. The only env files are the two `.env.example`
-  templates. Both CI grep guards pass locally.
-
-## 4. M2 acceptance criteria
-
-| Criterion | Status | Evidence |
+| Item | Status | What unblocks it |
 |---|---|---|
-| Email/password sign-up works through Supabase Auth | COMPLETE — VERIFIED (live) | Real project: `POST /sign-up` → check-email page (§3.5); unit tests; E2E |
-| Email-confirmation-pending flow works | COMPLETE — VERIFIED (live) | Real project: confirmation link → `/auth/confirm` 307 → `/dashboard` 200 (§3.5); 8 route tests |
-| Email/password sign-in works | IMPLEMENTED — NOT VERIFIED (live success path) | Live: wrong-password path verified (§3.5). The successful sign-in was verified only against the stand-in (E2E) and in action tests. |
-| Session persistence works | IMPLEMENTED — NOT VERIFIED (live) | Stand-in E2E: reload and new tab; proxy tests. Not yet exercised on the real project. |
-| Sign-out works | IMPLEMENTED — NOT VERIFIED (live) | Stand-in E2E: cookies cleared, dashboard redirects; action test. Not yet exercised on the real project. |
-| Protected dashboard access works | COMPLETE — VERIFIED | Proxy tests (11), dashboard tests (6), E2E, and the production smoke test |
-| Backend JWT validation works | COMPLETE — VERIFIED | 54 auth tests: ES256/RS256 via JWKS, legacy HS256, the real `PyJWKClient` with a mocked endpoint, fail-closed 503 |
-| Invalid credentials safely return 401 | COMPLETE — VERIFIED | Missing, malformed, expired, not-yet-valid, bad signature, tampered, unknown `kid`, `alg:none`, algorithm confusion, wrong issuer or audience, missing claims, bad `sub` or role, anonymous: all return the same 401 body |
-| `/me` uses verified JWT identity | COMPLETE — VERIFIED | Tests: client-supplied `user_id` in the query or headers is ignored; E2E confirms end to end |
-| No custom credential system exists | COMPLETE — VERIFIED | No password storage, hashing or credential tables. Passwords go only to Supabase (Server Actions → `supabase.auth.*`) |
-| No secrets exposed or committed | COMPLETE — VERIFIED | Secret scan; CI guards; `SecretStr`; log leak scans; tests that fake secrets never reach logs or responses |
-| Backend tests, lint, format, mypy pass | COMPLETE — VERIFIED | §3.1, and on Python 3.12 in §3.4 |
-| Frontend lint, typecheck, build pass | COMPLETE — VERIFIED | §3.1. Frontend tests pass on Node 22.23.3; on the local Node 22.9 they can't start (§5). |
-| Docker configuration passes | COMPLETE — VERIFIED | `docker compose config`, plus a container run (§3.4) |
-| Documentation matches implementation | COMPLETE — VERIFIED | README, API_CONTRACT (`/health`, `/me`), OPEN_DECISIONS and this file updated in this pass |
+| M3 migrations not applied to the real Supabase database | BLOCKED (founder) | Provide a server-only `DATABASE_URL` in `backend/.env`, run `alembic upgrade head`, then confirm `app` is not an exposed API schema (D-26). |
+| Consent text is a placeholder | BLOCKED for public launch (legal) | Counsel's terms and privacy text (D-24, D-11). Publishing it is a new catalog version, which forces re-consent. |
+| Remaining M2 live checks | Pending (founder) | Sign in, reload, sign out on the real project (§9). |
+| CI has never run | Pending | Push, and create `main` (for example from `m1-foundation`), so pushes and PRs trigger the workflow. |
+| System Node 22.9 | Worked around | Upgrade to Node ≥ 22.22.2; the portable 22.23.3 is used meanwhile. |
 
-## 5. Blockers and environment notes
+## 8. Security findings and notes
 
-| Item | Status | Impact / what unblocks it |
-|---|---|---|
-| Live checks still missing: successful sign-in, reload persistence, sign-out on the real project | Pending (founder) | They need the founder's account and password. Credentials are now in the local git-ignored env files; the project settings were checked (§3.5). |
-| Local Node is v22.9.0; the frontend dev dependencies need ≥22.22.2 | Worked around (2026-09-29) | A portable Node 22.23.3 on `PATH` now runs `npm test` directly: 87/87 pass. |
-| (Original note) | Environment deviation | `npm test` can't start its jsdom workers locally. All 87 tests pass on Node 22.23.3 (via `npx node@22`), which is what CI's `node-version: "22"` installs. Also, Rolldown's native Windows binding (an optional dependency) was skipped; it was installed locally with `npm install --no-save --force @rolldown/binding-win32-x64-msvc@1.2.11`, which left `package.json` and the lockfile unchanged. **Fix: upgrade local Node to the latest 22.x.** |
-| GitHub CI has not run | IMPLEMENTED — NOT VERIFIED | Nothing has been pushed (awaiting your decision from M1). |
-| Port 8000 is taken by a local Apache | Worked around | `API_PORT=8001` for Docker; `uvicorn --port 8001` plus `API_BASE_URL=http://127.0.0.1:8001` for local development. |
+- **Identity and ownership:** every profile and consent lookup is keyed on the verified JWT
+  `sub`. No endpoint takes a user id; bodies with `user_id`, `supabase_user_id` or `email`
+  are rejected (422). Tests and mutation checks confirm this.
+- **Explicit consent only:**
+  - nothing is recorded at sign-up;
+  - `granted` must be a JSON boolean;
+  - the UI requires an unticked checkbox and a button press;
+  - older-version acceptances show as `outdated` and are never upgraded;
+  - duplicates are idempotent and concurrency-safe.
+- **Fail closed:**
+  - no `DATABASE_URL` → 503;
+  - consent status unavailable → the dashboard shows an error page, not content;
+  - soft-deleted profile → 403.
+- **Audit:**
+  - written in the same transaction as the change;
+  - append-only, enforced by a DB trigger;
+  - metadata limited to reference tokens by code;
+  - the E2E run and tests confirm no email, name, token or JWT in audit rows.
+- **Supabase exposure:** the tables are in schema `app`, with RLS on (no policies) and the
+  Data API roles revoked. This was tested with simulated roles on plain Postgres, not yet
+  on Supabase itself (D-26).
+- **Logs:** the request log is metadata only; the M3 E2E leak scan was clean.
+- **Secrets:**
+  - `frontend/.env.local` and `backend/.env` contain real values and are git-ignored
+    (`git check-ignore` confirmed);
+  - only `.env.example` templates are tracked;
+  - the Compose database password is a local-only development value;
+  - the CI database password is for a throwaway CI container;
+  - the service-role key is still unused and never referenced in `frontend/`, and the CI
+    guards still apply.
+- **Open, accepted for now:**
+  - no admin or compliance access tooling (D-28);
+  - no link to `auth.users` deletion (D-27);
+  - auth cookies are not `HttpOnly` (D-20);
+  - no app-level rate limiting (D-21);
+  - the legacy JWT secret shared in chat should be rotated (D-17).
 
-## 6. Security notes
+## 9. M2 record (for reference)
 
-- **No custom auth.** Passwords are sent only from Server Actions to Supabase; this
-  project never stores, hashes or logs them. Password fields are never echoed back into
-  form state.
-- **Token verification (backend):**
-  - The algorithm is chosen by the server: ES256/RS256 must match the JWKS key's own
-    algorithm, and HS256 is used only when a legacy secret is configured. This blocks
-    `alg:none` and algorithm confusion, and both attacks are tested.
-  - Every token is checked for `exp`/`nbf` (30 s skew), `iss`, `aud`, UUID `sub`,
-    `role=authenticated`, and not anonymous.
-  - The JWKS fetch uses a 5 s timeout, a 600 s cache, and PyJWT's 30 s cooldown on
-    unknown `kid`s.
-  - Header length is capped at 8 KB.
-- **Uniform errors.**
-  - Every invalid token gets the same 401 body and `WWW-Authenticate` header.
-  - If Supabase isn't configured or the JWKS is unreachable, the answer is 503, never
-    "authenticated".
-  - The frontend maps Supabase error *codes* to fixed messages; raw provider messages are
-    never shown.
-  - Sign-up doesn't reveal whether an email is already registered.
-- **Identity.** `/me` and `CurrentPrincipal` use only verified claims. Client-supplied ids
-  are ignored, and tests prove it.
-- **Frontend session handling.**
-  - `getClaims()` verifies the JWT on every request in the proxy, and again on the
-    dashboard.
-  - The access token is forwarded to the API server-side only, and the E2E run confirmed
-    it isn't in the page HTML.
-  - Redirect targets (`next`) are restricted to local paths (tested against absolute URLs,
-    `//host`, backslashes, control characters and `javascript:`).
-  - The `?status=` notices come from a fixed allowlist.
-  - The confirmation links use the configured `SITE_URL`, not the request's Host header.
-- **Secrets separation.**
-  - Only the publishable key and URL are `NEXT_PUBLIC_`.
-  - `server-only` guards the server modules.
-  - CI fails on `service_role`, `jwt_secret`, `DATABASE_URL` or `sb_secret_` in
-    `frontend/`, or on any secret-looking `NEXT_PUBLIC_` name.
-- **Logging.**
-  - The backend logs only a reason code for auth rejections, and tests confirm no token or
-    email is logged.
-  - HTTP-client URL logging stays suppressed (from M1).
-  - Next's dev Server Action logging is off.
-- **Known, accepted for now:**
-  - The auth cookies aren't `HttpOnly` (D-20); a CSP is needed before a pilot.
-  - There is no app-level rate limiting (D-21); Supabase rate-limits the auth endpoints
-    itself.
-  - The age gate is a self-attestation that isn't stored (D-12).
+| M2 criterion | Status |
+|---|---|
+| Sign-up through Supabase Auth | COMPLETE — VERIFIED (live) |
+| Email-confirmation-pending flow | COMPLETE — VERIFIED (live) |
+| Email/password sign-in | IMPLEMENTED — NOT VERIFIED on the real project (success path). Wrong-password path verified live; success verified against the stand-in. |
+| Session persistence | IMPLEMENTED — NOT VERIFIED on the real project (stand-in E2E passes) |
+| Sign-out | IMPLEMENTED — NOT VERIFIED on the real project (stand-in E2E passes) |
+| Protected dashboard; backend JWT validation; 401 handling; `/me` from verified JWT; no custom credentials; no secrets; checks pass; docs | COMPLETE — VERIFIED |
 
-## 7. Open decisions (summary)
+**Live evidence against the real project:**
+- the founder's session: `POST /sign-up` 200 → `/auth/check-email` → `/auth/confirm` 307
+  → `/dashboard` 200 → API `/me` 200 (a real ES256 token);
+- the agent's checks: anonymous `/dashboard` → `/sign-in?next=/dashboard`; a real
+  `invalid_credentials` → "The email or password is incorrect."; a forged token with the
+  real `kid` → 401 `invalid_signature`;
+- no emails, JWTs or bearer tokens in the logs.
+
+The full M2 write-up is in git history at `207fc13:docs/IMPLEMENTATION_STATUS.md`.
+
+## 10. Open decisions
 
 Full list: [OPEN_DECISIONS.md](OPEN_DECISIONS.md).
 
-- **Resolved in M2:** D-0, D-2, D-3, D-12 (policy), D-15.
-- **New:**
-  - D-17: confirm the Supabase dashboard settings (founder action, blocks live
-    verification);
-  - D-18: which confirmation email template to use;
-  - D-19: Arabic copy for the auth UI;
-  - D-20: auth cookies readable by JavaScript;
-  - D-21: rate limiting.
-- **Still open from M1:**
-  - D-4 and D-5: database strategy, hosting and region;
-  - D-7: clinical governance;
-  - D-8 to D-11: legal questions;
-  - D-13: crisis content (blocks any real-user AI access);
-  - D-14: ESLint 9.
+- **New in M3:**
+  - D-22: goals vocabulary;
+  - D-23: preference keys;
+  - D-24: consent text and publishing process (blocks launch);
+  - D-25: optional consents and withdrawal;
+  - D-26: apply the migrations to Supabase (needs `DATABASE_URL`);
+  - D-27: link to `auth.users` deletion;
+  - D-28: staff access to audit and consent records.
+- **Updated:**
+  - D-2: M3 scope recorded;
+  - D-4: Postgres 17 engineering default;
+  - D-10 and D-11: M3 status;
+  - D-12: the attestation is still not stored, because the model has no field for it.
 
-## 8. Recommended next step
+## 11. Recommended next step
 
-1. **Founder: live verification** (about 10 minutes, with real credentials in local env
-   files):
-   1. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to
-      `frontend/.env.local`, and `SUPABASE_URL` to `backend/.env`. Confirm the D-17
-      settings.
-   2. Start the backend (`uvicorn app.main:app --port 8001`) and the frontend (with
-      `API_BASE_URL=http://127.0.0.1:8001`).
-   3. Walk through: sign up with a real inbox → "Check your email" → open the link in the
-      same browser → dashboard shows "verified by the AI Wellness Egypt API" → reload →
-      sign out → `/dashboard` redirects → sign in with a wrong password (safe message) →
-      sign in correctly.
-   4. If all of that works, the five live criteria in §4 become COMPLETE — VERIFIED.
-2. **Upgrade local Node** to the latest 22.x so that `npm test` runs directly.
-3. **Commit** M2 on `m2-supabase-auth`, push both branches, and confirm that all four CI
-   jobs pass.
-4. **Only after approval,** plan M3. Per the imported plan that is consent and profile,
-   including resolving D-11 and the D-12 attestation wording.
+1. **Founder:**
+   1. Provide a server-only `DATABASE_URL` and run `alembic upgrade head` against Supabase
+      (D-26).
+   2. Finish the M2 live checks: sign in, reload, sign out.
+   3. Rotate the legacy JWT secret.
+2. **Push and turn on CI:** create `main`, then open pull requests for M2 and M3 so all
+   four CI jobs run on GitHub.
+3. **Legal:** start the consent text (D-24, D-11) and the age-attestation wording (D-12).
+   Product and clinical: the goals vocabulary (D-22).
+4. **Only after approval,** plan M4.
 
-**M3 has not been started.**
+**M4 has not been started.**
