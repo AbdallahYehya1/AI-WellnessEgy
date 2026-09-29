@@ -1,0 +1,69 @@
+"""FastAPI application factory."""
+
+from __future__ import annotations
+
+import time
+import uuid
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request, Response
+
+from app.core.config import Settings, get_settings
+from app.core.health import router as health_router
+from app.core.logging import configure_logging, get_logger
+
+logger = get_logger(__name__)
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or get_settings()
+    configure_logging(settings.log_level)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        # Log identifiers only; never dump the settings object.
+        logger.info(
+            "application_startup",
+            extra={"environment": settings.environment, "version": settings.app_version},
+        )
+        yield
+        logger.info("application_shutdown")
+
+    app = FastAPI(
+        title=settings.app_name,
+        version=settings.app_version,
+        lifespan=lifespan,
+        docs_url="/docs" if settings.docs_enabled else None,
+        redoc_url="/redoc" if settings.docs_enabled else None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
+    )
+
+    @app.middleware("http")
+    async def request_logging(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        # Metadata only: no headers, query strings or bodies (they can hold
+        # tokens or user-written text).
+        request_id = str(uuid.uuid4())
+        started = time.perf_counter()
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        logger.info(
+            "http_request",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            },
+        )
+        return response
+
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.include_router(health_router)
+    return app
+
+
+app = create_app()

@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --color-calm-50: #f3f8f6;
+  --color-calm-100: #e0eee8;
+  --color-calm-700: #2f5d50;
+  --color-calm-900: #1c3830;
+  --font-sans: "Segoe UI", Tahoma, "Noto Sans Arabic", system-ui, sans-serif;
+}
+
+body {
+  @apply bg-calm-50 text-calm-900 antialiased;
+}

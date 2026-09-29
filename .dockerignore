@@ -1,0 +1,14 @@
+# Applies when the repository root is a build context. The backend image
+# uses backend/ as its context and has its own backend/.dockerignore.
+.git/
+.github/
+.env
+.env.*
+**/node_modules/
+**/.next/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+docs/
