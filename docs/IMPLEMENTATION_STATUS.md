@@ -8,10 +8,10 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 | Milestone | Status |
 |---|---|
 | **M1: Repository and engineering foundation** | **COMPLETE — VERIFIED.** Committed as `d525820` on branch `m1-foundation`. The M1 gap "backend not run on Python 3.12" was closed in this pass (§3.4). GitHub CI has still not run, because nothing has been pushed. |
-| **M2: Supabase authentication** | **IMPLEMENTED — NOT VERIFIED** against the founder's real Supabase project. There are no credentials in this environment (§5). Everything else is **COMPLETE — VERIFIED**: automated tests, lint, types, build, Docker, and a full browser E2E run against a local Supabase Auth stand-in (§3.3). |
+| **M2: Supabase authentication** | **IMPLEMENTED — VERIFIED LOCALLY; real-Supabase verification PARTIAL.** All automated checks, the Docker checks and a 21/21 browser E2E run against a local Supabase Auth stand-in pass (§3.3). Against the **real project**, sign-up, email confirmation, the dashboard and backend `/me` verification of a real ES256 token are verified, as are the anonymous redirect and the wrong-password message (§3.5). Successful sign-in, reload persistence and sign-out have **not** yet been exercised against the real project. |
 | M3 and later | Not started. Awaiting approval. |
 
-Work is on branch `m2-supabase-auth` (from `m1-foundation`), **uncommitted**.
+M2 code is committed as `9474bbf` on `m2-supabase-auth` and pushed. The live-verification evidence in §3.5 was added in a follow-up commit.
 
 ---
 
@@ -209,6 +209,38 @@ This proves the integration against Supabase's HTTP protocol as implemented by
 `@supabase/supabase-js`. **It does not prove the founder's real project is configured
 correctly**, which is why the live-project items in §4 stay IMPLEMENTED — NOT VERIFIED.
 
+### 3.5 Live verification against the real Supabase project (2026-09-29)
+
+Credentials were supplied by the founder and kept only in the git-ignored
+`frontend/.env.local` and `backend/.env`. The project signs tokens with an **ES256** key
+(JWKS checked), so no legacy JWT secret is configured. The project's public
+`/auth/v1/settings` shows: email provider on, sign-ups open, **`mailer_autoconfirm: false`**
+(confirmation required), and anonymous users off.
+
+**Founder's browser session** (evidence from the server logs; query strings and all
+personal data redacted):
+
+```text
+POST /sign-up 200                  → GET /auth/check-email 200
+GET  /auth/confirm?<redacted> 307  → GET /dashboard 200
+API: GET /me 200                   (real Supabase ES256 access token verified by the backend)
+Log scan: "@" 0, "eyJ" 0, "Bearer " 0 in both the API and Next logs
+```
+
+**Checks run by the agent that need no inbox** (headless Edge against the real project;
+the sign-in used a random, non-existent address, so no account was created and no email
+sent):
+
+```text
+PASS  live: anonymous /dashboard redirects to /sign-in?next=/dashboard
+PASS  live: real Supabase invalid_credentials maps to the safe message
+PASS  live: still on /sign-in, no session created
+PASS  live: forged token (real kid, wrong key) → 401, reason invalid_signature (JWKS fetched)
+```
+
+**Not yet exercised against the real project:** a successful email/password sign-in,
+reload persistence, and sign-out. These need the founder's own account and password.
+
 ### 3.4 Other checks
 
 - **Backend on Python 3.12 (closes the M1 deviation):** the full suite ran in a
@@ -235,11 +267,11 @@ correctly**, which is why the live-project items in §4 stay IMPLEMENTED — NOT
 
 | Criterion | Status | Evidence |
 |---|---|---|
-| Email/password sign-up works through Supabase Auth | IMPLEMENTED — NOT VERIFIED (live) | Unit tests; E2E against the stand-in. Needs a run against the real project (§5). |
-| Email-confirmation-pending flow works | IMPLEMENTED — NOT VERIFIED (live) | `/auth/check-email` tests; E2E; `/auth/confirm` handles both `code` (PKCE) and `token_hash` (8 route tests) |
-| Email/password sign-in works | IMPLEMENTED — NOT VERIFIED (live) | Action tests; E2E, including the unconfirmed and wrong-password cases |
-| Session persistence works | IMPLEMENTED — NOT VERIFIED (live) | E2E: reload, new tab, cookie refresh through the proxy (proxy tests) |
-| Sign-out works | IMPLEMENTED — NOT VERIFIED (live) | Action test; E2E: cookies cleared, dashboard redirects |
+| Email/password sign-up works through Supabase Auth | COMPLETE — VERIFIED (live) | Real project: `POST /sign-up` → check-email page (§3.5); unit tests; E2E |
+| Email-confirmation-pending flow works | COMPLETE — VERIFIED (live) | Real project: confirmation link → `/auth/confirm` 307 → `/dashboard` 200 (§3.5); 8 route tests |
+| Email/password sign-in works | IMPLEMENTED — NOT VERIFIED (live success path) | Live: wrong-password path verified (§3.5). The successful sign-in was verified only against the stand-in (E2E) and in action tests. |
+| Session persistence works | IMPLEMENTED — NOT VERIFIED (live) | Stand-in E2E: reload and new tab; proxy tests. Not yet exercised on the real project. |
+| Sign-out works | IMPLEMENTED — NOT VERIFIED (live) | Stand-in E2E: cookies cleared, dashboard redirects; action test. Not yet exercised on the real project. |
 | Protected dashboard access works | COMPLETE — VERIFIED | Proxy tests (11), dashboard tests (6), E2E, and the production smoke test |
 | Backend JWT validation works | COMPLETE — VERIFIED | 54 auth tests: ES256/RS256 via JWKS, legacy HS256, the real `PyJWKClient` with a mocked endpoint, fail-closed 503 |
 | Invalid credentials safely return 401 | COMPLETE — VERIFIED | Missing, malformed, expired, not-yet-valid, bad signature, tampered, unknown `kid`, `alg:none`, algorithm confusion, wrong issuer or audience, missing claims, bad `sub` or role, anonymous: all return the same 401 body |
@@ -255,8 +287,9 @@ correctly**, which is why the live-project items in §4 stay IMPLEMENTED — NOT
 
 | Item | Status | Impact / what unblocks it |
 |---|---|---|
-| **No Supabase credentials in this environment** (`frontend/.env.local` and the root `.env` don't exist) | **BLOCKED** (live verification only) | The founder adds the project URL and publishable key to `frontend/.env.local`, and the project URL to `backend/.env` (or the root `.env` for Docker). Then run the live checklist in §8 and confirm the dashboard settings in D-17. |
-| Local Node is v22.9.0; the frontend dev dependencies need ≥22.22.2 | Environment deviation | `npm test` can't start its jsdom workers locally. All 87 tests pass on Node 22.23.3 (via `npx node@22`), which is what CI's `node-version: "22"` installs. Also, Rolldown's native Windows binding (an optional dependency) was skipped; it was installed locally with `npm install --no-save --force @rolldown/binding-win32-x64-msvc@1.2.11`, which left `package.json` and the lockfile unchanged. **Fix: upgrade local Node to the latest 22.x.** |
+| Live checks still missing: successful sign-in, reload persistence, sign-out on the real project | Pending (founder) | They need the founder's account and password. Credentials are now in the local git-ignored env files; the project settings were checked (§3.5). |
+| Local Node is v22.9.0; the frontend dev dependencies need ≥22.22.2 | Worked around (2026-09-29) | A portable Node 22.23.3 on `PATH` now runs `npm test` directly: 87/87 pass. |
+| (Original note) | Environment deviation | `npm test` can't start its jsdom workers locally. All 87 tests pass on Node 22.23.3 (via `npx node@22`), which is what CI's `node-version: "22"` installs. Also, Rolldown's native Windows binding (an optional dependency) was skipped; it was installed locally with `npm install --no-save --force @rolldown/binding-win32-x64-msvc@1.2.11`, which left `package.json` and the lockfile unchanged. **Fix: upgrade local Node to the latest 22.x.** |
 | GitHub CI has not run | IMPLEMENTED — NOT VERIFIED | Nothing has been pushed (awaiting your decision from M1). |
 | Port 8000 is taken by a local Apache | Worked around | `API_PORT=8001` for Docker; `uvicorn --port 8001` plus `API_BASE_URL=http://127.0.0.1:8001` for local development. |
 
