@@ -9,10 +9,16 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 |---|---|
 | **M1: Repository and engineering foundation** | **COMPLETE — VERIFIED** (`d525820`). |
 | **M2: Supabase authentication** | **IMPLEMENTED; verified locally; real-Supabase verification PARTIAL** (`9474bbf`, plus evidence in `207fc13`). Against the real project, sign-up, email confirmation, dashboard access, backend verification of a real ES256 token, the anonymous redirect and the wrong-password message are all verified. A successful sign-in, reload persistence and sign-out have not been run against the real project (§9). |
-| **M3: Consent and user-profile foundation** | **COMPLETE — VERIFIED against local Postgres 17.** All 21 DoD items are met with evidence (§5). **Not yet applied to the real Supabase database:** no `DATABASE_URL` was provided (§7, OPEN_DECISIONS D-26). |
+| **M3: Consent and user-profile foundation** | **Implemented and COMPLETE — VERIFIED against local Postgres 17 and in CI** (`78de377`). All 21 DoD items are met with evidence (§5). **Not applied to the real Supabase database:** no `DATABASE_URL` has been provided (§7, OPEN_DECISIONS D-26). Not production-ready (see §7 and §8). |
+| **CI (GitHub Actions)** | **PASSING on `main` at `78de377`**: run [36598112648](https://github.com/AbdallahYehya1/AI-WellnessEgy/actions/runs/36598112648), 4/4 jobs succeeded (§12). |
 | M4 and later | Not started. Awaiting approval. |
 
-M3 work is on branch `m3-consent-profile`, created from `m2-supabase-auth` at `207fc13`.
+**Repository:**
+- **`main`** is the default branch and holds the full linear history:
+  `d525820` (M1) → `9474bbf` (M2) → `207fc13` (M2 evidence) → `78de377` (M3).
+- Milestone branches `m1-foundation`, `m2-supabase-auth` and `m3-consent-profile` are
+  retained and pushed.
+- There was no force-push and no history rewrite.
 
 ---
 
@@ -24,7 +30,7 @@ M3 work is on branch `m3-consent-profile`, created from `m2-supabase-auth` at `2
 | Node ≥ 22.23.3 | Used via a portable Node 22.23.3 put first on `PATH`. The system Node is still 22.9.0. With it, `npm test` runs directly: **87/87** (M2 suite). |
 | Full M2 verification suite, re-run | Backend 106 passed; ruff, format and mypy clean; frontend lint, typecheck, test (87/87) and build pass; `docker compose config` OK. |
 | Live Supabase checklist | Credentials are in local, git-ignored env files; **no secret was printed**. Evidence from the founder's own browser run: sign-up → check-email → confirmation link (307) → dashboard (200) → API `/me` 200. The agent's inbox-free live checks: 3/3. See §9. |
-| M2 commit | M2 code was already committed (`9474bbf`). The live evidence was committed as `207fc13` (`docs(auth): record live Supabase verification evidence for milestone 2`). Not pushed. |
+| M2 commit | M2 code was already committed (`9474bbf`). The live evidence was committed as `207fc13` (`docs(auth): record live Supabase verification evidence for milestone 2`). Pushed with `main` in the M3 pass. |
 
 ---
 
@@ -97,7 +103,7 @@ echo submitted values.
 
 ## 3. Files changed in M3
 
-58 paths, relative to the repository root.
+57 paths in commit `78de377`, relative to the repository root.
 
 **Backend: new**
 - App code:
@@ -312,8 +318,8 @@ No test, lint rule or type setting was weakened.
 | M3 migrations not applied to the real Supabase database | BLOCKED (founder) | Provide a server-only `DATABASE_URL` in `backend/.env`, run `alembic upgrade head`, then confirm `app` is not an exposed API schema (D-26). |
 | Consent text is a placeholder | BLOCKED for public launch (legal) | Counsel's terms and privacy text (D-24, D-11). Publishing it is a new catalog version, which forces re-consent. |
 | Remaining M2 live checks | Pending (founder) | Sign in, reload, sign out on the real project (§9). |
-| CI has never run | Pending | Push, and create `main` (for example from `m1-foundation`), so pushes and PRs trigger the workflow. |
-| System Node 22.9 | Worked around | Upgrade to Node ≥ 22.22.2; the portable 22.23.3 is used meanwhile. |
+| CI | **Resolved.** `main` was created and pushed; the first run passed 4/4 (§12). | None |
+| System Node 22.9 | Worked around locally | Upgrade to Node ≥ 22.22.2. Until then, **`npm` itself must also run on the newer Node**. Otherwise `npm ci` or `npm install` skips Rolldown's optional native binding and `npm test` can't start (seen and fixed during the M3 pre-commit run). CI is unaffected, since it uses Node 22.23.2. |
 
 ## 8. Security findings and notes
 
@@ -400,10 +406,40 @@ Full list: [OPEN_DECISIONS.md](OPEN_DECISIONS.md).
       (D-26).
    2. Finish the M2 live checks: sign in, reload, sign out.
    3. Rotate the legacy JWT secret.
-2. **Push and turn on CI:** create `main`, then open pull requests for M2 and M3 so all
-   four CI jobs run on GitHub.
+2. **Done:** `main` was established and pushed, and CI passes (§12). From now on, work on a
+   feature branch and merge into `main` through a pull request, so CI runs before the
+   merge.
 3. **Legal:** start the consent text (D-24, D-11) and the age-attestation wording (D-12).
    Product and clinical: the goals vocabulary (D-22).
 4. **Only after approval,** plan M4.
 
 **M4 has not been started.**
+
+## 12. CI result (GitHub Actions)
+
+The first-ever run was triggered by the push of `main` at `78de377`:
+[run 36598112648](https://github.com/AbdallahYehya1/AI-WellnessEgy/actions/runs/36598112648).
+Result: **completed / success**. Every step of every job was inspected; all succeeded.
+
+| Job | Result | Evidence from the job log |
+|---|---|---|
+| Backend (Python 3.12) | success | CPython 3.12.14 on ubuntu-24.04 with a Postgres 17 service container. Ruff: "All checks passed!". Format: "54 files already formatted". Mypy: "no issues found in 52 source files". Pytest: **176 passed**, 98% coverage (12 lines missed on Linux against 11 locally; all in defensive branches). |
+| Frontend (Node 22) | success | Node v22.23.2; `npm ci`: 0 vulnerabilities; lint and typecheck pass; Vitest **13 files, 138 tests passed**; build "Compiled successfully", `/onboarding` and `/onboarding/consent` dynamic |
+| Repository guards | success | No tracked `.env`; no server-only secret names in `frontend/`; no secret-looking `NEXT_PUBLIC_` names |
+| Docker | success | Compose config valid. db `Healthy`, migrate exited 0 (asserted), api `Healthy`. `/health` is exactly `{"status":"ok"}`; `/consents/current` is served; `/me` returns 401 anonymously and 503 without Supabase |
+
+Also in this pass:
+- **Pre-commit audit:**
+  - the change set was inspected (57 files);
+  - the secret and project-identifier scan was clean;
+  - `.env`, `.env.local`, `.coverage`, caches and build output were confirmed ignored;
+  - migrations, tests and docs are included;
+  - every DB query is keyed on the verified identity;
+  - no route takes a user id;
+  - request bodies forbid extra fields;
+  - the audit trigger is intact.
+- **Final local run before commit:**
+  - backend: 176 passed; ruff, format and mypy clean;
+  - frontend (with `npm ci`, and npm itself on Node 22.23.3): 0 vulnerabilities, lint,
+    typecheck, 138 tests and build all pass;
+  - `docker compose config` OK.

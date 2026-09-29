@@ -241,10 +241,23 @@ chat session and should be rotated.
 - The migrations have **not** been run against the Supabase project, because no database
   connection string was provided (the only credentials given were the URL and publishable
   key).
-- **Needed:** a `DATABASE_URL` for the project (server-only; kept in `backend/.env` or a
-  secret store, never in the frontend). Use the direct connection or the **session
-  pooler** (the app disables prepared statements, so the transaction pooler also works).
-  Then run `alembic upgrade head` from `backend/`.
+- **Needed:** a `DATABASE_URL` for the project. It is server-only: keep it in
+  `backend/.env` (git-ignored) or a secret store, and never put it in the frontend or in
+  source control. Use the direct connection or the **session pooler**; the app disables
+  prepared statements, so the transaction pooler also works.
+- **Exact procedure, not yet executed.** Do not run it against an unidentified database:
+
+  ```bash
+  # backend/.env (git-ignored), e.g.
+  # DATABASE_URL=postgresql://postgres.<project-ref>:<password>@<pooler-host>:5432/postgres
+  cd backend
+  alembic current          # confirm which database is targeted; expect no revision yet
+  alembic upgrade head     # creates schema app + users, consents, audit_events (rev 0001)
+  alembic current          # expect: 0001 (head)
+  ```
+
+  The API reads the same `DATABASE_URL`. Without it, the profile and consent endpoints
+  answer 503.
 - **Security design (verified on plain Postgres with simulated Supabase roles):**
   - the tables live in schema `app`, which the Supabase Data API does not expose by
     default;
@@ -259,6 +272,14 @@ chat session and should be rotated.
   migration runs on plain Postgres. If a user is deleted in Supabase, their app profile,
   consents and audit rows remain. The intended behaviour belongs to the deletion
   workflow (D-10, `deletion_requests`).
+
+### D-29. Branch and CI workflow — RESOLVED (2026-09-29)
+- `main` was established (linear history M1 → M2 → M2 evidence → M3) and made the GitHub
+  default branch. The milestone branches are retained.
+- CI runs on pushes to `main` and on pull requests. The first run (`78de377`) passed 4/4
+  jobs.
+- **Recommended practice:** feature branch → pull request → CI → merge. Branch protection
+  on `main` (required checks) is a founder setting that has not been enabled yet.
 
 ### D-28. Access to audit and consent records by staff — OPEN
 - `DATA_MODEL.md` restricts `audit_events` to an admin/compliance role and allows admin
