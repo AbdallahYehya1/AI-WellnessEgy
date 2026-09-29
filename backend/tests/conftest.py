@@ -14,7 +14,7 @@ _SETTINGS_ENV = [name.upper() for name in Settings.model_fields]
 
 FAKE_SECRETS = {
     "SUPABASE_SERVICE_ROLE_KEY": "fake-service-role-key-6f1c2a",
-    "SUPABASE_JWT_SECRET": "fake-jwt-secret-9b7d3e",
+    "SUPABASE_JWT_SECRET": "fake-jwt-secret-9b7d3e-long-enough-for-validation",
     "DATABASE_URL": "postgresql://user:fake-db-password-41ac@localhost/db",
 }
 

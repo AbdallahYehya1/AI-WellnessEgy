@@ -56,6 +56,8 @@ jobs:
         run: npm run lint
       - name: Type check
         run: npm run typecheck
+      - name: Tests
+        run: npm test
       - name: Build
         run: npm run build
 
@@ -72,9 +74,16 @@ jobs:
           fi
       - name: No server-only secrets referenced by the frontend
         run: |
-          if grep -rInE 'service[_-]?role|jwt[_-]?secret|DATABASE_URL' frontend \
+          if grep -rInE 'service[_-]?role|jwt[_-]?secret|DATABASE_URL|sb_secret_' frontend \
               --exclude-dir=node_modules --exclude-dir=.next --exclude=.env.example; then
             echo "The frontend must never reference server-only secrets." >&2
+            exit 1
+          fi
+      - name: No secret-looking NEXT_PUBLIC_ variables
+        run: |
+          if grep -rInE 'NEXT_PUBLIC_[A-Z0-9_]*(SECRET|SERVICE|PASSWORD|PRIVATE|TOKEN)' . \
+              --exclude-dir=node_modules --exclude-dir=.next --exclude-dir=.git; then
+            echo "NEXT_PUBLIC_ values are shipped to browsers and must not be secrets." >&2
             exit 1
           fi
 
@@ -88,7 +97,14 @@ jobs:
       - name: Build and start API
         run: docker compose up --build --detach --wait --wait-timeout 60
       - name: Health check
-        run: curl --fail --silent http://127.0.0.1:8000/health
+        run: |
+          test "$(curl --fail --silent http://127.0.0.1:8000/health)" = '{"status":"ok"}'
+      - name: Protected endpoint rejects anonymous calls and fails closed without Supabase
+        run: |
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:8000/me)" = "401"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            -H 'Authorization: Bearer a.b.c' http://127.0.0.1:8000/me)" = "503"
       - name: Stop
         if: always()
         run: docker compose down

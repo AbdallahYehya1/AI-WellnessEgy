@@ -72,3 +72,69 @@ def test_secrets_are_loaded_as_secret_strings(secret_env: dict[str, str]) -> Non
 
 def test_get_settings_is_cached() -> None:
     assert get_settings() is get_settings()
+
+
+def test_supabase_is_unconfigured_by_default() -> None:
+    settings = Settings()
+    assert settings.supabase_url is None
+    assert settings.supabase_issuer is None
+    assert settings.supabase_jwks_url is None
+    assert settings.supabase_jwt_audience == "authenticated"
+
+
+def test_supabase_urls_are_derived_from_project_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SUPABASE_URL", "https://abc.supabase.co/")
+    settings = Settings()
+    assert settings.supabase_url == "https://abc.supabase.co"
+    assert settings.supabase_issuer == "https://abc.supabase.co/auth/v1"
+    assert settings.supabase_jwks_url == "https://abc.supabase.co/auth/v1/.well-known/jwks.json"
+
+
+def test_blank_supabase_url_means_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SUPABASE_URL", "   ")
+    assert Settings().supabase_url is None
+
+
+def test_local_supabase_may_use_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SUPABASE_URL", "http://127.0.0.1:54321")
+    assert Settings().supabase_issuer == "http://127.0.0.1:54321/auth/v1"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://abc.supabase.co",
+        "http://localhost.evil.example",
+        "http://127.0.0.1.evil.example",
+        "ftp://abc.supabase.co",
+        "abc.supabase.co",
+        "https://",
+    ],
+)
+def test_remote_supabase_url_must_use_https(monkeypatch: pytest.MonkeyPatch, url: str) -> None:
+    monkeypatch.setenv("SUPABASE_URL", url)
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+@pytest.mark.parametrize(
+    "name", ["SUPABASE_JWT_SECRET", "DATABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]
+)
+def test_blank_secret_env_var_means_unset(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    monkeypatch.setenv(name, "")
+    assert getattr(Settings(), name.lower()) is None
+
+
+def test_example_env_file_loads_with_everything_unset(tmp_path: Path) -> None:
+    example = Path(__file__).resolve().parents[2] / ".env.example"
+    (tmp_path / ".env").write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
+    settings = Settings()
+    assert settings.supabase_url is None
+    assert settings.supabase_jwt_secret is None
+    assert settings.database_url is None
+
+
+def test_short_legacy_jwt_secret_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "too-short")
+    with pytest.raises(ValidationError):
+        Settings()

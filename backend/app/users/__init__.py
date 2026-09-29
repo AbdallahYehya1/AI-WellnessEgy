@@ -1,4 +1,4 @@
-"""Users: app-side profile keyed on the Supabase Auth user id.
+"""Users: identity endpoint (``GET /me``).
 
-Milestone 1: module boundary only. No implementation yet.
+M2 has no application users table; profiles arrive in a later milestone.
 """

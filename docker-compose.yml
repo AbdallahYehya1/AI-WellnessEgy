@@ -10,8 +10,12 @@ services:
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     environment:
-      # Allowlist only what the API uses today. Secrets are passed through
-      # here once a milestone actually needs them.
+      # Allowlist only what the API uses today.
       ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Without SUPABASE_URL, authenticated endpoints fail closed (503).
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_JWT_AUDIENCE: ${SUPABASE_JWT_AUDIENCE:-authenticated}
+      # Legacy HS256 projects only; empty means unset.
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
     restart: unless-stopped

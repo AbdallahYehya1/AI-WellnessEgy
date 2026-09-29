@@ -9,14 +9,20 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 
+from app.auth.tokens import SupabaseTokenVerifier
+from app.common.errors import register_error_handlers
 from app.core.config import Settings, get_settings
 from app.core.health import router as health_router
 from app.core.logging import configure_logging, get_logger
+from app.users.router import router as users_router
 
 logger = get_logger(__name__)
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    token_verifier: SupabaseTokenVerifier | None = None,
+) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
 
@@ -25,7 +31,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Log identifiers only; never dump the settings object.
         logger.info(
             "application_startup",
-            extra={"environment": settings.environment, "version": settings.app_version},
+            extra={
+                "environment": settings.environment,
+                "version": settings.app_version,
+                "auth_configured": settings.supabase_url is not None,
+            },
         )
         yield
         logger.info("application_shutdown")
@@ -61,8 +71,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         return response
 
+    app.state.token_verifier = token_verifier or SupabaseTokenVerifier(settings)
     app.dependency_overrides[get_settings] = lambda: settings
+    register_error_handlers(app)
     app.include_router(health_router)
+    app.include_router(users_router)
     return app
 
 

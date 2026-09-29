@@ -7,237 +7,344 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 
 | Milestone | Status |
 |---|---|
-| **M1: Repository and engineering foundation** | **COMPLETE — VERIFIED** (locally; see §4 for the one item that is not verified) |
-| M2 and later | Not started. Awaiting approval. |
+| **M1: Repository and engineering foundation** | **COMPLETE — VERIFIED.** Committed as `d525820` on branch `m1-foundation`. The M1 gap "backend not run on Python 3.12" was closed in this pass (§3.4). GitHub CI has still not run, because nothing has been pushed. |
+| **M2: Supabase authentication** | **IMPLEMENTED — NOT VERIFIED** against the founder's real Supabase project. There are no credentials in this environment (§5). Everything else is **COMPLETE — VERIFIED**: automated tests, lint, types, build, Docker, and a full browser E2E run against a local Supabase Auth stand-in (§3.3). |
+| M3 and later | Not started. Awaiting approval. |
+
+Work is on branch `m2-supabase-auth` (from `m1-foundation`), **uncommitted**.
 
 ---
 
-## 1. Starting point
+## 1. Decisions applied in M2
 
-- The GitHub repository `AbdallahYehya1/AI-WellnessEgy` was **empty**: `git clone`
-  reported "You appear to have cloned an empty repository" and there were no commits.
-- None of the required source documents were in the repository. Earlier planning material
-  was in the local parent folder (`../files4/mental-wellness-platform-m1gate/docs/`):
-  `ARCHITECTURE.md`, `API_CONTRACT.md`, `DATA_MODEL.md`, `SME_COUNCIL_DECISIONS.md`,
-  `PHASE_1_IMPLEMENTATION_PLAN.md`, and older `OPEN_DECISIONS.md` and
-  `IMPLEMENTATION_STATUS.md` files. They were read, and the first five were copied into
-  `docs/`, each with a provenance note at the top. `OPEN_DECISIONS.md` and this file were
-  rewritten from scratch. Their open clinical, legal and crisis items were carried forward.
-- `Architecture_V2_Phase_1_Build_Spec.docx` was **not found** anywhere. This is recorded as
-  OPEN_DECISIONS D-0.
-- That folder also held earlier, unverified M1 code. It was used only as a reference. All
-  code here was written fresh and verified.
+These are recorded in [OPEN_DECISIONS.md](OPEN_DECISIONS.md):
 
-## 2. Files created
+- **D-0:** the imported docs are the source of truth.
+- **D-2:** M2 is auth only.
+- **D-3:** email/password with required confirmation.
+- **D-12:** adults 18+ only.
+- **D-15:** `/health` returns exactly `{"status":"ok"}`.
 
-All paths are relative to the repository root. No existing files were changed, because the
-repository was empty.
+## 2. Files changed in M2
 
-**Repository and operations:** `.env.example`, `.gitignore`, `.dockerignore`,
-`docker-compose.yml`, `README.md`, `.github/workflows/ci.yml`
+**Backend: new**
+- `backend/app/auth/tokens.py`: `SupabaseTokenVerifier`, which checks the JWKS (ES256/RS256)
+  and the legacy HS256 secret, plus expiry, issuer, audience, subject and role, and maps
+  each rejection to a reason.
+- `backend/app/auth/dependencies.py`: bearer extraction, uniform 401/503 errors, and the
+  `CurrentPrincipal` dependency.
+- `backend/app/auth/principal.py`: the `AuthenticatedPrincipal` model.
+- `backend/app/users/router.py`: `GET /me`.
+- `backend/app/common/errors.py`: `ApiError` and the `{"error":{code,message}}` handler.
+- `backend/tests/test_auth.py` (54 tests) and `backend/tests/auth_helpers.py` (in-process
+  ES256/RS256 keys, fake JWKS, token minting).
 
-**Docs:** `docs/IMPLEMENTATION_STATUS.md`, `docs/OPEN_DECISIONS.md` (both new), and
-`docs/ARCHITECTURE.md`, `docs/API_CONTRACT.md`, `docs/DATA_MODEL.md`,
-`docs/SME_COUNCIL_DECISIONS.md`, `docs/PHASE_1_IMPLEMENTATION_PLAN.md` (imported, with a
-provenance note added)
+**Backend: changed**
+- `app/core/config.py`: Supabase URL, audience and JWKS settings; derived issuer and JWKS
+  URLs; strict URL validation; blank secrets count as unset; minimum length for the
+  legacy secret.
+- `app/core/health.py`: returns `{"status":"ok"}` only.
+- `app/main.py`: token verifier held on `app.state`, error handlers, the users router, and
+  an `auth_configured` flag in the startup log.
+- `app/auth/__init__.py` and `app/users/__init__.py`: docstrings.
+- `pyproject.toml`: adds `pyjwt[crypto]>=2.15,<3`.
+- Tests: `tests/conftest.py`, `test_app_startup.py`, `test_config.py`, `test_health.py`,
+  `test_sensitive_data.py`.
 
-**Backend:**
-- `backend/pyproject.toml`, `backend/Dockerfile`, `backend/.dockerignore`
-- `backend/app/__init__.py`, `backend/app/main.py`
-- `backend/app/core/__init__.py`, `config.py`, `health.py`, `logging.py`
-- Module boundaries (a docstring-only `__init__.py` each): `auth`, `users`, `consent`,
-  `conversations`, `ai`, `ai/provider`, `ai/language`, `ai/prompts`, `ai/evaluation`,
-  `safety`, `knowledge`, `memory`, `mood`, `wellness`, `journal`, `analytics`, `audit`,
-  `common`
-- `backend/tests/__init__.py`, `conftest.py`, `test_app_startup.py`, `test_health.py`,
-  `test_config.py`, `test_sensitive_data.py`
+**Frontend: new**
+- `proxy.ts` and `lib/supabase/proxy.ts`: session refresh and route protection.
+- `lib/supabase/server.ts` and `lib/supabase/env.ts`: the Supabase SSR client and public
+  env.
+- `lib/auth/actions.ts`: the `signUp`, `signIn` and `signOut` Server Actions.
+- `lib/auth/validation.ts`, `lib/auth/errors.ts`, `lib/auth/site-url.ts`.
+- `lib/api/backend.ts`: server-side `fetchMe`.
+- `app/(auth)/sign-in/page.tsx`, `app/(auth)/sign-up/page.tsx`,
+  `app/auth/check-email/page.tsx`, `app/auth/confirm/route.ts`, `app/dashboard/page.tsx`.
+- `components/auth/form-parts.tsx`, `sign-in-form.tsx`, `sign-up-form.tsx`.
+- Tests: `lib/supabase/proxy.test.ts`, `lib/auth/actions.test.ts`,
+  `lib/auth/validation.test.ts`, `lib/auth/errors.test.ts`, `app/auth/confirm/route.test.ts`,
+  `app/dashboard/page.test.tsx`, `app/(auth)/pages.test.tsx`,
+  `components/auth/auth-forms.test.tsx`.
+- Test support: `vitest.config.mts`, `test/setup.ts`, `test/supabase-mock.ts`,
+  `test/server-only-stub.ts`.
+- `AGENTS.md` and `CLAUDE.md`: **generated by `next dev`**, not written by hand. They point
+  coding agents at `node_modules/next/dist/docs/`, and `next dev` recreates them if
+  removed.
 
-**Frontend:** `frontend/package.json`, `frontend/package-lock.json`, `frontend/tsconfig.json`,
-`frontend/next.config.ts`, `frontend/eslint.config.mjs`, `frontend/postcss.config.mjs`,
-`frontend/.env.example`, `frontend/app/layout.tsx`, `frontend/app/page.tsx`,
-`frontend/app/globals.css`
+**Frontend: changed**
+- `app/page.tsx`: sign-up and sign-in links.
+- `next.config.ts`: Server Action dev logging switched off (§6).
+- `package.json` and `package-lock.json`:
+  - adds `@supabase/ssr`, `@supabase/supabase-js`, `server-only`, and the Vitest and
+    Testing Library dev dependencies;
+  - adds a `test` script;
+  - raises `engines.node` to `>=22.22.2`.
+- `.env.example`: `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SITE_URL`, `API_BASE_URL`.
 
-The following are generated locally and git-ignored: `backend/.venv/`,
-`frontend/node_modules/`, `frontend/.next/`, `frontend/next-env.d.ts`, and tool caches.
+**Repository**
+- `.env.example`: `SUPABASE_URL`, `SUPABASE_JWT_AUDIENCE`, and notes on the legacy secret.
+- `docker-compose.yml`: passes the Supabase settings through the allowlist.
+- `.github/workflows/ci.yml`: adds the frontend test step, a `sb_secret_` guard, a guard
+  against secret-looking `NEXT_PUBLIC_` names, an exact `/health` body check, and `/me`
+  401/503 checks.
+- `README.md`, `docs/API_CONTRACT.md`, `docs/OPEN_DECISIONS.md`, and this file.
 
-## 3. Tasks completed and evidence
+## 3. Verification
 
-| Task | Status | Evidence |
-|---|---|---|
-| FastAPI app (`create_app` factory, lifespan, request-logging middleware) | COMPLETE — VERIFIED | `test_app_startup.py` (6 tests); real Uvicorn run; container run |
-| `GET /health` → `{"status":"ok","environment":...}` (liveness only, typed response model) | COMPLETE — VERIFIED | `test_health.py` (5 tests); `curl` against Uvicorn (200) and against the container (200, healthy) |
-| Environment-based config with safe defaults (`pydantic-settings`, `Literal`-validated environment and log level, `SecretStr` secrets) | COMPLETE — VERIFIED | `test_config.py` (10 tests: defaults, env override, case-insensitivity, `.env` loading and precedence, invalid values rejected, caching) |
-| API docs (`/docs`, `/redoc`, `/openapi.json`) off in production | COMPLETE — VERIFIED | Tests; Uvicorn with `ENVIRONMENT=production` returned `/docs` 404 |
-| Privacy-safe JSON logging: metadata only, no headers, bodies or query strings; sensitive keys and `SecretStr` values redacted; Uvicorn access log and HTTP-client URL logs suppressed | COMPLETE — VERIFIED | `test_sensitive_data.py` (14 tests); a real Uvicorn run with a fake secret and a `?token=` query showed 0 occurrences of either in the log |
-| Sensitive config never logged or exposed | COMPLETE — VERIFIED | Tests assert that fake secrets are absent from `repr`, `str`, `model_dump`, the JSON dump, captured stdout/stderr across the app lifecycle, and the `/health`, `/openapi.json` and `/docs` bodies and headers |
-| Ruff lint (E, W, F, I, UP, B, SIM, S, N, RUF) and format config | COMPLETE — VERIFIED | `ruff check .` and `ruff format --check .` pass |
-| Strict mypy (`strict = true`, `warn_unreachable`, pydantic plugin) | COMPLETE — VERIFIED | `mypy app` passes (24 files). `mypy app tests` also passes (30 files) and is what CI runs |
-| Backend Dockerfile (Python 3.12-slim, non-root uid 10001, HEALTHCHECK, `.env` excluded from the image) | COMPLETE — VERIFIED | `docker build ./backend` succeeded; the container became `healthy`; `id` inside it shows `uid=10001(appuser)` |
-| Next.js 16 + TypeScript strict + App Router + Tailwind 4, root layout (`lang="ar" dir="rtl"`), minimal non-clinical bilingual landing page | COMPLETE — VERIFIED | lint, typecheck and build pass; `/` is prerendered statically |
-| Public and server config separated: root `.env.example` is server-only, `frontend/.env.example` is `NEXT_PUBLIC_*` only | COMPLETE — VERIFIED | Guard `grep` finds no service-role, JWT-secret or `DATABASE_URL` references in `frontend/` |
-| Minimal Docker Compose (API only; host port configurable through `API_PORT`) | COMPLETE — VERIFIED | `docker compose config` passes; `compose up --wait` reached healthy; `/health` returned 200 |
-| GitHub Actions CI (backend, frontend, guards, docker jobs) | **IMPLEMENTED — NOT VERIFIED** | The workflow has not run on GitHub yet because nothing is committed or pushed. Each step it runs was run locally and passed |
-| No secrets committed | COMPLETE — VERIFIED | A pattern scan (OpenAI-style `sk-` keys, JWT `eyJ…`, AWS `AKIA…`, private keys) over all trackable files found nothing. `git add -A --dry-run` shows no `.env` file |
+### 3.1 Required commands: final run (real output, abridged)
 
-**Tests:** 35 passed, with 100% line coverage of `app/` (107 statements).
-
-## 4. Commands run and results (real output, final run)
-
-Environment: Windows 11, Git Bash. **Python 3.13.6** (see §5), Node v22.9.0, npm 10.8.3,
-Docker 29.8.0.
+Environment: Windows 11, Git Bash. Local Python 3.13.6 (and 3.12.14 in Docker, §3.4).
+Local Node v22.9.0 (and 22.23.3 via `npx node@22`). Docker 29.8.0.
 
 ```text
 $ cd backend
 $ python -m pytest -q
-...................................                                      [100%]
-TOTAL                             107      0   100%
-35 passed in 0.87s                                         [exit 0]
-$ ruff check .
-All checks passed!                                         [exit 0]
-$ ruff format --check .
-30 files already formatted                                 [exit 0]
-$ mypy app --show-error-codes
-Success: no issues found in 24 source files                [exit 0]
-$ mypy app tests --show-error-codes
-Success: no issues found in 30 source files                [exit 0]
+106 passed in 1.88s        TOTAL 321 stmts, 4 missed, 99% coverage     [exit 0]
+  (uncovered: tokens.py 110, 130-131 and errors.py 43, all defensive error branches)
+$ ruff check .                 All checks passed!                       [exit 0]
+$ ruff format --check .        37 files already formatted               [exit 0]
+$ mypy app --show-error-codes  Success: no issues found in 29 source files [exit 0]
+$ mypy app tests --show-error-codes  Success: no issues found in 37 source files [exit 0]
 
 $ cd ../frontend
 $ npm install
-npm warn EBADENGINE Unsupported engine { package: 'ai-wellness-egypt-web@0.1.0',
-  required: { node: '>=22.13.0' }, current: { node: 'v22.9.0' } }
-npm warn EBADENGINE Unsupported engine { package: 'eslint-visitor-keys@5.0.1',
-  required: { node: '^20.19.0 || ^22.13.0 || >=24' }, current: { node: 'v22.9.0' } }
-up to date, audited 365 packages in 1s
-found 0 vulnerabilities                                    [exit 0]
-$ npm run lint
-> eslint . --max-warnings=0                                [exit 0, no findings]
-$ npm run typecheck
-> next typegen && tsc --noEmit
-✓ Types generated successfully                             [exit 0]
+  EBADENGINE warnings: local Node v22.9.0 is older than several packages require
+  (jsdom, vitest, vite, undici …; see §5)
+  up to date, audited 453 packages; found 0 vulnerabilities           [exit 0]
+$ npm run lint                 eslint . --max-warnings=0 (no findings)  [exit 0]
+$ npm run typecheck            next typegen && tsc --noEmit ✓           [exit 0]
 $ npm run build
-▲ Next.js 16.3.6 (Turbopack)
-✓ Compiled successfully in 3.0s
-✓ Generating static pages using 4 workers (3/3) in 618ms
-Route (app)
-┌ ○ /
-└ ○ /_not-found                                            [exit 0]
+  ▲ Next.js 16.3.6 (Turbopack)  ✓ Compiled successfully
+  Route (app): ○ /  ○ /_not-found  ○ /auth/check-email  ƒ /auth/confirm
+               ƒ /dashboard  ƒ /sign-in  ○ /sign-up   ƒ Proxy (Middleware)   [exit 0]
+$ npm test                     (local Node v22.9.0)
+  Test Files 2 passed (2), Tests 19 passed (19), plus 6 "Failed to start forks worker"
+  errors: ERR_REQUIRE_ESM in html-encoding-sniffer → @exodus/bytes (jsdom needs
+  Node ≥22.22.2)                                                       [exit 1]
+$ npx -y -p node@22 -- node node_modules/vitest/vitest.mjs run   (Node v22.23.3)
+  Test Files 8 passed (8), Tests 87 passed (87)                        [exit 0]
 
 $ cd ..
-$ docker compose config
-name: ai-wellness-egypt
-services:
-  api:
-    build: { context: ...\backend, dockerfile: Dockerfile }
-    environment: { ENVIRONMENT: development, LOG_LEVEL: INFO }
-    ports: [ { host_ip: 127.0.0.1, target: 8000, published: "8000" } ]
-    restart: unless-stopped                                [exit 0]
+$ docker compose config        valid; api service with ENVIRONMENT, LOG_LEVEL,
+                               SUPABASE_URL, SUPABASE_JWT_AUDIENCE, SUPABASE_JWT_SECRET [exit 0]
 ```
 
-Additional checks, beyond the required list:
-
-```text
-$ docker build ./backend                                   [exit 0]
-$ docker compose up --build --detach --wait --wait-timeout 60
-Error response from daemon: ports are not available: exposing port TCP 127.0.0.1:8000
-... bind: An attempt was made to access a socket in a way forbidden by its access permissions.
-                                                           [exit 1]
-  → Cause: a local Apache `httpd` (PID 4868) already listens on port 8000 on this machine.
-    This is an environment conflict, not a code defect. Fix: the host port was made
-    configurable (API_PORT). The Apache process was not touched.
-$ API_PORT=8001 docker compose up --build --detach --wait --wait-timeout 60
-Container ai-wellness-egypt-api-1 Healthy                  [exit 0]
-$ curl --fail --silent http://127.0.0.1:8001/health
-{"status":"ok","environment":"development"}                [exit 0]
-$ docker compose exec api id
-uid=10001(appuser) gid=10001(appuser) groups=10001(appuser)
-$ docker compose down                                      [exit 0]
-
-$ SUPABASE_JWT_SECRET=live-smoke-secret-xyz ENVIRONMENT=production uvicorn app.main:app --port 8765
-$ curl -i "http://127.0.0.1:8765/health?token=qs-secret-abc"
-HTTP/1.1 200 OK ... x-request-id: <uuid4> ... {"status":"ok","environment":"production"}
-$ curl http://127.0.0.1:8765/docs   → 404
-$ grep -cE "live-smoke-secret-xyz|qs-secret-abc" <server log>   → 0
-```
-
-### Failures found during development and how they were fixed
+### 3.2 Failures found and fixed during M2
 
 No test, lint rule or type setting was weakened.
 
-1. **Pytest collection failed on all three TestClient test files.** Starlette 1.7 deprecates
-   `httpx` as the TestClient transport in favour of `httpx2`, and `filterwarnings = error`
-   turned the warning into an error. Fix: the dev dependency is now `httpx2`, which is what
-   Starlette asks for. The warnings-as-errors setting was kept.
-2. **A real privacy leak, caught by `test_request_log_omits_query_string_and_headers`.**
-   The HTTP client library logs full request URLs, query-string tokens included, at INFO.
-   Fix: `configure_logging` raises the `httpx`, `httpx2` and `httpcore` loggers to WARNING.
-   This matters from M2 onward, when the backend makes outbound calls to Supabase.
-3. **`test_only_milestone_one_routes_are_exposed` failed.** FastAPI 0.141 wraps included
-   routers, so `route.path` is no longer exposed on `app.routes`. Fix: the test now asserts
-   on the generated OpenAPI paths (`{"/health"}`), which checks the same thing more
-   robustly.
+1. **`/dashboard` was being prerendered.** The build output showed it as static (`○`):
+   with no Supabase env at build time, `createClient()` returned before reading cookies,
+   so Next rendered a fixed redirect. It was safe (it failed closed) but wrong for a
+   protected page. Fix: read cookies first; the build now shows `ƒ /dashboard`.
+2. **A blank `SUPABASE_JWT_SECRET=` (as shipped in `.env.example`) became an empty
+   `SecretStr`.** That would have enabled the HS256 path with an empty key, and PyJWT's
+   `InvalidKeyError` would then have produced a 500. Fix: blank secrets count as unset,
+   short legacy secrets are rejected at startup, and any other `PyJWTError` maps to 401.
+3. **The `SUPABASE_URL` check accepted `http://localhost.evil.example`.** It was a prefix
+   match. Fix: parse the hostname; `http` is allowed only for `localhost` and
+   `127.0.0.1`.
+4. **An unreachable branch in the verifier** (no key source while an issuer is set) was
+   folded into the main condition.
+5. **Ruff N818:** the exceptions were renamed `TokenRejectedError` and
+   `AuthUnavailableError`.
+6. **Bandit S105/S106 in tests:** the error-message constant was renamed (it only tripped
+   on the word "TOKEN"), and the two deliberately fake secrets got an inline
+   `# noqa: S105 - fake`. No per-file ignore was added.
+7. **Strict mypy** caught `jwt.encode(key=None)` in the `alg: none` test. That token, and
+   the algorithm-confusion token, are now built by hand, because PyJWT refuses to create
+   them.
+8. **ESLint** caught unused variables in two new test files; fixed in the tests.
+9. **The Next dev server logged Server Action arguments and return values, including
+   users' emails** (dev only). Fixed with `logging.serverFunctions: false`. Re-checked in
+   the E2E logs: 0 emails.
+10. **One test expectation was wrong:** a percent-encoded local path such as `/%0d%0a…` is
+    a safe redirect target. The case was removed.
 
-## 5. Blockers and environment deviations
+Mutation checks confirmed the tests can fail. Removing `/dashboard` protection and leaking
+raw sign-in errors made 6 frontend tests fail. Dropping the issuer and audience checks made
+4 backend tests fail. Both were restored and re-run green.
 
-| Item | Status | Impact |
+### 3.3 End-to-end browser run (local Supabase Auth stand-in)
+
+There are no real Supabase credentials here, so the **whole flow was run in headless
+Microsoft Edge (Playwright)** against the real Next.js app and the real FastAPI backend.
+Both were pointed at a small local stand-in for the Supabase Auth API. It covers
+sign-up with a PKCE confirmation email, the verify link, password, PKCE and refresh grants,
+logout, and an ES256 JWKS. The stand-in and the script are in the session scratchpad, not
+the repo.
+
+```text
+21/21 checks passed
+PASS  landing page links to sign-up
+PASS  sign-up validation shows field errors
+PASS  sign-up shows the confirmation-pending page
+PASS  unconfirmed sign-in explains email confirmation
+PASS  confirmation email was sent with a redirect to /auth/confirm
+PASS  confirmation link signs in and lands on the dashboard
+PASS  dashboard shows the API-verified identity
+PASS  session survives a reload
+PASS  session is shared with a new tab
+PASS  session is stored in sb-*-auth-token cookies (SameSite=Lax, HttpOnly=false; see D-20)
+PASS  dashboard HTML does not contain the access token
+PASS  signed-in user visiting /sign-in is sent to the dashboard
+PASS  sign-out shows the signed-out notice
+PASS  sign-out clears the auth cookies (0 left)
+PASS  dashboard redirects to sign-in after sign-out
+PASS  wrong password shows a safe message
+PASS  password is not kept in the form after an error
+PASS  sign-in returns to the dashboard with API verification
+PASS  backend /me rejects anonymous requests with 401
+PASS  backend /me rejects a forged token with 401
+PASS  backend /health is exactly {status: ok}
+
+Log leak scan after the run (API log / Next log):
+  "eyJ" (JWTs)            0 / 0
+  passwords used          0 / 0
+  "@example.com" emails   0 / 0
+  "Bearer "               0 / 0
+```
+
+This proves the integration against Supabase's HTTP protocol as implemented by
+`@supabase/supabase-js`. **It does not prove the founder's real project is configured
+correctly**, which is why the live-project items in §4 stay IMPLEMENTED — NOT VERIFIED.
+
+### 3.4 Other checks
+
+- **Backend on Python 3.12 (closes the M1 deviation):** the full suite ran in a
+  `python:3.12-slim` container (Python 3.12.14): 106 passed, ruff clean, format clean,
+  mypy clean. The first attempt had 1 failure because only `backend/` was mounted and a
+  test reads the repo-root `.env.example`. With the repo root mounted it passed; the test
+  was not changed.
+- **Production server smoke test (`next start`, no Supabase configured):**
+  - `/`, `/sign-up`, `/sign-in` and `/auth/check-email` return 200;
+  - `/dashboard` → 307 to `/sign-in` (fails closed);
+  - `/auth/confirm?code=x` → `/sign-in?status=confirmation-failed`;
+  - an injected `?status=<script>` value is not rendered;
+  - no `X-Powered-By` header.
+- **Docker** (`API_PORT=8001`, because port 8000 is taken by a local Apache):
+  - the container becomes `healthy` and runs Python 3.12.14 with PyJWT 2.15.1;
+  - `/health` → `{"status":"ok"}`;
+  - `/me` with no token → 401 `{"error":{"code":"unauthorized","message":"Authentication is required."}}`;
+  - `/me` with `Bearer a.b.c` and no `SUPABASE_URL` → 503 `auth_unavailable`.
+- **Secrets:** a pattern scan of every changed or new file (for `sb_secret_…`, JWTs, `sk-…`
+  keys and private keys) found nothing. The only env files are the two `.env.example`
+  templates. Both CI grep guards pass locally.
+
+## 4. M2 acceptance criteria
+
+| Criterion | Status | Evidence |
 |---|---|---|
-| Python 3.12 is not installed locally (the `py` launcher lists 3.14, 3.13 and 3.10; no `uv`). Backend checks ran on **3.13.6**. | Deviation, recorded | Low. Ruff targets `py312` and mypy checks as `python_version = "3.12"`. The Docker image runs Python 3.12 and started healthy. CI runs pytest and mypy on 3.12. The first CI run will confirm this. |
-| Local Node is v22.9.0; the dependency tree needs ≥ 22.13 (`EBADENGINE` warnings) | Deviation, recorded | Low. Every frontend command succeeded. CI uses the latest Node 22. Upgrading Node locally is recommended. |
-| CI has not run on GitHub | IMPLEMENTED — NOT VERIFIED | The workflow will run on the first push or PR. Nothing was committed or pushed, because that needs your approval. |
-| Port 8000 is taken by a local Apache | Worked around | Use `API_PORT=8001 docker compose up`, or `uvicorn ... --port 8001`. |
-| Docker daemon | Resolved | It was unreachable at the start of the session and running later. All Docker checks then passed. |
+| Email/password sign-up works through Supabase Auth | IMPLEMENTED — NOT VERIFIED (live) | Unit tests; E2E against the stand-in. Needs a run against the real project (§5). |
+| Email-confirmation-pending flow works | IMPLEMENTED — NOT VERIFIED (live) | `/auth/check-email` tests; E2E; `/auth/confirm` handles both `code` (PKCE) and `token_hash` (8 route tests) |
+| Email/password sign-in works | IMPLEMENTED — NOT VERIFIED (live) | Action tests; E2E, including the unconfirmed and wrong-password cases |
+| Session persistence works | IMPLEMENTED — NOT VERIFIED (live) | E2E: reload, new tab, cookie refresh through the proxy (proxy tests) |
+| Sign-out works | IMPLEMENTED — NOT VERIFIED (live) | Action test; E2E: cookies cleared, dashboard redirects |
+| Protected dashboard access works | COMPLETE — VERIFIED | Proxy tests (11), dashboard tests (6), E2E, and the production smoke test |
+| Backend JWT validation works | COMPLETE — VERIFIED | 54 auth tests: ES256/RS256 via JWKS, legacy HS256, the real `PyJWKClient` with a mocked endpoint, fail-closed 503 |
+| Invalid credentials safely return 401 | COMPLETE — VERIFIED | Missing, malformed, expired, not-yet-valid, bad signature, tampered, unknown `kid`, `alg:none`, algorithm confusion, wrong issuer or audience, missing claims, bad `sub` or role, anonymous: all return the same 401 body |
+| `/me` uses verified JWT identity | COMPLETE — VERIFIED | Tests: client-supplied `user_id` in the query or headers is ignored; E2E confirms end to end |
+| No custom credential system exists | COMPLETE — VERIFIED | No password storage, hashing or credential tables. Passwords go only to Supabase (Server Actions → `supabase.auth.*`) |
+| No secrets exposed or committed | COMPLETE — VERIFIED | Secret scan; CI guards; `SecretStr`; log leak scans; tests that fake secrets never reach logs or responses |
+| Backend tests, lint, format, mypy pass | COMPLETE — VERIFIED | §3.1, and on Python 3.12 in §3.4 |
+| Frontend lint, typecheck, build pass | COMPLETE — VERIFIED | §3.1. Frontend tests pass on Node 22.23.3; on the local Node 22.9 they can't start (§5). |
+| Docker configuration passes | COMPLETE — VERIFIED | `docker compose config`, plus a container run (§3.4) |
+| Documentation matches implementation | COMPLETE — VERIFIED | README, API_CONTRACT (`/health`, `/me`), OPEN_DECISIONS and this file updated in this pass |
 
-There are no blockers to M1 itself.
+## 5. Blockers and environment notes
 
-## 6. Open decisions
+| Item | Status | Impact / what unblocks it |
+|---|---|---|
+| **No Supabase credentials in this environment** (`frontend/.env.local` and the root `.env` don't exist) | **BLOCKED** (live verification only) | The founder adds the project URL and publishable key to `frontend/.env.local`, and the project URL to `backend/.env` (or the root `.env` for Docker). Then run the live checklist in §8 and confirm the dashboard settings in D-17. |
+| Local Node is v22.9.0; the frontend dev dependencies need ≥22.22.2 | Environment deviation | `npm test` can't start its jsdom workers locally. All 87 tests pass on Node 22.23.3 (via `npx node@22`), which is what CI's `node-version: "22"` installs. Also, Rolldown's native Windows binding (an optional dependency) was skipped; it was installed locally with `npm install --no-save --force @rolldown/binding-win32-x64-msvc@1.2.11`, which left `package.json` and the lockfile unchanged. **Fix: upgrade local Node to the latest 22.x.** |
+| GitHub CI has not run | IMPLEMENTED — NOT VERIFIED | Nothing has been pushed (awaiting your decision from M1). |
+| Port 8000 is taken by a local Apache | Worked around | `API_PORT=8001` for Docker; `uvicorn --port 8001` plus `API_BASE_URL=http://127.0.0.1:8001` for local development. |
 
-Full list: [OPEN_DECISIONS.md](OPEN_DECISIONS.md). The most important ones:
+## 6. Security notes
 
-- **D-0:** the `Architecture_V2_Phase_1_Build_Spec.docx` source spec is missing.
-- **D-3 / D-4 / D-5:** Supabase project, auth methods, local database strategy, and hosting
-  and region.
-- **D-7:** clinical reviewer, risk taxonomy and thresholds, Egyptian Arabic reviewer, and
-  the anti-dependence policy.
-- **D-8 to D-12:** Egyptian regulatory status, data residency, retention periods,
-  accountability and disclaimers (the landing-page disclaimer is placeholder copy), and
-  minimum age.
-- **D-13:** crisis escalation content and emergency resources. None are invented, and this
-  blocks any real-user AI access.
-- **D-14:** ESLint is kept on 9 because Next's plugins don't support ESLint 10 yet.
-- **D-15:** confirm that `/health` may expose the environment name.
+- **No custom auth.** Passwords are sent only from Server Actions to Supabase; this
+  project never stores, hashes or logs them. Password fields are never echoed back into
+  form state.
+- **Token verification (backend):**
+  - The algorithm is chosen by the server: ES256/RS256 must match the JWKS key's own
+    algorithm, and HS256 is used only when a legacy secret is configured. This blocks
+    `alg:none` and algorithm confusion, and both attacks are tested.
+  - Every token is checked for `exp`/`nbf` (30 s skew), `iss`, `aud`, UUID `sub`,
+    `role=authenticated`, and not anonymous.
+  - The JWKS fetch uses a 5 s timeout, a 600 s cache, and PyJWT's 30 s cooldown on
+    unknown `kid`s.
+  - Header length is capped at 8 KB.
+- **Uniform errors.**
+  - Every invalid token gets the same 401 body and `WWW-Authenticate` header.
+  - If Supabase isn't configured or the JWKS is unreachable, the answer is 503, never
+    "authenticated".
+  - The frontend maps Supabase error *codes* to fixed messages; raw provider messages are
+    never shown.
+  - Sign-up doesn't reveal whether an email is already registered.
+- **Identity.** `/me` and `CurrentPrincipal` use only verified claims. Client-supplied ids
+  are ignored, and tests prove it.
+- **Frontend session handling.**
+  - `getClaims()` verifies the JWT on every request in the proxy, and again on the
+    dashboard.
+  - The access token is forwarded to the API server-side only, and the E2E run confirmed
+    it isn't in the page HTML.
+  - Redirect targets (`next`) are restricted to local paths (tested against absolute URLs,
+    `//host`, backslashes, control characters and `javascript:`).
+  - The `?status=` notices come from a fixed allowlist.
+  - The confirmation links use the configured `SITE_URL`, not the request's Host header.
+- **Secrets separation.**
+  - Only the publishable key and URL are `NEXT_PUBLIC_`.
+  - `server-only` guards the server modules.
+  - CI fails on `service_role`, `jwt_secret`, `DATABASE_URL` or `sb_secret_` in
+    `frontend/`, or on any secret-looking `NEXT_PUBLIC_` name.
+- **Logging.**
+  - The backend logs only a reason code for auth rejections, and tests confirm no token or
+    email is logged.
+  - HTTP-client URL logging stays suppressed (from M1).
+  - Next's dev Server Action logging is off.
+- **Known, accepted for now:**
+  - The auth cookies aren't `HttpOnly` (D-20); a CSP is needed before a pilot.
+  - There is no app-level rate limiting (D-21); Supabase rate-limits the auth endpoints
+    itself.
+  - The age gate is a self-attestation that isn't stored (D-12).
 
-## 7. Security notes
+## 7. Open decisions (summary)
 
-- **Secrets:** no real secrets exist in the repository. The root `.env.example` holds only
-  server-side settings. `frontend/.env.example` holds only `NEXT_PUBLIC_*` values and warns
-  that they are public. `.env` and `.env.*` are git-ignored, except `.env.example`.
-- **Service-role key:** it appears only as a server-side `SecretStr` setting and is never
-  referenced in `frontend/`. A CI guard fails the build if `service_role`, `jwt_secret` or
-  `DATABASE_URL` appears in the frontend. Compose passes the container an explicit
-  allowlist of variables, and no secrets are passed in M1.
-- **Logging:** JSON lines containing metadata only (method, path, status, duration, request
-  id). No headers, query strings or bodies are logged. Sensitive-looking keys and
-  `SecretStr` values are redacted as a second line of defence. The Uvicorn access log is
-  disabled (`--no-access-log`, and the logger is disabled in code).
-  - Uvicorn's own startup lines ("Started server process…") are still plain text, because
-    Uvicorn configures them before the app loads. They contain no sensitive data. A later
-    milestone can pass `--log-config` to make them JSON as well.
-- **Attack surface:** the only route is `/health`. API docs and the OpenAPI schema are off
-  in production. The container runs as non-root, and Compose binds to `127.0.0.1` only.
-- **Dependencies:** `npm install` reports 0 vulnerabilities. Python dependencies have
-  major-version upper bounds.
-- **Product safety:** no LLM integration, chat, safety classifier or crisis content exists.
-  The landing page makes no clinical claims and states that the product does not diagnose,
-  does not recommend medication, and is not a replacement for professional care.
+Full list: [OPEN_DECISIONS.md](OPEN_DECISIONS.md).
+
+- **Resolved in M2:** D-0, D-2, D-3, D-12 (policy), D-15.
+- **New:**
+  - D-17: confirm the Supabase dashboard settings (founder action, blocks live
+    verification);
+  - D-18: which confirmation email template to use;
+  - D-19: Arabic copy for the auth UI;
+  - D-20: auth cookies readable by JavaScript;
+  - D-21: rate limiting.
+- **Still open from M1:**
+  - D-4 and D-5: database strategy, hosting and region;
+  - D-7: clinical governance;
+  - D-8 to D-11: legal questions;
+  - D-13: crisis content (blocks any real-user AI access);
+  - D-14: ESLint 9.
 
 ## 8. Recommended next step
 
-1. **Review and commit** the M1 foundation on a branch, push it, and confirm that all four
-   CI jobs pass on GitHub (Python 3.12, Node 22). That closes the one IMPLEMENTED — NOT
-   VERIFIED item.
-2. **Resolve the prerequisites for M2:** add the V2 spec (D-0), confirm the scope of M2
-   (D-2), and provide a Supabase dev project and the enabled auth methods (D-3). Settle
-   minimum age (D-12) before sign-up is built.
-3. **Only after approval,** start M2. Per the imported plan that is Supabase Auth: backend
-   JWT verification and identity derivation, with no client-supplied user ids.
+1. **Founder: live verification** (about 10 minutes, with real credentials in local env
+   files):
+   1. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to
+      `frontend/.env.local`, and `SUPABASE_URL` to `backend/.env`. Confirm the D-17
+      settings.
+   2. Start the backend (`uvicorn app.main:app --port 8001`) and the frontend (with
+      `API_BASE_URL=http://127.0.0.1:8001`).
+   3. Walk through: sign up with a real inbox → "Check your email" → open the link in the
+      same browser → dashboard shows "verified by the AI Wellness Egypt API" → reload →
+      sign out → `/dashboard` redirects → sign in with a wrong password (safe message) →
+      sign in correctly.
+   4. If all of that works, the five live criteria in §4 become COMPLETE — VERIFIED.
+2. **Upgrade local Node** to the latest 22.x so that `npm test` runs directly.
+3. **Commit** M2 on `m2-supabase-auth`, push both branches, and confirm that all four CI
+   jobs pass.
+4. **Only after approval,** plan M3. Per the imported plan that is consent and profile,
+   including resolving D-11 and the D-12 attestation wording.
 
-**M2 has not been started.**
+**M3 has not been started.**

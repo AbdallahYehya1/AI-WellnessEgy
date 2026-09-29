@@ -49,7 +49,7 @@ def test_secrets_not_exposed_over_http(secret_env: dict[str, str]) -> None:
 
 def test_health_exposes_no_configuration_fields(secret_env: dict[str, str]) -> None:
     body = TestClient(create_app(Settings())).get("/health").json()
-    assert set(body) == {"status", "environment"}
+    assert body == {"status": "ok"}
 
 
 def test_request_log_omits_query_string_and_headers(

@@ -1,4 +1,5 @@
-"""Auth: Supabase JWT verification and identity derivation (no credential storage).
+"""Auth: Supabase JWT verification and identity derivation.
 
-Milestone 1: module boundary only. No implementation yet (planned for M2).
+This module never stores or checks passwords; Supabase Auth owns credentials.
+Use ``app.auth.dependencies.CurrentPrincipal`` to protect a route.
 """

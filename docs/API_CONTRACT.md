@@ -1,6 +1,6 @@
 # API Contract (Phase 1 / Validation Slice) — Mental Health & Wellness Platform
 
-> **Imported source document (2026-09-29).** Copied unchanged from the pre-repository planning pass, apart from this note. Only `GET /health` is implemented as of Milestone 1. Every other endpoint below is a planned contract, not working code.
+> **Imported source document (2026-09-29), updated for M2.** Copied from the pre-repository planning pass. The **Health** and **Identity** sections were updated in M2 to match the implementation. As of M2, only `GET /health` and `GET /me` are implemented; every other endpoint below is a planned contract, not working code.
 
 **Depends on:** `ARCHITECTURE.md`, `DATA_MODEL.md`, `Architecture_V2_Phase_1_Build_Spec` §13
 (this document's endpoint list and naming now matches V2 §13 exactly — see
@@ -18,19 +18,35 @@ must match, not a replacement for it.
 ## Health
 
 ### GET /health
-- **Response 200:** `{ status: "ok", environment: str }`
+- **Response 200:** exactly `{ "status": "ok" }`. No environment name, version or other
+  configuration is ever returned (OPEN_DECISIONS D-15).
 - **Auth:** none
-- Liveness only — does not check DB/Redis/provider dependencies (Milestone 1 scope; see
-  `IMPLEMENTATION_STATUS.md`).
+- Liveness only. It does not check the database, Redis or any provider.
 
 ---
 
 ## Identity
 
-### GET /me
-- **Response 200:** `{ user_id: uuid, supabase_user_id: uuid, display_name?: str, created_at: datetime }`
-- **Auth:** required — identity derived entirely from the verified Supabase JWT.
-- **Errors:** `401 unauthorized`
+### GET /me  *(implemented in M2)*
+- **Response 200:** `{ "user_id": uuid, "email": str | null }`
+  - `user_id` is the Supabase Auth user id (the token's `sub`). M2 has no application
+    `users` table, so profile fields (`display_name`, `created_at`, …) arrive with the
+    profile milestone.
+- **Auth:** required: `Authorization: Bearer <supabase_access_token>`. Identity comes only
+  from the verified token. Any user id sent in the query, body or headers is ignored.
+- **Token checks:** signature (ES256/RS256 via the project JWKS at
+  `<SUPABASE_URL>/auth/v1/.well-known/jwks.json`; HS256 only if the legacy
+  `SUPABASE_JWT_SECRET` is configured), `exp`/`nbf` (30 s clock-skew allowance),
+  `iss == <SUPABASE_URL>/auth/v1`, `aud == SUPABASE_JWT_AUDIENCE` (default `authenticated`),
+  a UUID `sub`, `role == "authenticated"`, and not an anonymous session.
+- **Errors** (all use the standard error body, and every 401 carries
+  `WWW-Authenticate: Bearer realm="api"`):
+  - `401 unauthorized`, message `"Authentication is required."`: no `Authorization` header.
+  - `401 unauthorized`, message `"The access token is invalid or has expired."`: malformed
+    header or token, bad signature, expired, wrong issuer or audience, missing claims,
+    unknown key id, disallowed algorithm. The response deliberately doesn't say which.
+  - `503 auth_unavailable`: tokens can't be verified at all (Supabase not configured, or
+    the JWKS endpoint unreachable). Fails closed; never treated as authenticated.
 
 ---
 

@@ -29,9 +29,9 @@ def test_startup_and_shutdown_are_logged(capsys: pytest.CaptureFixture[str]) -> 
     assert "application_shutdown" in messages
 
 
-def test_only_milestone_one_routes_are_exposed() -> None:
+def test_only_expected_routes_are_exposed() -> None:
     app = create_app(Settings(environment="development"))
-    assert set(app.openapi()["paths"]) == {"/health"}
+    assert set(app.openapi()["paths"]) == {"/health", "/me"}
 
 
 def test_docs_enabled_outside_production() -> None:

@@ -1,6 +1,6 @@
 # Open Decisions
 
-Last updated: 2026-09-29 (Milestone 1).
+Last updated: 2026-09-29 (Milestone 2).
 
 Engineering does not make the decisions below. Some are clinical, legal or
 crisis-procedure calls, and some belong to the founder. Until each one is
@@ -12,42 +12,33 @@ Status values: **OPEN** (needs a decision), **RESOLVED** (decided; kept for the 
 
 ---
 
-## A. Source documents
+## A. Source documents and scope
 
-### D-0. `Architecture_V2_Phase_1_Build_Spec.docx` is missing — OPEN
-- **Situation:** The project brief lists this file as required reading. It is not in
-  the GitHub repository (the remote was empty) or in the local project folder. The
-  imported documents in `docs/` cite it as their source of truth throughout (§6, §7, §9,
-  §10, §12, §13, §20).
-- **What was used:** the imported Markdown documents (`ARCHITECTURE.md`,
-  `API_CONTRACT.md`, `DATA_MODEL.md`, `SME_COUNCIL_DECISIONS.md`,
-  `PHASE_1_IMPLEMENTATION_PLAN.md`), taken from the pre-repository planning pass, plus the
-  Milestone 1 brief.
-- **Impact:** None on Milestone 1. Before M2, someone should confirm the imported docs
-  still match the spec.
-- **Owner:** Founder. Add the `.docx` (or a Markdown export of it) to `docs/`.
+### D-0. Source of truth while the V2 spec is missing — RESOLVED (2026-09-29, founder)
+- `Architecture_V2_Phase_1_Build_Spec.docx` is still missing.
+- **Decision:** until it is recovered, the imported Markdown planning documents in `docs/`
+  are the implementation source of truth.
+- If the `.docx` turns up, compare it with `docs/` before the next milestone.
 
 ### D-1. Redis, Celery and Compose services in the imported docs — RESOLVED
-- The imported `ARCHITECTURE.md` and `PHASE_1_IMPLEMENTATION_PLAN.md` put Redis, Celery
-  workers and a Postgres/Redis/worker Compose stack in Phase 1.
-- **Resolution:** The approved architecture in the Milestone 1 brief governs: Redis only
-  when there is a real need, no workers, Supabase PostgreSQL, and a minimal Compose file.
-  Each affected document now has a note at the top.
+- The approved architecture governs: Redis only when there is a real need, no workers,
+  Supabase PostgreSQL, and a minimal Compose file. Each affected document has a note at
+  the top.
 
-### D-2. Milestone numbering after M1 — OPEN
-- The imported plan puts Supabase Auth in M2 and the database in M4. The Milestone 1 brief
-  only says "do not start M2 without approval".
-- **Needed:** Confirm the scope of M2.
-- **Owner:** Founder.
+### D-2. Scope of M2 — RESOLVED (2026-09-29, founder)
+- **Decision:** M2 covers Supabase authentication only. Profiles, consent, application
+  database models, migrations, and audit and domain features belong to later milestones.
 
 ---
 
 ## B. Founder / business
 
-### D-3. Supabase project and enabled auth methods — OPEN
-- Needed before M2 can be tested end to end: a Supabase project (dev, and later staging and
-  prod), its URL and anon key, server-side credentials kept in a secret store, and which auth
-  methods are enabled (email/password, magic link, OAuth, MFA, email verification).
+### D-3. Supabase auth methods — RESOLVED (2026-09-29, founder)
+- **Decision:** email/password with **required email confirmation**. Magic links, OAuth,
+  phone authentication and MFA are deferred.
+- **Implementation note:** the app assumes confirmation is switched on in the Supabase
+  project. If sign-up ever returns a live session (confirmation off), the server logs a
+  warning. See D-17 for the dashboard settings to check.
 
 ### D-4. Local database strategy — OPEN
 - When the database milestone arrives: run Supabase locally (Supabase CLI) for development
@@ -59,8 +50,39 @@ Status values: **OPEN** (needs a decision), **RESOLVED** (decided; kept for the 
   region choice depends on D-9 (data residency). The code assumes no provider.
 
 ### D-6. Product name and branding — OPEN
-- "AI Wellness Egypt" is a working name, used in the landing page, the API title and the
-  package names.
+- "AI Wellness Egypt" is a working name, used in the UI, the API title and the package
+  names.
+
+### D-17. Supabase project settings must be confirmed — OPEN (founder action, blocks live verification)
+Engineering can't see or change the dashboard. These must be checked before live testing:
+1. **Authentication → Providers → Email:** enabled, with **Confirm email** on (D-3).
+2. **Authentication → URL Configuration:** Site URL `http://localhost:3000` and redirect
+   URL `http://localhost:3000/**` (stated as configured).
+3. **JWT signing keys:** asymmetric (ES256/RS256) keys are recommended. The backend then
+   needs only `SUPABASE_URL`. If the project still uses the legacy shared secret, the
+   backend also needs `SUPABASE_JWT_SECRET`.
+4. **Email sending:** Supabase's built-in email service is meant for testing and is
+   heavily rate-limited. A custom SMTP provider is needed before any pilot.
+5. **Password policy:** the project uses Supabase's defaults (founder, 2026-09-29): at least
+   6 characters and no character rules. The app requires at least 8, which is stricter, so
+   every password the app accepts is also accepted by Supabase. If the project policy is
+   tightened later, the app shows a friendly "choose a stronger password" message.
+
+Checked on 2026-09-29 through the project's public `/auth/v1/settings` and JWKS endpoints:
+email provider on, sign-ups open, **email confirmation required** (`mailer_autoconfirm:
+false`), anonymous users off, and tokens signed with an **asymmetric ES256 key**, so no
+legacy JWT secret is needed. Still to confirm in the dashboard: redirect URLs (item 2)
+and custom email sending before a pilot (item 4). The legacy JWT secret was shared in a
+chat session and should be rotated.
+
+### D-18. Confirmation email template — OPEN (founder choice, non-blocking)
+- **Default template (works now):** the link goes through Supabase, then to
+  `/auth/confirm?code=…` (PKCE). It must be opened **in the same browser** that signed up.
+  Otherwise the address is still confirmed, but the user has to sign in manually; the app
+  explains this.
+- **Optional:** change the "Confirm signup" template to link to
+  `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup`. That works in any
+  browser. The route already supports it.
 
 ---
 
@@ -70,12 +92,18 @@ Status values: **OPEN** (needs a decision), **RESOLVED** (decided; kept for the 
 1. Which licensed mental-health professional reviews and approves psychoeducation content
    and the AI's allowed and prohibited behaviour before real users see it?
 2. What clinical risk taxonomy and LOW / MEDIUM / HIGH / UNKNOWN thresholds should the
-   safety layer use? Until this is decided, the safety milestone may only ship
-   conservative placeholders labelled as pending clinical validation.
-3. Who reviews AI tone, the Egyptian Arabic and Arabizi evaluation cases, and the knowledge
-   content? Ideally a native Egyptian Arabic speaker with mental-health content experience.
-4. What does the product do to prevent unhealthy dependence on the AI (for example session
-   nudges or signposting to human support), and who approves it?
+   safety layer use? Until decided, only conservative placeholders labelled as pending
+   clinical validation may ship.
+3. Who reviews AI tone, the Egyptian Arabic and Arabizi evaluation cases, the knowledge
+   content, **and the Arabic UI copy**? Ideally a native Egyptian Arabic speaker with
+   mental-health content experience.
+4. What does the product do to prevent unhealthy dependence on the AI, and who approves it?
+
+### D-19. Auth UI language — OPEN
+- In M2 the auth screens have Arabic page titles, with English form labels, messages and
+  errors. That kept the copy accurate without an unreviewed Arabic translation.
+- **Needed:** an i18n approach, and reviewed Egyptian Arabic copy for all auth screens and
+  error messages (see D-7.3).
 
 ---
 
@@ -88,9 +116,9 @@ Status values: **OPEN** (needs a decision), **RESOLVED** (decided; kept for the 
   answer this. Engineering has not interpreted it.
 
 ### D-9. Data residency — OPEN
-- Can sensitive wellness data (conversations, journal entries, mood notes) be stored and
-  processed outside Egypt? This affects the Supabase region (D-5) and the choice of LLM
-  provider.
+- Can sensitive wellness data be stored or processed outside Egypt? This affects the
+  Supabase project region (already created; its region should be checked against this
+  answer) and the choice of LLM provider.
 
 ### D-10. Retention periods — OPEN
 - What are the retention periods for messages, journal entries, mood notes, safety events
@@ -100,12 +128,18 @@ Status values: **OPEN** (needs a decision), **RESOLVED** (decided; kept for the 
 ### D-11. Accountability, terms and disclaimers — OPEN
 - Who is legally and clinically accountable if the safety layer misses a genuine crisis?
 - Terms of service, privacy policy and the "not a replacement for professional care"
-  wording need counsel's review. **The disclaimer on the Milestone 1 landing page is
-  placeholder copy** and must be reviewed before any public launch.
+  wording need counsel's review. **The disclaimers on the landing and sign-up pages are
+  placeholder copy.** Sign-up does not yet collect acceptance of terms; consent is a later
+  milestone (D-2).
 
-### D-12. Minimum age and minors — OPEN
-- What is the minimum user age? If minors are allowed, what consent and safeguarding rules
-  apply? This must be settled before sign-up (M2/M3).
+### D-12. Minimum age — RESOLVED (2026-09-29, founder); wording OPEN for legal review
+- **Decision:** adults aged 18+ only. There is no support for minors.
+- **Implementation:** sign-up requires an "I confirm that I am 18 or older" checkbox,
+  checked on the server before the Supabase call. The attestation is **not stored**:
+  there is no database or profile in M2, and storing it is part of the consent/profile
+  milestone.
+- **Still open for counsel:** is self-attestation enough, what exact wording to use, and
+  must the attestation be recorded (and with what timestamp or version)?
 
 ---
 
@@ -117,27 +151,38 @@ Status values: **OPEN** (needs a decision), **RESOLVED** (decided; kept for the 
   available?
 - Does the business have a referral relationship with qualified professionals, and what is
   the path to scheduling?
-- Until this is decided, the escalation flow must use a loud, non-final placeholder (for
-  example "Crisis resource content pending clinical/legal validation — do not launch").
-  It must never contain invented numbers or procedures.
+- Until this is decided, the escalation flow must use a loud, non-final placeholder. It
+  must never contain invented numbers or procedures.
 - **Deadline:** before any user outside the team can reach the AI companion.
 
 ---
 
-## F. Engineering notes (non-blocking, for the record)
+## F. Engineering notes
 
 ### D-14. ESLint 9 kept despite its deprecation notice — OPEN (revisit)
-- `npm install` warns that `eslint@9.39.5` is no longer supported. ESLint 10 exists, but
-  `eslint-plugin-react`, `eslint-plugin-jsx-a11y` and `eslint-plugin-import` (all pulled in
-  by `eslint-config-next@16.3.6`) only declare support up to ESLint 9. Upgrade once those
-  plugins support 10.
+- `eslint-plugin-react`, `eslint-plugin-jsx-a11y` and `eslint-plugin-import` (pulled in by
+  `eslint-config-next`) still only support up to ESLint 9. Upgrade once they support 10.
 
-### D-15. `/health` includes the environment name — OPEN (confirm)
-- The response is `{"status": "ok", "environment": "<name>"}`, as the imported
-  `API_CONTRACT.md` specifies. Confirm that exposing the environment name on an
-  unauthenticated endpoint is acceptable. The alternative is `{"status": "ok"}` only.
+### D-15. `/health` response — RESOLVED (2026-09-29, founder)
+- **Decision:** `GET /health` returns exactly `{"status":"ok"}` and never exposes the
+  environment name. This is implemented, and tests enforce it for every environment.
 
 ### D-16. SQLAlchemy and Alembic not yet installed — RESOLVED (deferred)
-- They are part of the approved stack but nothing uses them in M1. They are added in the
-  database milestone, together with the first models and migrations, so the project carries
-  no unused dependencies.
+- They are added in the database milestone, together with the first models and
+  migrations.
+
+### D-20. Auth cookies are readable by JavaScript — OPEN (accepted for M2, revisit)
+- `@supabase/ssr` stores the session in `sb-<ref>-auth-token` cookies with
+  `SameSite=Lax`, **not** `HttpOnly`, because its browser client needs to read them. This
+  was observed in the E2E run. The M2 app doesn't use the browser client (all auth runs
+  in Server Actions and the proxy). Whether the cookies could safely be made `HttpOnly`
+  with `@supabase/ssr` has **not been evaluated**.
+- **Mitigation now:** no third-party scripts, React's escaping, and a strict review for any
+  `dangerouslySetInnerHTML`.
+- **Revisit:** add a Content-Security-Policy before any pilot.
+
+### D-21. No rate limiting in the app — OPEN
+- Sign-in and sign-up attempts are rate-limited by Supabase itself, and the UI explains
+  429s. The backend has no rate limiting of its own. A failed JWKS lookup for an unknown
+  key id refetches at most once per 30 s (PyJWT cooldown). Revisit when Redis is
+  introduced (D-1), or at the latest before a pilot.

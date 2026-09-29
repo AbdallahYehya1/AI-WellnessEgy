@@ -12,8 +12,9 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["development", "test", "staging", "production"]
@@ -33,11 +34,52 @@ class Settings(BaseSettings):
     environment: Environment = "development"
     log_level: LogLevel = "INFO"
 
-    # Server-only secrets. Declared now so later milestones do not change the
-    # shape of configuration; nothing reads them in Milestone 1.
+    # Supabase Auth. The project URL is not secret; it determines the token
+    # issuer and the JWKS endpoint. When unset, authenticated endpoints fail
+    # closed with 503 rather than accepting any token.
+    supabase_url: str | None = None
+    supabase_jwt_audience: str = "authenticated"
+    supabase_jwks_cache_seconds: int = Field(default=600, gt=0)
+    supabase_jwks_timeout_seconds: float = Field(default=5.0, gt=0)
+
+    # Server-only secrets.
+    # Only for projects still on the legacy shared-secret (HS256) signing key.
+    # Projects using asymmetric signing keys are verified through JWKS and
+    # must leave this unset.
+    supabase_jwt_secret: SecretStr | None = None
+    # Declared for later milestones; nothing reads these yet.
     database_url: SecretStr | None = None
     supabase_service_role_key: SecretStr | None = None
-    supabase_jwt_secret: SecretStr | None = None
+
+    @field_validator("supabase_url")
+    @classmethod
+    def _normalise_supabase_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        value = value.strip().rstrip("/")
+        parsed = urlsplit(value)
+        is_local = parsed.hostname in {"localhost", "127.0.0.1"}
+        if not parsed.hostname or not (
+            parsed.scheme == "https" or (parsed.scheme == "http" and is_local)
+        ):
+            raise ValueError("SUPABASE_URL must use https (http is allowed only for localhost)")
+        return value
+
+    @field_validator("supabase_jwt_secret", "database_url", "supabase_service_role_key")
+    @classmethod
+    def _blank_secret_is_unset(cls, value: SecretStr | None) -> SecretStr | None:
+        # `.env.example` ships these as `NAME=`; an empty string must mean
+        # "not configured", never "configured with an empty value".
+        if value is None or not value.get_secret_value().strip():
+            return None
+        return value
+
+    @field_validator("supabase_jwt_secret")
+    @classmethod
+    def _legacy_secret_is_long_enough(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value()) < 32:
+            raise ValueError("SUPABASE_JWT_SECRET is too short to be a Supabase JWT secret")
+        return value
 
     @property
     def is_production(self) -> bool:
@@ -47,6 +89,15 @@ class Settings(BaseSettings):
     def docs_enabled(self) -> bool:
         """Interactive API docs are disabled in production."""
         return not self.is_production
+
+    @property
+    def supabase_issuer(self) -> str | None:
+        return f"{self.supabase_url}/auth/v1" if self.supabase_url else None
+
+    @property
+    def supabase_jwks_url(self) -> str | None:
+        issuer = self.supabase_issuer
+        return f"{issuer}/.well-known/jwks.json" if issuer else None
 
 
 @lru_cache

@@ -5,7 +5,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.config import Settings
+from app.core.config import Environment, Settings
 from app.main import create_app
 
 
@@ -18,12 +18,15 @@ def test_health_returns_ok(client: TestClient) -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/json")
-    assert response.json() == {"status": "ok", "environment": "test"}
+    assert response.json() == {"status": "ok"}
 
 
-def test_health_reports_configured_environment() -> None:
-    client = TestClient(create_app(Settings(environment="staging")))
-    assert client.get("/health").json()["environment"] == "staging"
+@pytest.mark.parametrize("environment", ["development", "staging", "production"])
+def test_health_never_exposes_environment(environment: Environment) -> None:
+    client = TestClient(create_app(Settings(environment=environment)))
+    response = client.get("/health")
+    assert response.json() == {"status": "ok"}
+    assert environment not in response.text
 
 
 def test_health_sets_request_id_header(client: TestClient) -> None:
