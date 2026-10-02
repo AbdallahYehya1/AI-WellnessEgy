@@ -1,6 +1,6 @@
 # Open Decisions
 
-Last updated: 2026-09-29 (Milestone 3).
+Last updated: 2026-10-02 (Milestone 4).
 
 Engineering does not make the decisions below. Some are clinical, legal or
 crisis-procedure calls, and some belong to the founder. Until each one is
@@ -31,6 +31,9 @@ Status values: **OPEN** (needs a decision), **RESOLVED** (decided; kept for the 
 - **M3 scope (founder, 2026-09-29):** consent and user-profile foundation only: profile,
   consent versioning, audit and onboarding. No AI, RAG, memory, crisis logic or other
   wellness features.
+- **M4 scope (founder, 2026-10-02):** mood check-in and the wellness-data foundation only.
+  No AI companion, LLM calls, RAG, embeddings, memory, risk classification, crisis logic,
+  diagnosis or treatment recommendations.
 
 ---
 
@@ -285,3 +288,78 @@ chat session and should be rotated.
 - `DATA_MODEL.md` restricts `audit_events` to an admin/compliance role and allows admin
   profile reads only with a logged reason. M3 builds no admin access at all. Audit rows are
   readable only by direct database access. Roles and tooling are future work.
+
+---
+
+## H. Raised in M4 (mood check-in)
+
+### D-30. Mood tag vocabulary — OPEN (product + clinical; blocks the tags feature only)
+- **Question:** which tags (if any) may users attach to a mood check-in?
+- **Why it matters:** `DATA_MODEL.md` defines `mood_checkins.tags` as a "controlled
+  vocabulary", but none is defined. Mood labels such as "anxious" or "hopeless" carry
+  clinical meaning and could read as symptom checklists.
+- **Options:** (a) no tags for the validation slice; (b) a small, neutral, clinically
+  reviewed list; (c) activity or context tags such as "work" or "sleep" instead of feeling
+  words.
+- **Current implementation:** an empty allowlist (`backend/app/mood/schemas.py`); the API
+  accepts only `tags: []`, and the UI has no tag picker. Adding tags needs a code change
+  only, not a migration.
+- **Blocks:** neither development nor launch, only the tags feature itself.
+
+### D-31. Mood check-in copy and scale anchors — OPEN (product + native-language review; blocks launch copy)
+- **Question:** what wording should the check-in use, in Arabic and English, including
+  what "1" and "5" mean?
+- **Why it matters:** the scale (1–5) is defined, but its anchors aren't. Anchor wording
+  shapes how users interpret the score, and the project must avoid language that sounds
+  like a clinical assessment.
+- **Current implementation, all marked provisional in code:**
+  - the question "How are you feeling right now?";
+  - the anchors "1 = very low · 5 = very good";
+  - an Arabic page title in Egyptian Arabic;
+  - the line "not a medical assessment and is not used to diagnose anything".
+- **Options:** keep the numeric scale with neutral anchors (current), or add emoji or
+  colour cues (an accessibility and cultural review is needed).
+- **Blocks:** launch copy only (see also D-19, D-7.3).
+
+### D-32. Collecting free-text mood notes before the safety layer exists — OPEN (clinical + legal; blocks the note UI)
+- **Question:** may the product collect free-text notes before there is a safety
+  assessment and an approved crisis pathway (D-13)?
+- **Why it matters:** a note can contain disclosures of distress or risk. In M4 nothing
+  reads or responds to notes. Collecting them can imply that someone is listening, and
+  creates stored sensitive data with no safety handling.
+- **Options:**
+  - (a) keep the note out of the UI until D-13 and the safety milestone (**current**);
+  - (b) show the note with an explicit "not monitored" notice, approved by clinical and
+    legal reviewers;
+  - (c) route notes through the future safety assessment before storage or display.
+- **Current implementation:** the API supports `note` exactly as the contract documents,
+  validated and stored verbatim, never logged or audited. **The frontend does not offer a
+  note field.**
+- **Blocks:** exposing notes in the UI, and therefore launch of that feature. It does not
+  block other development.
+
+### D-33. Encryption at rest and retention for `mood_checkins.note` — OPEN (security + legal; blocks launch)
+- **Question:** how is "encrypted at rest" (ARCHITECTURE §5) satisfied for sensitive free
+  text, and what is the note's retention period?
+- **Why it matters:**
+  - Managed Postgres disk encryption protects against stolen disks, but not against anyone
+    with database access. The architecture groups notes with conversation data.
+  - Retention for notes is meant to be shorter than for scores (D-10).
+- **Options:**
+  - (a) rely on Supabase's at-rest disk encryption and document it;
+  - (b) application-level column encryption, which needs a key-management decision (KMS,
+    rotation, impact on search);
+  - (c) Postgres `pgcrypto` with server-held keys.
+  - Retention: a scheduled purge of `note` after N days, with N set by counsel.
+- **Current implementation:** plain `text` column, length-limited, RLS on, Data API roles
+  revoked. No encryption beyond the platform's, and no purge job. The 1000-character limit
+  is an engineering bound to revisit together with this decision.
+- **Blocks:** launch (any real user data). Development can continue.
+
+### D-34. Constraint naming defect from M3 — RESOLVED (M4)
+- `0001` created CHECK constraints with doubled names (for example
+  `ck_users_ck_users_display_name_length`), because the naming convention was applied on
+  top of explicit names. Behaviour was unaffected.
+- **Fixed forward in `0002`:** the five constraints are renamed, new constraints use
+  `op.f()`, and a regression test pins every constraint name. `0001` was not edited, since
+  it may already be applied somewhere.

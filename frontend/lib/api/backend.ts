@@ -132,3 +132,25 @@ export function recordConsent(token: string, version: string, granted: boolean) 
     body: { version, granted, consent_type: "required" },
   });
 }
+
+export type MoodCheckin = {
+  checkin_id: string;
+  mood_score: number;
+  tags: string[];
+  note: string | null;
+  submitted_at: string;
+};
+
+export function recordMoodCheckin(token: string, moodScore: number) {
+  return request<{ checkin_id: string; submitted_at: string }>("/mood/checkins", {
+    token,
+    method: "POST",
+    body: { mood_score: moodScore },
+  });
+}
+
+export function fetchMoodHistory(token: string, limit: number) {
+  return request<{ checkins: MoodCheckin[] }>(`/mood/history?limit=${encodeURIComponent(limit)}`, {
+    token,
+  });
+}

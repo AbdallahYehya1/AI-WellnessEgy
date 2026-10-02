@@ -19,8 +19,9 @@ AuditAction = Literal[
     "user.created",
     "user.profile_updated",
     "consent.recorded",
+    "mood.checkin_recorded",
 ]
-TargetType = Literal["user", "consent"]
+TargetType = Literal["user", "consent", "mood_checkin"]
 MetadataValue = str | int | bool | uuid.UUID | list[str]
 
 # Short machine tokens only: versions, enum values, field names.

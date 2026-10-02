@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   fetchCurrentConsent,
   fetchMe,
+  fetchMoodHistory,
   fetchMyConsent,
   recordConsent,
+  recordMoodCheckin,
   updateProfile,
 } = await import("@/lib/api/backend");
 
@@ -81,5 +83,38 @@ describe("backend client", () => {
     expect(await fetchMe("tok")).toEqual({ status: "unavailable" });
     respond(401, { error: { code: "unauthorized", message: "x" } });
     expect(await fetchMe("tok")).toEqual({ status: "unauthorized" });
+  });
+});
+
+describe("mood client", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("API_BASE_URL", "http://api.test");
+  });
+
+  it("posts only the score with the bearer token", async () => {
+    respond(201, { checkin_id: "c1", submitted_at: "t" });
+    await recordMoodCheckin("tok", 3);
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("http://api.test/mood/checkins");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ mood_score: 3 });
+    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer tok");
+  });
+
+  it("requests a bounded history", async () => {
+    respond(200, { checkins: [] });
+    const result = await fetchMoodHistory("tok", 7);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://api.test/mood/history?limit=7");
+    expect(result).toEqual({ ok: true, status: 200, data: { checkins: [] } });
+  });
+
+  it("surfaces consent_required as an error code", async () => {
+    respond(403, { error: { code: "consent_required", message: "x" } });
+    expect(await recordMoodCheckin("tok", 3)).toEqual({
+      ok: false,
+      status: 403,
+      error: "consent_required",
+    });
   });
 });

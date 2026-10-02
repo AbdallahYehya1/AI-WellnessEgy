@@ -118,12 +118,13 @@ def test_tables_live_in_app_schema_with_rls_enabled(db_engine: Engine) -> None:
         public: int = connection.execute(
             text(
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' "
-                "AND table_name IN ('users', 'consents', 'audit_events')"
+                "AND table_name IN ('users', 'consents', 'audit_events', 'mood_checkins')"
             )
         ).scalar_one()
     assert [(name, rls) for name, rls in found if name != "alembic_version"] == [
         ("audit_events", True),
         ("consents", True),
+        ("mood_checkins", True),
         ("users", True),
     ]
     assert public == 0
@@ -174,7 +175,7 @@ def test_supabase_data_api_roles_get_no_access(test_database_url: str, db_engine
             assert not _has_privilege(
                 db_engine, "SELECT has_schema_privilege(:r, 'app', 'USAGE')", r=role
             )
-            for table in ("app.users", "app.consents", "app.audit_events"):
+            for table in ("app.users", "app.consents", "app.audit_events", "app.mood_checkins"):
                 assert not _has_privilege(
                     db_engine, "SELECT has_table_privilege(:r, :t, 'SELECT')", r=role, t=table
                 )
@@ -182,3 +183,55 @@ def test_supabase_data_api_roles_get_no_access(test_database_url: str, db_engine
         with db_engine.begin() as connection:
             connection.execute(text("DROP OWNED BY anon, authenticated"))
             connection.execute(text("DROP ROLE IF EXISTS anon, authenticated"))
+
+
+EXPECTED_CONSTRAINTS = {
+    ("audit_events", "fk_audit_events_actor_user_id_users"),
+    ("audit_events", "pk_audit_events"),
+    ("consents", "ck_consents_consent_type_valid"),
+    ("consents", "ck_consents_withdrawal_only_for_optional"),
+    ("consents", "fk_consents_user_id_users"),
+    ("consents", "pk_consents"),
+    ("mood_checkins", "ck_mood_checkins_mood_score_range"),
+    ("mood_checkins", "ck_mood_checkins_note_length"),
+    ("mood_checkins", "ck_mood_checkins_tags_count"),
+    ("mood_checkins", "fk_mood_checkins_user_id_users"),
+    ("mood_checkins", "pk_mood_checkins"),
+    ("users", "ck_users_display_name_length"),
+    ("users", "ck_users_goals_is_array"),
+    ("users", "ck_users_preferences_is_object"),
+    ("users", "pk_users"),
+    ("users", "uq_users_supabase_user_id"),
+}
+
+
+def _constraint_names(engine: Engine) -> set[tuple[str, str]]:
+    with engine.connect() as connection:
+        return {
+            (str(table), str(name))
+            for table, name in connection.execute(
+                text(
+                    "SELECT cl.relname, c.conname FROM pg_constraint c "
+                    "JOIN pg_class cl ON cl.oid = c.conrelid "
+                    "JOIN pg_namespace n ON n.oid = cl.relnamespace "
+                    "WHERE n.nspname = 'app' AND cl.relname <> 'alembic_version'"
+                )
+            )
+        }
+
+
+def test_constraint_names_follow_the_convention(db_engine: Engine) -> None:
+    """Regression: 0001 created doubled names like `ck_users_ck_users_...`; 0002 fixes them."""
+    assert _constraint_names(db_engine) == EXPECTED_CONSTRAINTS
+
+
+def test_downgrade_to_0001_restores_its_names_and_reupgrade_works(
+    test_database_url: str, db_engine: Engine
+) -> None:
+    config = alembic_config(test_database_url)
+    command.downgrade(config, "0001")
+    names = {name for _, name in _constraint_names(db_engine)}
+    assert "ck_users_ck_users_display_name_length" in names
+    assert "mood_checkins" not in sa.inspect(db_engine).get_table_names(schema=SCHEMA)
+    command.upgrade(config, "head")
+    assert _constraint_names(db_engine) == EXPECTED_CONSTRAINTS

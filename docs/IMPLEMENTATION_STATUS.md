@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-09-29
+Last updated: 2026-10-02
 
 Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**, **BLOCKED**,
 **DEFERRED**.
@@ -8,19 +8,252 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 | Milestone | Status |
 |---|---|
 | **M1: Repository and engineering foundation** | **COMPLETE — VERIFIED** (`d525820`). |
-| **M2: Supabase authentication** | **IMPLEMENTED; verified locally; real-Supabase verification PARTIAL** (`9474bbf`, plus evidence in `207fc13`). Against the real project, sign-up, email confirmation, dashboard access, backend verification of a real ES256 token, the anonymous redirect and the wrong-password message are all verified. A successful sign-in, reload persistence and sign-out have not been run against the real project (§9). |
-| **M3: Consent and user-profile foundation** | **Implemented and COMPLETE — VERIFIED against local Postgres 17 and in CI** (`78de377`). All 21 DoD items are met with evidence (§5). **Not applied to the real Supabase database:** no `DATABASE_URL` has been provided (§7, OPEN_DECISIONS D-26). Not production-ready (see §7 and §8). |
-| **CI (GitHub Actions)** | **PASSING on `main` at `78de377`**: run [36598112648](https://github.com/AbdallahYehya1/AI-WellnessEgy/actions/runs/36598112648), 4/4 jobs succeeded (§12). |
-| M4 and later | Not started. Awaiting approval. |
+| **M2: Supabase authentication** | **COMPLETE — VERIFIED** (`9474bbf`, evidence `207fc13`). The founder reported (2026-10-01) that the last three real-account checks passed: successful sign-in, session persistence after reload, and sign-out with the protected-dashboard redirect. The earlier live checks are in §M3-9. |
+| **M3: Consent and user-profile foundation** | **COMPLETE — VERIFIED** locally and in CI (`78de377`, docs `9ff5b9d`). Migration `0001` is still a separately controlled deployment step for the real Supabase database (D-26). |
+| **M4: Mood check-in and wellness-data foundation** | **IMPLEMENTED; verified locally and in CI on branch `m4-mood-checkin`** (see §M4). Not merged to `main`. Real-Supabase migration pending (D-26); launch blockers D-32 and D-33. |
+| M5 and later | Not started. Awaiting approval. |
 
 **Repository:**
-- **`main`** is the default branch and holds the full linear history:
-  `d525820` (M1) → `9474bbf` (M2) → `207fc13` (M2 evidence) → `78de377` (M3).
-- Milestone branches `m1-foundation`, `m2-supabase-auth` and `m3-consent-profile` are
-  retained and pushed.
-- There was no force-push and no history rewrite.
+- `main` = `9ff5b9d` (M1 → M2 → M2 evidence → M3 → docs).
+- M4 work is on **`m4-mood-checkin`**, branched from `main`. It is opened as a pull request
+  for review and CI, and is not merged.
+- The milestone branches `m1-foundation`, `m2-supabase-auth` and `m3-consent-profile` are
+  retained.
 
 ---
+
+# M4: Mood check-in and wellness-data foundation
+
+## M4.1 Reconciliation with the source documents
+
+| Source | What it specifies | Implemented as |
+|---|---|---|
+| DATA_MODEL `mood_checkins` | `id`, `user_id` FK, `mood_score smallint (1-5)`, `tags text[]` (controlled vocabulary), `note` nullable and sensitive, `submitted_at` | Exactly these columns, no extra fields (`app.mood_checkins`) |
+| DATA_MODEL access | Self only; never used for clinical diagnosis; `note` sensitive | Owner-scoped queries; consent-gated; non-clinical copy; note never logged or audited |
+| API_CONTRACT `POST /mood/checkins` | `{mood_score 1-5, tags?, note?}` → `201 {checkin_id, submitted_at}` | Exact payload and response |
+| API_CONTRACT `GET /mood/history?from=&to=` | `{checkins:[{checkin_id, mood_score, tags, note, submitted_at}]}` | Exact shape. **Added:** `limit` (1–100, default 30), because no bound was specified. Range is `from` inclusive, `to` exclusive, timezone required. |
+| PHASE_1 plan | "mood module: check-in, history, recent summary"; UI "submits and displays history"; no diagnostic language | Check-in and history built. "Recent summary" has no contract entry and was **not** built. The UI shows recent history on `/check-in` and the dashboard. |
+| ARCHITECTURE §5 | `mood_checkins.note`: short retention, encrypted at rest | **Not met yet:** recorded as D-33 (blocks launch) |
+| Gaps | Tag vocabulary; scale-anchor wording; free-text notes before the safety layer | D-30, D-31, D-32. Nothing invented: tags accept only `[]`, and the note field is not shown in the UI. |
+
+## M4.2 Implementation
+
+**Backend** (`backend/app/mood/`):
+- `models.py`: `MoodCheckin`, with DB checks for the score range, tag count and note length.
+- `schemas.py`:
+  - strict input: `StrictInt` score in 1–5; tags checked against an empty allowlist;
+  - note validated and **stored verbatim**;
+  - `extra="forbid"`, so `user_id` and `submitted_at` are rejected;
+  - a timezone-aware history query with `limit`.
+- `service.py`: create plus an audit event (target id only); history scoped to `user.id`,
+  newest first.
+- `router.py`: `POST /mood/checkins` (201) and `GET /mood/history`, both depending on
+  **`ConsentedUser`**, which means the verified JWT plus current consent.
+- `audit/service.py`: adds the action `mood.checkin_recorded` and target type
+  `mood_checkin`.
+
+**Frontend:**
+- `app/check-in/page.tsx`, gated on session and consent and failing closed:
+  - the 1–5 radio scale;
+  - a non-clinical explanation;
+  - recent history (7 entries);
+  - a "Skip for now" link.
+- `components/mood/mood-form.tsx` (accessible fieldset with an error message) and
+  `mood-history.tsx` (date in UTC and score only; notes never shown).
+- `lib/mood/actions.ts` (Server Action) and `lib/mood/score.ts` (strict `1`–`5` parse,
+  plus the path constant).
+- The flow is now: consent accepted → **`/check-in`** → save → `/dashboard?status=checked-in`.
+  The dashboard shows a fixed "saved" notice, recent check-ins and a "Check in now" link.
+- `/check-in` was added to the proxy's protected routes.
+
+**Ops:** the CI Docker job also asserts that `/mood/history` returns 401 anonymously.
+
+## M4.3 Migration `0002_mood_checkins` (revision `0002`, down-revision `0001`)
+
+- **Creates `app.mood_checkins`:**
+  - PK `pk_mood_checkins`;
+  - FK `fk_mood_checkins_user_id_users` → `app.users(id)` `ON DELETE RESTRICT`;
+  - checks `ck_mood_checkins_mood_score_range` (1–5), `ck_mood_checkins_tags_count` (≤ 10)
+    and `ck_mood_checkins_note_length` (NULL or 1–1000);
+  - `submitted_at DEFAULT clock_timestamp()`;
+  - index `ix_mood_checkins_user_submitted (user_id, submitted_at)`.
+- **Security:** RLS enabled, and `REVOKE ALL` from `anon` and `authenticated` when present.
+  The table is in schema `app`, which is not exposed by the Data API.
+- **Fix to M3:** renames the five `0001` CHECK constraints whose names were doubled
+  (D-34).
+- **Downgrade:** drops the table and restores `0001`'s names. Tested both ways.
+
+## M4.4 Tests (with evidence)
+
+**Backend: `tests/test_mood.py` (55 tests)**
+- **Authentication:** 401 without a token or with a bad token; 200/201 when authenticated
+  and consented.
+- **Consent gate:** 403 `consent_required` on both endpoints without consent, and after a
+  decline.
+- **Persistence:**
+  - stored exactly, including an untrimmed note;
+  - the owner is the caller's profile;
+  - `submitted_at` comes from the server and is timezone-aware, and clients can't set it;
+  - a DB check backs up the score range.
+- **History:** newest-first ordering; the caller's own notes; empty for a new user;
+  `limit`; inclusive/exclusive date range; 7 invalid-query cases; reversed range → 422
+  `invalid_range`.
+- **Validation:** 18 invalid payloads rejected with 422 and nothing stored (0, 6, -1,
+  "3", 3.0, 3.5, true, null, missing, unknown tag, empty, blank or overlong note, NUL,
+  zero-width character, `user_id`, …). Accepted: Arabic, line breaks, 1000 characters,
+  explicit `[]` and `null`. Malformed JSON → 422. Duplicate tags → 422.
+- **Isolation:**
+  - users see only their own history;
+  - `X-User-Id` and `?user_id=` can't read another user's data;
+  - a write with another user's id is stored for the token's owner.
+- **Privacy:**
+  - the note, the `mood_score` key and query strings never appear in logs;
+  - the audit event has `metadata == {}` and no note or score;
+  - a rejected check-in writes no audit event.
+- **Non-diagnostic:** response bodies contain none of "diagnos", "depress", "disorder",
+  "anxiety", "risk", "symptom" or "clinical".
+
+**Backend: `tests/test_audit_and_migrations.py` (+2, and updated)**
+- the constraint-name regression test (all 16 `app` constraints pinned);
+- downgrade to `0001`, then upgrade to head;
+- the RLS table list and simulated Supabase roles now include `mood_checkins`;
+- the model/migration autogenerate diff is empty.
+
+**Frontend**
+- `app/check-in/check-in.test.tsx` (28):
+  - page access, plus consent gating for missing, declined and outdated;
+  - non-clinical copy and the 1–5 scale;
+  - history; fail closed;
+  - the action: valid → dashboard; 7 invalid inputs rejected without an API call;
+    403 → consent; 401 → sign-in; 422 and network errors;
+  - `parseMoodScore`, `MoodForm` and `MoodHistory` (the note is never shown).
+- `app/dashboard/page.test.tsx` (+4): the saved notice and history; an unknown status is
+  ignored; history failing doesn't break the page; no history is fetched before consent.
+- `lib/api/backend.test.ts` (+3), `lib/supabase/proxy.test.ts` (`/check-in` protected), and
+  `lib/onboarding/actions.test.ts` (consent → `/check-in`).
+
+**Mutation checks** (each restored afterwards and re-run green):
+- the history query without the owner filter → the 3 isolation tests fail;
+- `POST /mood/checkins` without the consent gate → the 2 consent tests fail;
+- the check-in page without its consent redirect → 3 frontend tests fail.
+
+## M4.5 Verification results (final local run)
+
+Environment: Windows 11; Python 3.13.6; Node 22.23.3 (with npm itself also run on Node
+22.23.3); Docker 29.8.0; Postgres 17 via testcontainers.
+
+```text
+backend $ python -m pytest -q            233 passed in 18.78s; TOTAL 836 stmts, 11 missed, 99%
+backend $ ruff check .                   All checks passed!
+backend $ ruff format --check .          60 files already formatted
+backend $ mypy app --show-error-codes    Success: no issues found in 45 source files
+backend $ mypy app tests --show-error-codes  Success: no issues found in 57 source files
+frontend $ npm ci                        0 vulnerabilities, no engine warnings
+frontend $ npm run lint                  no findings
+frontend $ npm run typecheck             ✓
+frontend $ npm test                      Test Files 14 passed (14), Tests 173 passed (173)
+frontend $ npm run build                 ✓ Compiled successfully; ƒ /check-in (dynamic)
+$ docker compose config --quiet          exit 0
+```
+
+The mood module has 100% line coverage. The 11 uncovered lines are pre-existing
+defensive branches in M2/M3 code.
+
+**Docker** (`API_PORT=8001 docker compose up --build --wait`, fresh volume):
+- `db` healthy; `migrate` ran `-> 0001` then `0001 -> 0002` and exited 0; `api` healthy.
+- `/health` → `{"status":"ok"}`.
+- `POST /mood/checkins` and `GET /mood/history` without a token → 401. With `Bearer a.b.c`
+  and no Supabase → 503.
+- `alembic_version = 0002`; RLS on for `audit_events`, `consents`, `mood_checkins` and
+  `users`; correctly named constraints and the index are present.
+
+**Browser E2E** (headless Edge; real Next.js, real FastAPI, Compose Postgres 17; auth from
+the local Supabase stand-in): **16/16**.
+
+```text
+PASS  sign in without consent lands on onboarding
+PASS  /check-in before consent redirects to onboarding
+PASS  after consent, the user lands on the mood check-in
+PASS  check-in explains it is not a medical assessment
+PASS  history starts empty
+PASS  submitting without a score shows clear feedback and stores nothing
+PASS  valid check-in continues to the dashboard
+PASS  dashboard confirms the check-in was saved
+PASS  dashboard shows the new check-in
+PASS  history is newest first
+PASS  rows stored as submitted (score, no note, no tags)
+PASS  both rows belong to one profile
+PASS  each check-in is audited without score or note   (mood.checkin_recorded {} ×2)
+PASS  another user's check-in page shows none of A's history
+PASS  /check-in is protected after sign-out
+PASS  returning user goes to the dashboard with history intact
+```
+
+Log leak scan of that run (API / Next): `mood_score` 0/0, `moodScore` 0/0, emails 0/0,
+`eyJ` 0/0, `Bearer ` 0/0, passwords 0/0. The API log contains only method, path and
+status.
+
+**CI:** see §M4.8. It is recorded after the pull request's run completed, and is not
+claimed before then.
+
+## M4.6 Security and privacy checks
+
+- **Identity:** the owner always comes from the verified Supabase JWT (`ConsentedUser` →
+  `get_or_create_user` keyed on `sub`). There are no user-id parameters; bodies and queries
+  with `user_id` are rejected; header and query overrides are ignored (tested).
+- **Isolation:** every mood query filters on `MoodCheckin.user_id == user.id`, and the
+  mutation check proves the tests depend on it. RLS is enabled, and the Data API roles are
+  revoked on the new table.
+- **Consent:** both endpoints require the current consent, enforced server-side and in the
+  UI.
+- **Logs:** request logs carry metadata only, with no bodies or query strings. Verified by
+  test and by the E2E log scan.
+- **Audit:** the event records only that a check-in happened, plus its id. There is no
+  score, tags or note, which avoids duplicating sensitive data.
+- **Analytics:** none; mood data goes nowhere else.
+- **Non-clinical:** tested on API responses and UI copy; the UI states it is not a medical
+  assessment.
+- **Secrets:** no credentials added; `.env` files are still ignored; no service-role usage.
+- **Open:** note encryption and retention (D-33); free-text notes before the safety layer
+  (D-32); no rate limiting (D-21); no CSP (D-20).
+
+## M4.7 M4 Definition of Done
+
+| Item | Status | Evidence |
+|---|---|---|
+| Existing mood architecture reconciled | COMPLETE — VERIFIED | §M4.1 |
+| `mood_checkins` model implemented | COMPLETE — VERIFIED | `app/mood/models.py`; autogenerate diff empty |
+| Alembic migration implemented | COMPLETE — VERIFIED | `0002`: upgrade, downgrade and re-upgrade tested; Compose migrate exit 0 |
+| Database constraints implemented | COMPLETE — VERIFIED | 3 checks, FK, PK and index; DB rejects score 9 (test); names pinned |
+| User ownership enforced | COMPLETE — VERIFIED | Owner from JWT; scoped queries; mutation check |
+| Cross-user isolation tested | COMPLETE — VERIFIED | 3 isolation tests and an E2E check |
+| Mood creation API implemented | COMPLETE — VERIFIED | `POST /mood/checkins`, exact contract |
+| Mood history API implemented | COMPLETE — VERIFIED | `GET /mood/history`, contract shape plus documented `limit` |
+| Server-side validation implemented | COMPLETE — VERIFIED | 18 invalid payloads and 8 invalid queries rejected |
+| Sensitive mood data excluded from ordinary logs | COMPLETE — VERIFIED | Log test and E2E log scan |
+| Appropriate audit behaviour implemented | COMPLETE — VERIFIED | `mood.checkin_recorded`, `metadata == {}`, nothing on rejection |
+| Frontend mood check-in implemented | COMPLETE — VERIFIED | `/check-in`; 28 tests; E2E |
+| Consent gating works | COMPLETE — VERIFIED | API 403 tests; page redirects; E2E |
+| End-to-end flow works | COMPLETE — VERIFIED (local stand-in auth) | 16/16 |
+| Backend tests pass | COMPLETE — VERIFIED | 233 passed |
+| Frontend tests pass | COMPLETE — VERIFIED | 173 passed |
+| Ruff passes | COMPLETE — VERIFIED | check and format clean |
+| Mypy passes | COMPLETE — VERIFIED | strict, 45/57 files |
+| Typecheck passes | COMPLETE — VERIFIED | `npm run typecheck` |
+| Production build passes | COMPLETE — VERIFIED | `npm run build` |
+| Docker verification passes | COMPLETE — VERIFIED | §M4.5 |
+| CI passes | see §M4.8 | Recorded from the actual run |
+| Documentation updated | COMPLETE — VERIFIED | API_CONTRACT, DATA_MODEL, README, OPEN_DECISIONS D-30 to D-34, this section |
+| No secrets committed | COMPLETE — VERIFIED | Pre-commit scan (§M4.8) |
+| No AI generation implemented prematurely | COMPLETE — VERIFIED | No LLM, RAG, embedding, memory or risk code; `ai/*` and `safety` are still boundary-only packages |
+
+## M4.8 Commit, push and CI
+
+Filled in after the run. See the follow-up commit on `m4-mood-checkin`.
+
+---
+
+# M3 record (as of `9ff5b9d`)
 
 ## 1. Step 1 of this pass: closing M2 operations
 

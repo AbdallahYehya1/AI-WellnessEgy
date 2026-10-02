@@ -123,6 +123,8 @@ jobs:
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             http://127.0.0.1:8000/me)" = "401"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:8000/mood/history)" = "401"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             -H 'Authorization: Bearer a.b.c' http://127.0.0.1:8000/me)" = "503"
       - name: Stop
         if: always()

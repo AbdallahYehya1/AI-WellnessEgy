@@ -1,4 +1,4 @@
-"""Mood: daily mood check-ins.
+"""Mood: daily mood check-ins (self-only, consent-gated).
 
-Milestone 1: module boundary only. No implementation yet.
+Never presented as, or used as input to, a clinical assessment.
 """

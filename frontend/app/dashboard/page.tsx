@@ -1,15 +1,25 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { MoodHistory } from "@/components/mood/mood-history";
 import { ServiceUnavailable } from "@/components/onboarding/service-unavailable";
-import { fetchMe, fetchMyConsent } from "@/lib/api/backend";
+import { fetchMe, fetchMoodHistory, fetchMyConsent } from "@/lib/api/backend";
 import { signOut } from "@/lib/auth/actions";
 import { getVerifiedSession } from "@/lib/auth/session";
 import { requiredOnboardingStep } from "@/lib/onboarding/steps";
 
 export const metadata: Metadata = { title: "Dashboard · AI Wellness Egypt" };
 
-export default async function DashboardPage() {
+const RECENT_LIMIT = 7;
+
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+export default async function DashboardPage({ searchParams }: Props) {
+  const params = await searchParams;
+  // Fixed notice only: the query string can't inject text.
+  const checkedIn = params.status === "checked-in";
+
   // The proxy already guards this route; check again here in case the
   // proxy is bypassed or misconfigured.
   const session = await getVerifiedSession();
@@ -25,7 +35,10 @@ export default async function DashboardPage() {
   const step = requiredOnboardingStep(consent.data.status);
   if (step) redirect(step);
 
-  const me = await fetchMe(session.accessToken);
+  const [me, history] = await Promise.all([
+    fetchMe(session.accessToken),
+    fetchMoodHistory(session.accessToken, RECENT_LIMIT),
+  ]);
   if (me.status !== "ok") return <ServiceUnavailable />;
   const name = me.me.display_name;
 
@@ -55,8 +68,31 @@ export default async function DashboardPage() {
           ✓ Your session was verified by the AI Wellness Egypt API.
         </p>
         <p className="text-sm text-calm-700">
-          This is a placeholder. Wellness features will appear here in later releases.
+          This is a placeholder. More wellness features will appear here in later releases.
         </p>
+      </section>
+
+      <section
+        lang="en"
+        dir="ltr"
+        className="space-y-3 rounded-lg border border-calm-100 bg-white p-5 text-left"
+      >
+        {checkedIn ? (
+          <p role="status" className="text-sm font-medium">
+            ✓ Your check-in was saved.
+          </p>
+        ) : null}
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Your recent check-ins</h2>
+          <Link href="/check-in" className="text-sm font-medium text-calm-700 underline">
+            Check in now
+          </Link>
+        </div>
+        {history.ok ? (
+          <MoodHistory checkins={history.data.checkins} />
+        ) : (
+          <p className="text-sm text-calm-700">Your recent check-ins can&apos;t be loaded right now.</p>
+        )}
       </section>
 
       <form action={signOut} lang="en" dir="ltr" className="text-left">

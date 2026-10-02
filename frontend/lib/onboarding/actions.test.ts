@@ -65,11 +65,11 @@ describe("saveProfile", () => {
 });
 
 describe("submitConsent", () => {
-  it("records explicit agreement to the shown version and opens the dashboard", async () => {
+  it("records explicit agreement to the shown version and continues to the mood check-in", async () => {
     const url = await expectRedirect(
       submitConsent({}, form({ intent: "accept", version: VERSION, confirmRead: "on" })),
     );
-    expect(url).toBe("/dashboard");
+    expect(url).toBe("/check-in");
     expect(backend.recordConsent).toHaveBeenCalledWith(SESSION.accessToken, VERSION, true);
   });
 

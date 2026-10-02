@@ -1,6 +1,6 @@
 # API Contract (Phase 1 / Validation Slice) — Mental Health & Wellness Platform
 
-> **Imported source document (2026-09-29), updated for M2 and M3.** Copied from the pre-repository planning pass. The **Health**, **Identity**, **Profile** and **Consents** sections now match the implementation. Implemented as of M3: `GET /health`, `GET /me`, `GET/PATCH /profile`, `GET /consents/current`, `GET /consents/me` and `POST /consents`. Every other endpoint below is a planned contract, not working code.
+> **Imported source document (2026-09-29), updated for M2 and M3.** Copied from the pre-repository planning pass. The **Health**, **Identity**, **Profile** and **Consents** sections now match the implementation. Implemented as of M3: `GET /health`, `GET /me`, `GET/PATCH /profile`, `GET /consents/current`, `GET /consents/me` and `POST /consents`. Added in M4: `POST /mood/checkins` and `GET /mood/history`. Every other endpoint below is a planned contract, not working code.
 >
 > **Validation errors (M3):** `422` with `{"error": {"code": "validation_failed", "message": ..., "fields": [{"field": ..., "message": ...}]}}`. Submitted values are never echoed back. `503 service_unavailable` means the database is not configured or not reachable.
 
@@ -159,15 +159,42 @@ records nothing. A decision applies to exactly one published version.
 
 ## Mood
 
-### POST /mood/checkins
-- **Request:** `{ mood_score: int (1-5), tags?: [str], note?: str }`
-- **Response 201:** `{ checkin_id: uuid, submitted_at: datetime }`
-- **Auth:** required (self only)
-- **Note:** response body never includes diagnostic or clinical language — enforced by test.
+*Implemented in M4.* Both endpoints are self-only by construction: the owner is always
+the verified token's user, and there is no user id in the path, query or body. Both
+require the **current consent** (`403 consent_required` otherwise).
 
-### GET /mood/history?from=&to=
-- **Response 200:** `{ checkins: [{ checkin_id, mood_score, tags, note, submitted_at }] }`
-- **Auth:** required (self only)
+### POST /mood/checkins
+- **Request:** `{ mood_score: int (1-5), tags?: [str], note?: str }`, exactly as documented.
+  - `mood_score`: a JSON integer from 1 to 5. Strings, floats, booleans and null are
+    rejected (422), never coerced.
+  - `tags`: must come from the controlled vocabulary. **No vocabulary is approved yet
+    (OPEN_DECISIONS D-30)**, so only `[]` (or omitting the field) is accepted.
+  - `note`: optional, 1–1000 characters, not whitespace-only. Line breaks and tabs are
+    allowed; other control and format characters are rejected. It is **stored exactly as
+    submitted** (never trimmed). The 1000-character limit is an engineering bound (D-33).
+  - Unknown fields (`user_id`, `submitted_at`, …) are rejected (422). `submitted_at` is
+    always set by the server.
+- **Response 201:** `{ checkin_id: uuid, submitted_at: datetime }`
+- **Auth:** required (self only) and current consent
+- **Errors:** `401 unauthorized`, `403 consent_required`, `422 validation_failed`, `503`
+- **Audit:** `mood.checkin_recorded` with the target id only. The score, tags and note are
+  never copied into the audit log.
+- **Note:** response bodies never include diagnostic or clinical language. Enforced by test.
+
+### GET /mood/history?from=&to=&limit=
+- **Response 200:** `{ checkins: [{ checkin_id, mood_score, tags, note, submitted_at }] }`,
+  newest first, and only the caller's own check-ins.
+- **Query:**
+  - `from` (inclusive) and `to` (exclusive): ISO-8601 datetimes **with a timezone**;
+    naive or date-only values are rejected. `from` must be earlier than `to`
+    (`422 invalid_range`).
+  - `limit`: *added in M4*, 1–100, default 30. The contract defined no bound or pagination,
+    and an unbounded history response is unsafe.
+  - Unknown query parameters (for example `user_id`) are rejected (422).
+- **Auth:** required (self only) and current consent
+- **Errors:** `401`, `403 consent_required`, `422 validation_failed | invalid_range`, `503`
+- The plan's "recent summary" for the mood module has no contract entry. It was not built,
+  to avoid adding endpoints the architecture doesn't specify.
 
 ---
 
