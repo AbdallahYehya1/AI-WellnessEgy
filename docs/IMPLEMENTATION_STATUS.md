@@ -193,8 +193,7 @@ Log leak scan of that run (API / Next): `mood_score` 0/0, `moodScore` 0/0, email
 `eyJ` 0/0, `Bearer ` 0/0, passwords 0/0. The API log contains only method, path and
 status.
 
-**CI:** see §M4.8. It is recorded after the pull request's run completed, and is not
-claimed before then.
+**CI:** passed on pull request #1 (§M4.8).
 
 ## M4.6 Security and privacy checks
 
@@ -242,14 +241,38 @@ claimed before then.
 | Typecheck passes | COMPLETE — VERIFIED | `npm run typecheck` |
 | Production build passes | COMPLETE — VERIFIED | `npm run build` |
 | Docker verification passes | COMPLETE — VERIFIED | §M4.5 |
-| CI passes | see §M4.8 | Recorded from the actual run |
+| CI passes | COMPLETE — VERIFIED | PR #1 run 36959093412 on `613f459`: 4/4 jobs, 41/41 steps (§M4.8) |
 | Documentation updated | COMPLETE — VERIFIED | API_CONTRACT, DATA_MODEL, README, OPEN_DECISIONS D-30 to D-34, this section |
 | No secrets committed | COMPLETE — VERIFIED | Pre-commit scan (§M4.8) |
 | No AI generation implemented prematurely | COMPLETE — VERIFIED | No LLM, RAG, embedding, memory or risk code; `ai/*` and `safety` are still boundary-only packages |
 
 ## M4.8 Commit, push and CI
 
-Filled in after the run. See the follow-up commit on `m4-mood-checkin`.
+**Git:**
+- M4 is committed as `613f459` (`feat(mood): implement mood check-in and wellness data
+  foundation`) on `m4-mood-checkin` and pushed.
+- Pull request [#1](https://github.com/AbdallahYehya1/AI-WellnessEgy/pull/1)
+  `m4-mood-checkin → main` is open and **not merged**. `main` is unchanged at `9ff5b9d`.
+
+**Pre-commit audit:**
+- 34 paths;
+- no `.env`, `.coverage`, build or cache files;
+- the secret and project-identifier scan was clean;
+- no AI or LLM code was added (the only matches are M1's docstring-only `ai/*` and
+  `conversations` boundary files, which are unchanged).
+
+**CI:** [run 36959093412](https://github.com/AbdallahYehya1/AI-WellnessEgy/actions/runs/36959093412),
+event `pull_request`, commit `613f459`. Result: **completed / success**.
+
+| Job | Result | Evidence from the job log |
+|---|---|---|
+| Backend (Python 3.12) | success (13/13 steps) | CPython 3.12.14 with a Postgres 17 service container. Ruff: "All checks passed!". Format: "60 files already formatted". Mypy: "no issues found in 57 source files". Pytest: **233 passed**, 99% coverage |
+| Frontend (Node 22) | success (11/11 steps) | `npm ci`, lint, typecheck; Vitest **14 files, 173 tests passed**; build with `ƒ /check-in` |
+| Repository guards | success (7/7 steps) | No tracked env files; no server-only secrets in the frontend; no secret-looking `NEXT_PUBLIC_` names |
+| Docker | success (10/10 steps) | db `Healthy`, migrate exited 0 (asserted), api `Healthy`. `/health` exact; consent version served; `/me` and **`/mood/history` 401** anonymously; `/me` 503 without Supabase |
+
+The docs-only follow-up commit that records this table triggers another PR run; its result
+is reported in the M4 handover.
 
 ---
 
