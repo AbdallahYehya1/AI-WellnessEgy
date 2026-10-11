@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-10-02
+Last updated: 2026-10-11
 
 Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**, **BLOCKED**,
 **DEFERRED**.
@@ -10,15 +10,91 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 | **M1: Repository and engineering foundation** | **COMPLETE — VERIFIED** (`d525820`). |
 | **M2: Supabase authentication** | **COMPLETE — VERIFIED** (`9474bbf`, evidence `207fc13`). The founder reported (2026-10-01) that the last three real-account checks passed: successful sign-in, session persistence after reload, and sign-out with the protected-dashboard redirect. The earlier live checks are in §M3-9. |
 | **M3: Consent and user-profile foundation** | **COMPLETE — VERIFIED** locally and in CI (`78de377`, docs `9ff5b9d`). Migration `0001` is still a separately controlled deployment step for the real Supabase database (D-26). |
-| **M4: Mood check-in and wellness-data foundation** | **Implementation COMPLETE — VERIFIED** (local) and **CI COMPLETE — VERIFIED** (PR #1, two runs). **PR review and merge: PENDING.** The review in §M4-R found no blocking defects; both Medium findings are **fixed locally** (§M4-R.4) and await commit, push and re-review. **Real Supabase migration: PENDING (D-26)**; runbook ready, not executed. **Real-Supabase end-to-end: PARTIAL**: real Supabase **auth** with a **local** database was exercised by the founder (§M4-R.3); with the Supabase **database** it is not verified. **Launch blockers unresolved:** D-32, D-33 and the M5 entry gate (OPEN_DECISIONS §I). |
-| M5 and later | Not started. Awaiting approval. |
+| **M4: Mood check-in and wellness-data foundation** | **COMPLETE — VERIFIED** and **merged**: PR #1 merged on 2026-10-11 as `675b4a3` after the review fixes (`f2e4c28`; PR CI run 38129738286 green, 4/4). CI on `main` after the merge: run 38129868214, **success**. **Real Supabase migration: PENDING (D-26)**; runbook ready, not executed. **Launch blockers unresolved:** D-32, D-33 and the M5 entry gate (OPEN_DECISIONS §I). |
+| **M5 slice: chat prototype** | **IMPLEMENTED — VERIFIED locally** on branch `m5-chat-slice` (§M5-P). **Not pushed; CI not run.** Adult band only, disabled by default, fake provider, synthetic fixtures, test-only safety policy, no message storage. **Not clinically validated** and not available to real users. |
+| Later milestones | Not started. |
 
 **Repository:**
-- `main` = `9ff5b9d` (M1 → M2 → M2 evidence → M3 → docs).
-- M4 work is on **`m4-mood-checkin`**, branched from `main`. It is opened as a pull request
-  for review and CI, and is not merged.
-- The milestone branches `m1-foundation`, `m2-supabase-auth` and `m3-consent-profile` are
-  retained.
+- `main` = `675b4a3` (merge of PR #1, M4).
+- **`m5-chat-slice`**, branched from `675b4a3`, holds three local commits: `14cea91` (npm
+  audit patch), `0d2c243` (backend chat pipeline) and `00c6169` (chat UI), plus the docs
+  commit that records this section. None are pushed.
+- The milestone branches `m1-foundation`, `m2-supabase-auth`, `m3-consent-profile` and
+  `m4-mood-checkin` are retained.
+
+---
+
+# M5-P: Chat prototype (first vertical slice, 2026-10-11)
+
+Approved by the founder on 2026-10-11 (decisions recorded in OPEN_DECISIONS §I update and
+D-35 to D-39). It covers one end-to-end path: authenticated adult user → consent → safety
+gate → approved (here: synthetic) knowledge retrieval → fake provider → citation and output
+validation → chat UI.
+
+## M5-P.1 What was built
+
+| Area | Implementation |
+|---|---|
+| Age bands | `child`, `teen`, `adult` defined as **draft** boundaries (under 13, 13–17, 18+; not legally approved). A hard-coded allowlist means only `adult` can ever be enabled. Every account resolves to `adult` (18+ attestation, D-12). |
+| Safety | `assess_safety_risk()` runs the assessor with a 2 s timeout; a timeout, exception or malformed result becomes UNKNOWN with an `assessor_*` reason → `unavailable`. The test-only policy `synthetic-test-v0` lets only LOW generate; HIGH, MEDIUM and UNKNOWN → `support` (placeholder notice, D-13); diagnosis or medication requests → `out_of_scope`. The `SyntheticTestAssessor` reacts only to explicit test markers and a few placeholder phrases; it is not a classifier. |
+| Generation gate | `GenerationGate.authorize()` issues a permit only for a GENERATE decision. The permit is single-use, bound to the request id and message hash, expires after 30 s, and can't be constructed outside the gate. `generate_with_permit()` is the only path to the provider and consumes the permit first. |
+| Retrieval | PostgreSQL full-text search over a stored tsvector (English + Arabic + simple configurations, GIN index), OR-matched, filtered by age band, review status (`approved`, plus `synthetic` only under the test-only policy) and expiry. Returns at most 4 passages. |
+| Provider | `FakeProvider` only: deterministic, no network. It builds a reply from the retrieved passages and cites them. Test markers trigger its failure modes. |
+| Output validation | Requires non-empty text within the band's length limit and at least one citation, all from this request's retrieval. A small regex screen rejects diagnosis, medication and "I am a doctor" phrasing (EN/AR). This is an engineering heuristic, not a clinical review. |
+| Rate limiting | Per-user, 60-second window in PostgreSQL, serialised by a row lock. A limiter error means no generation. |
+| Conversation state | Held in the browser. Assistant turns carry an HMAC-SHA256 signature (user id + text); forged, altered or other-user turns → `422 invalid_history`. At most 6 turns are sent back, and the whole window is re-assessed on every request. |
+| Privacy | No message or reply text in the database, logs, audit events or `safety_events` (which holds decision metadata only). |
+| Configuration | `CHAT_ENABLED` (default off), `CHAT_SAFETY_POLICY`, `CHAT_SIGNING_KEY`, `CHAT_RATE_LIMIT_PER_MINUTE`. Settings validation refuses chat in production unless the policy is approved (none is), and requires a 32+ character signing key there. |
+| Knowledge | Migration `0003` adds `knowledge_sources`, `knowledge_chunks`, `safety_events` and `chat_rate_events` (RLS on, Data API roles revoked). Ingestion requires provenance fields, requires reviewer details for `approved`, and rejects instruction-like text. Four **synthetic** fixtures: adult EN breathing, adult AR/Arabizi sleep, teen-only school stress, and a withdrawn note. |
+| UI | `/chat` (protected by the proxy and gated on session, consent and server config) shows "Adult" and "Prototype" badges, a scope statement and a test-mode notice. It has an accessible conversation log, loading, error and notice states, citations labelled "Synthetic test content", and "Start over". The dashboard links to it only when the server reports chat as enabled. |
+
+## M5-P.2 Verification (local, 2026-10-11)
+
+| Check | Result |
+|---|---|
+| Backend `ruff check` / `ruff format` | All checks passed; formatted |
+| Backend `mypy app tests` | Success: no issues found in 75 source files |
+| Backend `pytest` (testcontainers Postgres 17) | **332 passed** (241 before this slice), 99% coverage |
+| Frontend `npm run lint` / `typecheck` | Pass (0 warnings) |
+| Frontend `npm test` | **15 files, 196 tests passed** (175 before) |
+| Frontend `npm run build` | Pass; `ƒ /chat` is dynamic |
+| Migrations on a throwaway Postgres 17 | `upgrade head`, `alembic check` ("No new upgrade operations detected"), `downgrade 0002`, `upgrade head` all succeeded |
+| Ingest CLI | `python -m app.knowledge.ingest app/knowledge/fixtures` → "ingested 4 documents", twice (idempotent: 4 sources, 4 chunks) |
+| `npm audit` | 5 high, all in the `eslint-config-next` development chain (D-39) |
+| CI | **Not run**: the branch is not pushed |
+| Docker Compose | **Not run** locally for this slice; the CI Docker job will cover it once pushed |
+| Browser end-to-end | **Not run** |
+
+What the tests cover (each "no generation" case asserts the fake provider was **not called**):
+- the allowed path, with citations, a valid signature and a `reply` safety event;
+- Arabic, Arabizi, English and mixed-language retrieval;
+- HIGH, MEDIUM and UNKNOWN; assessor error, timeout and malformed results; out-of-scope requests;
+- a risky earlier turn in the window;
+- missing, forged, foreign, expired, reused and mismatched permits;
+- mutation checks: a removed permit, and an all-permissive policy still blocked by assessor failure;
+- no evidence; teen-only, withdrawn and expired content excluded for adults; synthetic content excluded under a non-synthetic policy;
+- a disabled age band (403);
+- invalid provider output (a bad citation, diagnosis text, empty text) and provider error or timeout;
+- message-side injection that can't bypass output validation, and rejection of injected documents at ingestion;
+- forged, unsigned and other-user history turns;
+- payload validation;
+- rate limit 429, per-user isolation, and fail-closed on limiter and retrieval failure;
+- auth 401, consent 403, the feature disabled by default (503);
+- production settings refusing the synthetic policy;
+- no message or reply text in logs or in any table.
+
+## M5-P.3 Limits and what this does not show
+
+- **Nothing here is clinically validated.** The policy, assessor, notices and fixtures are
+  synthetic test material; passing tests shows only that the engineering controls behave as
+  designed.
+- The `support` notice is a placeholder; no crisis resources exist (D-13).
+- Retrieval quality has not been evaluated against a labelled set; pgvector is deferred.
+- The permit store is in-process memory, so it suits one API process; multiple workers would
+  each hold their own gate (which is still fail-closed).
+- Child and teen experiences stay disabled until legal and clinical approval (D-12).
+- Not done, and needing separate approval: pushing or opening a PR, production migrations,
+  enabling for real users, a real provider (D-36), and real clinical content.
 
 ---
 

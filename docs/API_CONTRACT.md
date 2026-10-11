@@ -1,6 +1,6 @@
 # API Contract (Phase 1 / Validation Slice) — Mental Health & Wellness Platform
 
-> **Imported source document (2026-09-29), updated for M2 and M3.** Copied from the pre-repository planning pass. The **Health**, **Identity**, **Profile** and **Consents** sections now match the implementation. Implemented as of M3: `GET /health`, `GET /me`, `GET/PATCH /profile`, `GET /consents/current`, `GET /consents/me` and `POST /consents`. Added in M4: `POST /mood/checkins` and `GET /mood/history`. Every other endpoint below is a planned contract, not working code.
+> **Imported source document (2026-09-29), updated for M2 and M3.** Copied from the pre-repository planning pass. The **Health**, **Identity**, **Profile** and **Consents** sections now match the implementation. Implemented as of M3: `GET /health`, `GET /me`, `GET/PATCH /profile`, `GET /consents/current`, `GET /consents/me` and `POST /consents`. Added in M4: `POST /mood/checkins` and `GET /mood/history`. Added as a **prototype** on branch `m5-chat-slice`: `GET /chat/config` and `POST /chat/messages` (see "Chat prototype"). Every other endpoint below is a planned contract, not working code.
 >
 > **Validation errors (M3):** `422` with `{"error": {"code": "validation_failed", "message": ..., "fields": [{"field": ..., "message": ...}]}}`. Submitted values are never echoed back. `503 service_unavailable` means the database is not configured or not reachable.
 
@@ -126,6 +126,31 @@ records nothing. A decision applies to exactly one published version.
   covered by tests, and the frontend applies the same rule before showing the dashboard.
 
 ---
+
+## Chat prototype (M5 slice)  *(implemented on `m5-chat-slice`; prototype only)*
+
+Both endpoints require authentication and the current consent (`401`, `403 consent_required`).
+The feature is off unless `CHAT_ENABLED=true` with an allowed `CHAT_SAFETY_POLICY`. Only the
+fake provider exists. These endpoints replace nothing below: the planned `/conversations`
+contract (with server-side storage) remains planned.
+
+### GET /chat/config
+- **Response 200:** `{ "enabled": bool, "age_band": "adult", "age_band_label": str, "test_only_policy": bool, "prototype": true }`.
+  `enabled` is `false` when chat is not configured. Only the adult band can be enabled.
+
+### POST /chat/messages
+- **Request:** `{ "message": str (1–2000, not blank), "history": [ { "role": "user" | "assistant", "text": str (1–2000), "signature": str? } ] (≤ 6) }`. Unknown fields are rejected.
+  Assistant turns must carry the `signature` returned with that reply.
+- **Response 200:** `{ "status": "reply" | "support" | "out_of_scope" | "no_evidence" | "unable_to_answer" | "unavailable", "reply": { "text": str, "signature": str, "citations": [ { "chunk_id": uuid, "source_title": str, "publisher": str, "source_ref": str, "version_label": str, "synthetic": bool } ] } | null, "notice": str | null, "prototype": true }`.
+  `reply` is present only for `status = "reply"`. Every other status carries a fixed `notice`
+  and means **no provider call was made, or its output was discarded**. The `support` notice
+  is a placeholder pending D-13.
+- **Errors:** `403 age_band_unavailable`; `422 validation_failed`; `422 invalid_history`
+  (a forged, altered or other-user signature); `429 rate_limited`; `503 chat_unavailable`
+  (feature off). A limiter, assessor, retrieval or provider failure returns `200` with
+  `status = "unavailable"` (fail closed).
+- **Privacy:** message and reply text are not stored, logged, or written to audit or
+  safety events. `safety_events` holds decision metadata only.
 
 ## Conversations (AI Companion)
 
