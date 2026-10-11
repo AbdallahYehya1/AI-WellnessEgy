@@ -11,14 +11,15 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 | **M2: Supabase authentication** | **COMPLETE — VERIFIED** (`9474bbf`, evidence `207fc13`). The founder reported (2026-10-01) that the last three real-account checks passed: successful sign-in, session persistence after reload, and sign-out with the protected-dashboard redirect. The earlier live checks are in §M3-9. |
 | **M3: Consent and user-profile foundation** | **COMPLETE — VERIFIED** locally and in CI (`78de377`, docs `9ff5b9d`). Migration `0001` is still a separately controlled deployment step for the real Supabase database (D-26). |
 | **M4: Mood check-in and wellness-data foundation** | **COMPLETE — VERIFIED** and **merged**: PR #1 merged on 2026-10-11 as `675b4a3` after the review fixes (`f2e4c28`; PR CI run 38129738286 green, 4/4). CI on `main` after the merge: run 38129868214, **success**. **Real Supabase migration: PENDING (D-26)**; runbook ready, not executed. **Launch blockers unresolved:** D-32, D-33 and the M5 entry gate (OPEN_DECISIONS §I). |
-| **M5 slice: chat prototype** | **IMPLEMENTED — VERIFIED locally** on branch `m5-chat-slice` (§M5-P). **Not pushed; CI not run.** Adult band only, disabled by default, fake provider, synthetic fixtures, test-only safety policy, no message storage. **Not clinically validated** and not available to real users. |
+| **M5 slice: chat prototype** | **IMPLEMENTED — VERIFIED locally and in CI** on branch `m5-chat-slice`, draft PR #2 (§M5-P). **Not merged.** Outstanding: Docker Compose with chat enabled, browser end-to-end, search-quality evaluation, clinical crisis content, clinical/legal review. Adult band only, disabled by default, fake provider, synthetic fixtures, test-only safety policy, no message storage. **Not clinically validated** and not available to real users. |
 | Later milestones | Not started. |
 
 **Repository:**
 - `main` = `675b4a3` (merge of PR #1, M4).
 - **`m5-chat-slice`**, branched from `675b4a3`, holds three local commits: `14cea91` (npm
   audit patch), `0d2c243` (backend chat pipeline) and `00c6169` (chat UI), plus the docs
-  commit that records this section. None are pushed.
+  commits that record this section. Pushed on 2026-10-11 as draft
+  [PR #2](https://github.com/AbdallahYehya1/AI-WellnessEgy/pull/2); not merged.
 - The milestone branches `m1-foundation`, `m2-supabase-auth`, `m3-consent-profile` and
   `m4-mood-checkin` are retained.
 
@@ -61,8 +62,8 @@ validation → chat UI.
 | Migrations on a throwaway Postgres 17 | `upgrade head`, `alembic check` ("No new upgrade operations detected"), `downgrade 0002`, `upgrade head` all succeeded |
 | Ingest CLI | `python -m app.knowledge.ingest app/knowledge/fixtures` → "ingested 4 documents", twice (idempotent: 4 sources, 4 chunks) |
 | `npm audit` | 5 high, all in the `eslint-config-next` development chain (D-39) |
-| CI | **Not run**: the branch is not pushed |
-| Docker Compose | **Not run** locally for this slice; the CI Docker job will cover it once pushed |
+| CI | **Success**: PR #2 run 38133285109 on `21a5aa9`, 4/4 jobs (Backend: 332 passed, mypy clean, 83 files formatted; Frontend: 196 passed, build with `ƒ /chat`; Repository guards; Docker: db and api `Healthy`) |
+| Docker Compose | CI Docker job passed with the default configuration (chat **off**). Not run with chat enabled |
 | Browser end-to-end | **Not run** |
 
 What the tests cover (each "no generation" case asserts the fake provider was **not called**):
