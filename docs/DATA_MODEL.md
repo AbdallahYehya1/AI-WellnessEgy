@@ -15,6 +15,7 @@
 > - FK to `users` is `ON DELETE RESTRICT`. `submitted_at` is set by the server with `clock_timestamp()`.
 > - Index on `(user_id, submitted_at)`.
 > - `0002` also renames five M3 CHECK constraints whose names `0001` had doubled (for example `ck_users_ck_users_display_name_length` becomes `ck_users_display_name_length`).
+> - **`note` is currently never written:** the API rejects any note (temporary policy, D-32), so the column stays NULL. The column and its check stay in place for the future decision.
 > - **Not yet implemented for `note`:** the column-level "encrypted at rest" posture from ARCHITECTURE §5, and the shorter retention period. See D-33. Managed Postgres disk encryption is not the same guarantee.
 >
 > Every other table below is still a plan.

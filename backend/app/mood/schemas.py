@@ -2,29 +2,29 @@
 
 The 1-5 scale is the documented `mood_score` range. Tags must come from a
 controlled vocabulary that has not been defined yet, so none are accepted
-(docs/OPEN_DECISIONS.md, D-30). Notes are stored exactly as submitted:
-they are validated, never trimmed or rewritten.
+(docs/OPEN_DECISIONS.md, D-30).
+
+Notes: temporary policy while D-32 is open. Free-text notes are not collected
+before the safety layer and the required clinical/legal decisions exist, so
+any `note` string (including empty or whitespace-only) is rejected here,
+before anything is written. An omitted or null `note` is still valid.
 """
 
 from __future__ import annotations
 
-import unicodedata
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictInt, field_validator
 
-from app.mood.models import MAX_TAGS, MOOD_SCORE_MAX, MOOD_SCORE_MIN, NOTE_MAX_LENGTH
+from app.mood.models import MAX_TAGS, MOOD_SCORE_MAX, MOOD_SCORE_MIN
 
 # Controlled vocabulary for `tags`. Empty until approved (D-30).
 TAG_VOCABULARY: frozenset[str] = frozenset()
 
 HISTORY_DEFAULT_LIMIT = 30
 HISTORY_MAX_LIMIT = 100
-
-# Line breaks and tabs are normal in a note; other control/format characters are not.
-_ALLOWED_CONTROLS = {"\n", "\r", "\t"}
 
 
 class MoodCheckinCreate(BaseModel):
@@ -48,18 +48,12 @@ class MoodCheckinCreate(BaseModel):
 
     @field_validator("note")
     @classmethod
-    def _check_note(cls, value: str | None) -> str | None:
+    def _reject_note(cls, value: str | None) -> None:
+        # D-32: no free-text notes until the safety layer exists. The submitted
+        # text is never echoed back, logged or stored.
         if value is None:
             return None
-        if not value.strip():
-            raise ValueError("The note can't be empty. Leave it out instead.")
-        if len(value) > NOTE_MAX_LENGTH:
-            raise ValueError(f"The note must be at most {NOTE_MAX_LENGTH} characters.")
-        if any(
-            unicodedata.category(ch) in {"Cc", "Cf"} and ch not in _ALLOWED_CONTROLS for ch in value
-        ):
-            raise ValueError("The note contains characters that aren't allowed.")
-        return value  # stored exactly as written
+        raise ValueError("Notes aren't accepted yet. Leave the note out.")
 
 
 class MoodCheckinCreated(BaseModel):

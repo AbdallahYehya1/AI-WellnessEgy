@@ -92,15 +92,14 @@ def test_declined_consent_blocks_mood(db_engine: Engine) -> None:
 # --- Create / persistence -----------------------------------------------------
 
 
-def test_checkin_is_stored_exactly(client: TestClient, db_engine: Engine) -> None:
-    response = checkin(client, {"mood_score": 2, "note": f"  {NOTE}\n"})
+def test_checkin_is_stored_correctly(client: TestClient, db_engine: Engine) -> None:
+    response = checkin(client, {"mood_score": 2})
     assert response.status_code == 201
     body = response.json()
     assert set(body) == {"checkin_id", "submitted_at"}
     [row] = rows(db_engine, "SELECT * FROM app.mood_checkins")
     assert str(row.id) == body["checkin_id"]
-    assert (row.mood_score, row.tags) == (2, [])
-    assert row.note == f"  {NOTE}\n"  # not trimmed or rewritten
+    assert (row.mood_score, row.tags, row.note) == (2, [], None)
     profile_id = client.get("/profile", headers=bearer()).json()["user_id"]
     assert str(row.user_id) == profile_id
 
@@ -148,9 +147,11 @@ def test_history_is_newest_first_and_complete(client: TestClient) -> None:
     assert times == sorted(times, reverse=True)
 
 
-def test_history_returns_own_note(client: TestClient) -> None:
-    checkin(client, {"mood_score": 3, "note": NOTE})
-    assert history(client).json()["checkins"][0]["note"] == NOTE
+def test_history_note_field_is_always_null_while_notes_are_disabled(client: TestClient) -> None:
+    checkin(client, {"mood_score": 3})
+    checkin(client, {"mood_score": 4, "note": NOTE})  # rejected (D-32)
+    checkins = history(client).json()["checkins"]
+    assert [(c["mood_score"], c["note"]) for c in checkins] == [(3, None)]
 
 
 def test_history_empty_for_new_user(client: TestClient) -> None:
@@ -225,6 +226,7 @@ def test_reversed_range_is_rejected(client: TestClient) -> None:
         ({"mood_score": 3, "note": ""}, "note"),
         ({"mood_score": 3, "note": "   "}, "note"),
         ({"mood_score": 3, "note": "x" * 1001}, "note"),
+        ({"mood_score": 3, "note": 123}, "note"),
         ({"mood_score": 3, "note": "bad\u0000char"}, "note"),
         ({"mood_score": 3, "note": "zero​width"}, "note"),
         ({"mood_score": 3, "user_id": USER_B_ID}, "user_id"),
@@ -242,14 +244,56 @@ def test_invalid_checkin_is_rejected(
     assert rows(db_engine, "SELECT id FROM app.mood_checkins") == []
 
 
-def test_note_with_line_breaks_and_arabic_is_accepted(client: TestClient) -> None:
-    note = "نمت كويس\nبس متوتر شوية\t."
-    assert checkin(client, {"mood_score": 3, "note": note}).status_code == 201
-    assert history(client).json()["checkins"][0]["note"] == note
+# --- Notes are disabled (temporary policy, OPEN_DECISIONS D-32) --------------
 
 
-def test_note_at_max_length_is_accepted(client: TestClient) -> None:
-    assert checkin(client, {"mood_score": 3, "note": "x" * 1000}).status_code == 201
+@pytest.mark.parametrize(
+    "note",
+    [
+        NOTE,  # ordinary text
+        "نمت كويس\nبس متوتر شوية\t.",  # Arabic with line breaks
+        "   ",  # whitespace only
+        "\n",
+        "",  # empty string is not "omitted"
+        "x" * 1000,  # within the old length limit
+        "x" * 100_000,  # oversized
+    ],
+    ids=["text", "arabic", "spaces", "newline", "empty", "1000-chars", "oversized"],
+)
+def test_any_note_is_rejected_before_storage(
+    client: TestClient, db_engine: Engine, capsys: pytest.CaptureFixture[str], note: str
+) -> None:
+    capsys.readouterr()  # discard setup output
+    response = client.post("/mood/checkins", headers=bearer(), json={"mood_score": 3, "note": note})
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "validation_failed"
+    assert error["fields"] == [
+        {"field": "note", "message": "Notes aren't accepted yet. Leave the note out."}
+    ]
+    if note.strip():
+        assert note not in response.text  # never echoed back
+    # Nothing was written: no check-in row, no mood audit event.
+    assert rows(db_engine, "SELECT id FROM app.mood_checkins") == []
+    assert rows(db_engine, "SELECT id FROM app.audit_events WHERE action LIKE 'mood.%'") == []
+    if note.strip():
+        output = capsys.readouterr()
+        assert note not in output.out + output.err
+
+
+def test_omitted_or_null_note_is_still_accepted(client: TestClient, db_engine: Engine) -> None:
+    assert checkin(client, {"mood_score": 3}).status_code == 201
+    assert checkin(client, {"mood_score": 4, "note": None}).status_code == 201
+    assert [r.note for r in rows(db_engine, "SELECT note FROM app.mood_checkins")] == [None, None]
+
+
+def test_rejected_note_is_not_stored_even_with_a_valid_score(
+    client: TestClient, db_engine: Engine
+) -> None:
+    """A valid score must not be saved with the note silently dropped."""
+    response = checkin(client, {"mood_score": 5, "note": NOTE})
+    assert response.status_code == 422
+    assert rows(db_engine, "SELECT id FROM app.mood_checkins") == []
 
 
 def test_malformed_json_is_rejected(client: TestClient) -> None:
@@ -275,18 +319,18 @@ def test_database_constraint_backs_up_the_score_range(
 
 def test_users_only_see_their_own_history(client: TestClient) -> None:
     consent(client, sub=USER_B_ID, email=EMAIL_B)
-    checkin(client, {"mood_score": 1, "note": NOTE})
+    a_created = checkin(client, {"mood_score": 1}).json()
     checkin(client, {"mood_score": 5}, sub=USER_B_ID, email=EMAIL_B)
 
     a = history(client).json()["checkins"]
     b = history(client, sub=USER_B_ID, email=EMAIL_B).json()["checkins"]
     assert [c["mood_score"] for c in a] == [1]
     assert [c["mood_score"] for c in b] == [5]
-    assert NOTE not in json.dumps(b)
+    assert a_created["checkin_id"] not in json.dumps(b)
 
 
 def test_client_supplied_user_id_cannot_read_another_users_history(client: TestClient) -> None:
-    checkin(client, {"mood_score": 1, "note": NOTE})
+    assert checkin(client, {"mood_score": 1}).status_code == 201
     a_profile = client.get("/profile", headers=bearer()).json()["user_id"]
     consent(client, sub=USER_B_ID, email=EMAIL_B)
 
@@ -321,7 +365,8 @@ def test_client_supplied_user_id_cannot_write_for_another_user(
 def test_mood_content_never_reaches_logs(capsys: pytest.CaptureFixture[str]) -> None:
     with api_client() as c:
         consent(c)
-        checkin(c, {"mood_score": 2, "note": NOTE})
+        checkin(c, {"mood_score": 2})
+        checkin(c, {"mood_score": 2, "note": NOTE})  # rejected: notes disabled
         checkin(c, {"mood_score": 9, "note": NOTE})  # rejected
         history(c, {"from": "2026-01-01T00:00:00Z"})
     output = capsys.readouterr()
@@ -334,7 +379,8 @@ def test_mood_content_never_reaches_logs(capsys: pytest.CaptureFixture[str]) -> 
 
 
 def test_audit_records_the_event_but_no_mood_content(client: TestClient, db_engine: Engine) -> None:
-    created = checkin(client, {"mood_score": 2, "note": NOTE}).json()
+    assert checkin(client, {"mood_score": 2, "note": NOTE}).status_code == 422  # notes disabled
+    created = checkin(client, {"mood_score": 2}).json()
     [event] = rows(
         db_engine,
         "SELECT actor_user_id, target_type, target_id, metadata FROM app.audit_events "

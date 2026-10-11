@@ -169,9 +169,14 @@ require the **current consent** (`403 consent_required` otherwise).
     rejected (422), never coerced.
   - `tags`: must come from the controlled vocabulary. **No vocabulary is approved yet
     (OPEN_DECISIONS D-30)**, so only `[]` (or omitting the field) is accepted.
-  - `note`: optional, 1–1000 characters, not whitespace-only. Line breaks and tabs are
-    allowed; other control and format characters are rejected. It is **stored exactly as
-    submitted** (never trimmed). The 1000-character limit is an engineering bound (D-33).
+  - `note`: **temporarily not accepted** (OPEN_DECISIONS D-32). Omitting `note` or sending
+    `null` is valid. **Any string**, including empty, whitespace-only or oversized, is
+    rejected with `422 validation_failed` on field `note` ("Notes aren't accepted yet.
+    Leave the note out."). Rejection happens during request validation, before any
+    write. The submitted text is never echoed, logged, audited or stored. This is a
+    deliberate, temporary deviation from the documented `note?: str` until D-32 is
+    decided. The column and its DB check (NULL or 1–1000 characters) stay in place for
+    that future decision; encryption and retention (D-33) are **not** implemented.
   - Unknown fields (`user_id`, `submitted_at`, …) are rejected (422). `submitted_at` is
     always set by the server.
 - **Response 201:** `{ checkin_id: uuid, submitted_at: datetime }`
@@ -183,7 +188,8 @@ require the **current consent** (`403 consent_required` otherwise).
 
 ### GET /mood/history?from=&to=&limit=
 - **Response 200:** `{ checkins: [{ checkin_id, mood_score, tags, note, submitted_at }] }`,
-  newest first, and only the caller's own check-ins.
+  newest first, and only the caller's own check-ins. While notes are disabled (D-32),
+  `note` is always `null`.
 - **Query:**
   - `from` (inclusive) and `to` (exclusive): ISO-8601 datetimes **with a timezone**;
     naive or date-only values are rejected. `from` must be earlier than `to`

@@ -218,3 +218,40 @@ describe("MoodHistory", () => {
     expect(screen.getByText("No check-ins yet.")).toBeTruthy();
   });
 });
+
+describe("MoodForm keyboard accessibility", () => {
+  const FOCUS_CLASSES = [
+    "has-focus-visible:outline-2",
+    "has-focus-visible:outline-offset-2",
+    "has-focus-visible:outline-calm-900",
+  ];
+
+  it("gives every score a visible focus style distinct from the selected style", () => {
+    render(<MoodForm action={vi.fn(async () => ({}))} />);
+    for (const radio of screen.getAllByRole("radio")) {
+      const label = radio.closest("label");
+      expect(label).not.toBeNull();
+      for (const cls of FOCUS_CLASSES) expect(label?.classList.contains(cls)).toBe(true);
+      // Selection is shown differently (background + border), not by the outline.
+      expect(label?.classList.contains("has-checked:bg-calm-100")).toBe(true);
+    }
+  });
+
+  it("is reachable and operable with the keyboard alone", async () => {
+    const action = vi.fn<(s: MoodFormState, d: FormData) => Promise<MoodFormState>>(
+      async () => ({}),
+    );
+    render(<MoodForm action={action} />);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "1" }));
+    await userEvent.keyboard("{ArrowRight}{ArrowRight}");
+    const three = screen.getByRole("radio", { name: "3" }) as HTMLInputElement;
+    expect(document.activeElement).toBe(three);
+    expect(three.checked).toBe(true);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Save check-in" }));
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    expect(action.mock.calls[0]?.[1].get("moodScore")).toBe("3");
+  });
+});

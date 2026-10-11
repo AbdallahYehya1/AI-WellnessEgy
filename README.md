@@ -109,8 +109,11 @@ consent accepted ─▶ /check-in (1–5 scale, "Skip for now") ─(POST /mood/c
 
 - Both endpoints are self-only and require the current consent (`403 consent_required`).
 - The score is a strict JSON integer from 1 to 5. Tags accept only `[]` until a vocabulary
-  is approved (OPEN_DECISIONS D-30). The API accepts an optional note (stored verbatim,
-  never logged or audited), but **the UI does not offer one** until D-32 is decided.
+  is approved (OPEN_DECISIONS D-30). **Notes are temporarily rejected server-side** (any
+  `note` string → 422; omitted or `null` is fine) and the UI offers no note field, until
+  D-32 is decided.
+- The 1–5 scale is keyboard-operable (Tab, then the arrow keys) and has a visible focus
+  outline that is separate from the "selected" style.
 - The check-in is described as "not a medical assessment". The UI copy is provisional
   (D-31).
 

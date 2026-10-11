@@ -26,7 +26,9 @@ export function MoodForm({ action }: Props) {
           {SCORES.map((score) => (
             <label
               key={score}
-              className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-md border border-calm-100 bg-white text-lg font-semibold has-checked:border-calm-700 has-checked:bg-calm-100"
+              // Selected = filled background + dark border. Keyboard focus = a separate
+              // offset outline, so the focused and selected scores stay distinguishable.
+              className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-md border border-calm-100 bg-white text-lg font-semibold has-checked:border-calm-700 has-checked:bg-calm-100 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-calm-900"
             >
               <input
                 type="radio"

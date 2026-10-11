@@ -10,7 +10,7 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 | **M1: Repository and engineering foundation** | **COMPLETE — VERIFIED** (`d525820`). |
 | **M2: Supabase authentication** | **COMPLETE — VERIFIED** (`9474bbf`, evidence `207fc13`). The founder reported (2026-10-01) that the last three real-account checks passed: successful sign-in, session persistence after reload, and sign-out with the protected-dashboard redirect. The earlier live checks are in §M3-9. |
 | **M3: Consent and user-profile foundation** | **COMPLETE — VERIFIED** locally and in CI (`78de377`, docs `9ff5b9d`). Migration `0001` is still a separately controlled deployment step for the real Supabase database (D-26). |
-| **M4: Mood check-in and wellness-data foundation** | **IMPLEMENTED; verified locally and in CI on branch `m4-mood-checkin`** (see §M4). Not merged to `main`. Real-Supabase migration pending (D-26); launch blockers D-32 and D-33. |
+| **M4: Mood check-in and wellness-data foundation** | **Implementation COMPLETE — VERIFIED** (local) and **CI COMPLETE — VERIFIED** (PR #1, two runs). **PR review and merge: PENDING.** The review in §M4-R found no blocking defects; both Medium findings are **fixed locally** (§M4-R.4) and await commit, push and re-review. **Real Supabase migration: PENDING (D-26)**; runbook ready, not executed. **Real-Supabase end-to-end: PARTIAL**: real Supabase **auth** with a **local** database was exercised by the founder (§M4-R.3); with the Supabase **database** it is not verified. **Launch blockers unresolved:** D-32, D-33 and the M5 entry gate (OPEN_DECISIONS §I). |
 | M5 and later | Not started. Awaiting approval. |
 
 **Repository:**
@@ -19,6 +19,144 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
   for review and CI, and is not merged.
 - The milestone branches `m1-foundation`, `m2-supabase-auth` and `m3-consent-profile` are
   retained.
+
+---
+
+# M4-R: Pre-merge review (2026-10-02)
+
+Scope: PR #1 (`m4-mood-checkin` at `61e1676` → `main` at `9ff5b9d`). This was a review
+only. Nothing was merged, pushed or migrated on Supabase, and no M5 code was written.
+
+## M4-R.1 Findings by severity
+
+| Severity | Finding | Evidence | Recommended fix |
+|---|---|---|---|
+| Critical / High | **None found** | Diff review, test re-run, migration rehearsal (§M4-R.2) | None |
+| **Medium: FIXED (§M4-R.4)** | **D-32 mitigation is UI-only.** `POST /mood/checkins` accepts and stores `note` from any authenticated client, although the product position is "no notes before the safety layer". | `MoodCheckinCreate.note: str \| None` (`app/mood/schemas.py:38`); tests `test_checkin_is_stored_exactly`, `test_note_is_optional` | A founder decision (recorded under D-32): either reject a non-null `note` server-side (for example `422 notes_not_enabled` behind a setting that defaults to off, with a contract-deviation note), or accept the documented risk until M5. Not merge-blocking (no real users, Supabase DB not migrated), but launch-blocking. |
+| **Medium: FIXED (§M4-R.4)** | **Keyboard focus is invisible on the mood scale.** The radio inputs are `sr-only` and the visible labels have no focus style, so keyboard users can't see which score is focused. | `components/mood/mood-form.tsx:29` (label classes have no focus variant) and `:36` (`sr-only`) | Add a focus-visible style to the label (for example `has-focus-visible:ring-2 has-focus-visible:ring-calm-700`), plus a test that asserts the class or uses a keyboard-navigation check. Small change; recommended before merge or as the first follow-up. |
+| Low | History times are shown in UTC ("… UTC"), not local time. That's clear but unfriendly for users in Egypt. | `components/mood/mood-history.tsx:6` (`timeZone: "UTC"`) | Product decision: render in the user's time zone on the client, or in `Africa/Cairo`. Not blocking. |
+| Low | With outdated or declined consent, users can't read their own mood history (403). This is correct for the consent gate, but a data-access or export path may be legally required regardless of consent. | `read_history` depends on `ConsentedUser` | Track under D-10 and D-8 with the planned `/privacy/export`. No change now. |
+| Low | `0002`'s `RENAME CONSTRAINT` assumes the database was created by this repository's `0001`. On a hand-modified database it fails, but safely (the transaction rolls back). | `migrations/versions/0002_mood_checkins.py:34-50` | Covered by the runbook (§2 stop conditions, §5 recovery). |
+| Info | The migrations revoke `anon` and `authenticated` only. Other Supabase roles (for example `service_role`) aren't revoked. `app` is not an exposed Data API schema, and `service_role` is a server-only secret that this project doesn't use. | `0001:161`, `0002:104` | After D-26, verify Exposed schemas excludes `app` (runbook §4). Optionally revoke `service_role` in a later migration if a policy requires it. |
+| Info | No rate limiting on `POST /mood/checkins` (D-21). | No limiter in the code | M5 gate G-5. |
+
+**Checked and found consistent:**
+- **Contract:** the OpenAPI document exposes exactly `from`, `to` and `limit` (all
+  optional) for history. The body schema has `required: [mood_score]` and
+  `additionalProperties: false`.
+- **`limit`:** documented consistently in `API_CONTRACT.md` (heading and parameter list)
+  and in the README.
+- **`0001`:** byte-for-byte unchanged against `main`.
+- **`0002`:** touches other tables only through `RENAME CONSTRAINT`.
+- **Diff scope:** 34 files, all within the expected areas, with no secrets or unrelated
+  changes.
+- **Onboarding order:** sign-in → (profile) → consent → `/check-in` → dashboard
+  (`lib/onboarding/actions.ts` → `CHECK_IN_PATH`; E2E 16/16).
+- **States:** loading uses the pending-button state; the empty state is "No check-ins
+  yet."; a history error shows a non-blocking message; consent unavailable fails closed;
+  invalid input shows a field error (tests in `check-in.test.tsx` and
+  `page.test.tsx`).
+- **Arabic and English:** Arabic page titles, with English body copy marked provisional
+  (D-19, D-31).
+
+## M4-R.2 Checks personally re-run in this review (2026-10-02)
+
+| Check | Command or method | Actual result |
+|---|---|---|
+| Backend tests | `python -m pytest -q` (Python 3.13.6, Postgres 17 testcontainer) | **233 passed**, 99% coverage (836 statements, 11 missed) |
+| Lint and format | `ruff check .`, `ruff format --check .` | All checks passed; 60 files already formatted |
+| Types | `mypy app` and `mypy app tests` (strict) | No issues (45 and 57 files) |
+| Frontend | `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` (Node 22.23.3, with npm on 22.23.3) | 0 vulnerabilities; lint and typecheck clean; **173 passed** (14 files); build compiled |
+| Compose config | `docker compose config --quiet` | exit 0 |
+| Fresh migration | Compose with a new volume | `-> 0001`, `0001 -> 0002`, migrate exit 0; api healthy |
+| Repeat migration | `docker compose run --rm migrate` again, then `alembic current` | No "Running upgrade" (a no-op); `0002 (head)` |
+| Schema posture | `psql` in the Compose database | 0 tables in `public`; RLS on for `audit_events`, `consents`, `mood_checkins`, `users` |
+| Endpoints | `curl` against the Compose API | `/health` 200, `/consents/current` 200, `/mood/history` 401 (no token) |
+| Diff and contract | `git diff main...HEAD`; OpenAPI introspection | As in §M4-R.1 |
+
+**Historical results, not re-run here:**
+- CI runs 36959093412 and 36959260548. PR #1 currently reports all four checks
+  `SUCCESS` and the PR is `MERGEABLE` / `CLEAN` (read with `gh pr view 1`).
+- The 16/16 browser E2E from the M4 build.
+
+## M4-R.3 Real Supabase auth with a local database (founder session, 2026-10-02 06:30–06:32 +03:00)
+
+Evidence from the local API log of the founder's own browser session. The backend was
+configured with the real `SUPABASE_URL` and the **local** Compose database. Only method,
+path and status are logged:
+- `PATCH /profile` 200;
+- `POST /consents` 201;
+- `POST /mood/checkins` 201;
+- `GET /mood/history` 200 (×2);
+- `GET /consents/me` 200 (×4);
+- `GET /me` 200;
+- the one 401 (`missing_token`) was the agent's own unauthenticated probe.
+
+Log scan: emails 0, `eyJ` 0, `Bearer ` 0, `mood_score` 0, `note` 0.
+
+**What this proves:** real Supabase ES256 tokens pass the backend checks, and the full M4
+flow works with real auth. **What it doesn't prove:** anything about the **Supabase
+database**. Migrations aren't applied there (D-26), and that run needs the runbook.
+
+## M4-R.4 Fixes for the two Medium findings (2026-10-02, uncommitted)
+
+**1. Notes rejected server-side (temporary policy, D-32 remains open).**
+- `backend/app/mood/schemas.py`: `MoodCheckinCreate._reject_note` rejects **any**
+  `note` string with `422 validation_failed` and the field message "Notes aren't accepted
+  yet. Leave the note out.". That covers empty, whitespace-only, ordinary text and
+  oversized notes. An omitted or `null` note is still accepted.
+  - It's a hard rule in code, not a config flag.
+  - The old note-content validators were removed as dead code; the DB column and its
+    check are unchanged.
+- **Before storage:** this is Pydantic request validation, so the handler never runs.
+  The request's DB transaction rolls back on the error. Tests assert **0 rows** in
+  `app.mood_checkins` and **0** `mood.*` audit events after each rejected request.
+- **Tests:**
+  - `test_any_note_is_rejected_before_storage`, 7 cases: text, Arabic with line breaks,
+    spaces, newline, empty, 1000 characters, 100 000 characters. Each checks the exact
+    error body, that the text isn't echoed, 0 rows, 0 mood audit events, and that the text
+    doesn't appear in captured logs.
+  - `test_omitted_or_null_note_is_still_accepted`.
+  - `test_rejected_note_is_not_stored_even_with_a_valid_score`: no silent drop of the
+    note.
+  - History, logging, audit and isolation tests updated so that notes never appear.
+- **Mutation check:** making the validator accept notes again made **15 tests fail**.
+  With the fix restored, 63/63 mood tests pass.
+- **Docker:** a POST with `"note": "sensitive text"` appears **0** times in the API log.
+- **Docs:** API_CONTRACT (a deliberate, temporary deviation, documented), OPEN_DECISIONS
+  D-32 and G-6, DATA_MODEL and README. D-33 (encryption and retention) is **not** claimed.
+
+**2. Visible keyboard focus on the mood scale.**
+- `frontend/components/mood/mood-form.tsx`: each score label gets
+  `has-focus-visible:outline-2 has-focus-visible:outline-offset-2
+  has-focus-visible:outline-calm-900`. Selection keeps its separate style (filled
+  background and darker border).
+- **Tests** (`app/check-in/check-in.test.tsx`, +2):
+  - every score label carries the focus classes and the distinct selected style;
+  - keyboard-only operation: Tab focuses "1", arrow keys move to and select "3", Tab
+    reaches the submit button, and Enter submits `moodScore=3`.
+- **Compiled CSS:** the production build contains
+  `.has-focus-visible\:outline-2:has(:focus-visible){…outline-width:2px}`, plus the
+  offset and colour rules.
+- **Real browser** (headless Edge with the compiled CSS and real keyboard input):
+
+  | State | Outline | Background / border |
+  |---|---|---|
+  | Focused | `solid 2px rgb(28,56,48)`, offset 2px | white / light |
+  | Not focused | `none` | white / light |
+  | Selected and focused | `solid 2px`, offset 2px | `rgb(224,238,232)` / `rgb(47,93,80)` |
+  | Selected, not focused | `none` | `rgb(224,238,232)` / `rgb(47,93,80)` |
+
+  Focused and selected stay distinguishable in every combination.
+
+**Verification after the fixes (personally run):**
+- **Backend:** `pytest` **241 passed**, 99% coverage (`mood/schemas.py` 100%); ruff
+  check and format clean (60 files); strict mypy clean (45 and 57 files).
+- **Frontend:** `npm ci` with 0 vulnerabilities; lint and typecheck clean; `npm test`
+  **175 passed** (14 files); build compiled.
+- **Compose:** `docker compose config` OK. Fresh Docker stack: migrate
+  `-> 0001`, `0001 -> 0002`, exit 0; api healthy; `/health` 200; `/mood/history` 401.
+- CI has **not** run on these changes yet; they aren't pushed.
 
 ---
 

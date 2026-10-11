@@ -1,6 +1,6 @@
 # Open Decisions
 
-Last updated: 2026-10-02 (Milestone 4).
+Last updated: 2026-10-02 (M4 review and M5 entry gate).
 
 Engineering does not make the decisions below. Some are clinical, legal or
 crisis-procedure calls, and some belong to the founder. Until each one is
@@ -248,19 +248,12 @@ chat session and should be rotated.
   `backend/.env` (git-ignored) or a secret store, and never put it in the frontend or in
   source control. Use the direct connection or the **session pooler**; the app disables
   prepared statements, so the transaction pooler also works.
-- **Exact procedure, not yet executed.** Do not run it against an unidentified database:
-
-  ```bash
-  # backend/.env (git-ignored), e.g.
-  # DATABASE_URL=postgresql://postgres.<project-ref>:<password>@<pooler-host>:5432/postgres
-  cd backend
-  alembic current          # confirm which database is targeted; expect no revision yet
-  alembic upgrade head     # creates schema app + users, consents, audit_events (rev 0001)
-  alembic current          # expect: 0001 (head)
-  ```
-
-  The API reads the same `DATABASE_URL`. Without it, the profile and consent endpoints
-  answer 503.
+- **Procedure:** see [SUPABASE_MIGRATION_RUNBOOK.md](SUPABASE_MIGRATION_RUNBOOK.md), not yet
+  executed. Since M4 the head revision is **`0002`**; a correct run ends at
+  `0002 (head)`. The runbook covers target verification, backup, apply, read-only
+  verification queries and recovery. Do not run it against an unidentified database.
+- The API reads the same `DATABASE_URL`. Without it, the profile, consent and mood
+  endpoints answer 503.
 - **Security design (verified on plain Postgres with simulated Supabase roles):**
   - the tables live in schema `app`, which the Supabase Data API does not expose by
     default;
@@ -335,6 +328,19 @@ chat session and should be rotated.
 - **Current implementation:** the API supports `note` exactly as the contract documents,
   validated and stored verbatim, never logged or audited. **The frontend does not offer a
   note field.**
+- **M4 review finding (2026-10-02, Medium):** option (a) was enforced **only in the UI**;
+  the API still accepted and stored notes from direct clients.
+- **Temporary policy now enforced server-side (founder instruction, 2026-10-02):**
+  `POST /mood/checkins` rejects **any** `note` string (empty, whitespace-only, ordinary
+  text or oversized) with `422 validation_failed` on field `note`, during request
+  validation and before any database write. An omitted or `null` note is still accepted.
+  The text is never echoed, logged, audited or stored, and the UI still has no note
+  field. It's implemented as a hard rule in code (`app/mood/schemas.py`), not a config
+  flag, so it can't be switched on by accident. Re-enabling notes requires a reviewed
+  code change after this decision.
+- **This does not resolve D-32.** The question itself, and options (b) and (c), remain
+  open for clinical and legal review. **D-33 (encryption and retention) is also
+  unresolved** and still blocks launch.
 - **Blocks:** exposing notes in the UI, and therefore launch of that feature. It does not
   block other development.
 
@@ -363,3 +369,39 @@ chat session and should be rotated.
 - **Fixed forward in `0002`:** the five constraints are renamed, new constraints use
   `op.f()`, and a regression test pins every constraint name. `0001` was not edited, since
   it may already be applied somewhere.
+
+---
+
+## I. M5 entry gate (safety engine): prerequisites before any implementation
+
+Recorded 2026-10-02. **M5 has not started.** Every item below stays **PENDING** until the
+evidence listed exists. Nothing here records an approval that hasn't happened.
+
+**Qualified reviewers needed (none named or engaged yet):**
+- a licensed mental-health professional with experience in Egypt (clinical owner);
+- an Egyptian lawyer for health data and consumer protection (legal owner);
+- a native Egyptian Arabic reviewer with mental-health content experience (language
+  owner);
+- a security reviewer (security owner);
+- the founder (product owner and accountable sign-off).
+
+### Gate items
+
+| ID | Prerequisite | Owner | Status | Measurable acceptance criteria (all must hold) |
+|---|---|---|---|---|
+| G-1 | **D-7 clinical risk framework** | Clinical owner + founder | PENDING | (1) A written risk taxonomy and LOW / MEDIUM / HIGH / UNKNOWN definitions, with signed, dated approval by the named clinical owner, stored in `docs/`. (2) An approved labelled evaluation set, including Egyptian Arabic, Arabizi and mixed-language cases, with an agreed minimum sensitivity target for HIGH (the number is set by the clinical owner, not by engineering). (3) The policy is versioned (`policy_version`) and its changes require re-approval. |
+| G-2 | **D-13 crisis content and resources** | Clinical + legal owners | PENDING | (1) Every resource (service name, contact method, hours, languages) is verified as current by a named reviewer on a recorded date. Engineering supplies **no** numbers. (2) Escalation copy is approved in Arabic and English. (3) A re-verification schedule is set (for example, quarterly) with a named owner. (4) Until approved, the escalation UI shows a loud non-final placeholder, and no real user can reach AI features. |
+| G-3 | **Safety-pipeline invariants** (architectural, engineering-owned) | Security owner | PENDING (design) | (1) The only message path is: authentication → authorisation → consent → safety assessment → safety decision → context → generation → output validation → response. (2) The generation entrypoint's signature requires a safety-decision object, so it can't be called without one. A test proves it. (3) HIGH never reaches the LLM; tests use a provider mock that fails if called. (4) UNKNOWN is treated at least as MEDIUM; there is a test. (5) A classifier or policy **failure, timeout or exception blocks generation** and routes to escalation, **never** to unrestricted generation; there are fault-injection tests for each dependency. (6) A mutation test shows that removing the gate fails the suite. |
+| G-4 | **D-20 Content Security Policy** | Security owner | PENDING | (1) A CSP is sent on every page, with no `unsafe-inline` for scripts, using nonces or hashes as Next.js supports. (2) `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`. (3) `connect-src` is limited to the app, the API and the Supabase project origin. (4) An automated test asserts the header, and a browser run shows zero CSP violations on every route. (5) A decision is recorded on whether auth cookies can be `HttpOnly` with `@supabase/ssr`. |
+| G-5 | **D-21 rate limiting** | Security owner + founder | PENDING | (1) Per-user and per-IP limits on message sending (and on `POST /mood/checkins`), with values agreed by the founder. (2) A 429 response with the standard error body, and the UI explains it. (3) Limiter-store failure behaviour is decided and tested. For message generation it must **fail closed**: no generation without the limiter. (4) Load test evidence that the limits hold. |
+| G-6 | **D-32 notes before the safety layer** | Clinical + legal owners + founder | PENDING (decision); interim server-side rejection **in place** | (1) A recorded decision between options (a), (b) and (c). (2) Interim: server-side rejection implemented and tested (done on `m4-mood-checkin`, not yet merged). (3) If notes are enabled: they pass through the M5 safety assessment before storage or display, and approved "not monitored" copy, if used, is shown. |
+| G-7 | **D-33 note encryption and retention** | Security + legal owners | PENDING | (1) A recorded encryption approach (platform-only, app-level with a named KMS, or `pgcrypto`) with key rotation documented. (2) A retention period set by counsel, a scheduled purge job, and a test showing notes older than N days are removed while scores remain. (3) The same decision is applied to M5 conversation messages (ARCHITECTURE §5 groups them together). |
+| G-8 | **Consent and terms** (D-11, D-24, D-25) | Legal owner | PENDING | (1) Final terms and privacy text, published as a new consent version (which forces re-consent; tested in M3). (2) Whether AI processing needs its own optional consent is decided, and if so modelled with withdrawal (D-25). (3) No `pending_legal_review: true` documents remain current at launch. |
+| G-9 | **Age eligibility** (D-12) | Legal owner | PENDING (wording) | (1) Counsel confirms whether self-attestation suffices and what wording to use. (2) If the attestation must be recorded, the data model is extended through a reviewed migration. |
+| G-10 | **Privacy, residency and deletion** (D-8, D-9, D-10, D-27, D-28) | Legal + security owners | PENDING | (1) A written regulatory position (D-8) and data-residency decision (D-9), with the LLM provider's data handling assessed against it. (2) Retention periods for every sensitive table (D-10). (3) A deletion workflow that covers Supabase `auth.users` deletion (D-27). (4) A staff access model with logged reasons (D-28). |
+| G-11 | **Deployment baseline** | Founder | PENDING | (1) PR #1 merged with CI green on `main`. (2) Migrations applied to Supabase per the runbook, with recorded evidence. (3) A real-Supabase end-to-end run (sign in → consent → mood → dashboard) recorded. (4) Branch protection on `main` requiring the four CI checks. |
+
+**The M5 implementation may start only when** G-3 is designed and agreed and G-11 is
+complete. M5 may only be exposed to any user outside the team when **every** item from G-1
+to G-11 meets its criteria. Until then, M5 work runs only against mocks, behind the gate,
+with no real-user access.
