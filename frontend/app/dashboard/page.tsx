@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { MoodHistory } from "@/components/mood/mood-history";
 import { ServiceUnavailable } from "@/components/onboarding/service-unavailable";
-import { fetchMe, fetchMoodHistory, fetchMyConsent } from "@/lib/api/backend";
+import { fetchChatConfig, fetchMe, fetchMoodHistory, fetchMyConsent } from "@/lib/api/backend";
 import { signOut } from "@/lib/auth/actions";
 import { getVerifiedSession } from "@/lib/auth/session";
 import { requiredOnboardingStep } from "@/lib/onboarding/steps";
@@ -35,10 +35,13 @@ export default async function DashboardPage({ searchParams }: Props) {
   const step = requiredOnboardingStep(consent.data.status);
   if (step) redirect(step);
 
-  const [me, history] = await Promise.all([
+  const [me, history, chat] = await Promise.all([
     fetchMe(session.accessToken),
     fetchMoodHistory(session.accessToken, RECENT_LIMIT),
+    fetchChatConfig(session.accessToken),
   ]);
+  // The assistant link only appears when the server reports chat as enabled.
+  const chatEnabled = Boolean(chat?.ok && chat.data.enabled);
   if (me.status !== "ok") return <ServiceUnavailable />;
   const name = me.me.display_name;
 
@@ -94,6 +97,22 @@ export default async function DashboardPage({ searchParams }: Props) {
           <p className="text-sm text-calm-700">Your recent check-ins can&apos;t be loaded right now.</p>
         )}
       </section>
+
+      {chatEnabled ? (
+        <section
+          lang="en"
+          dir="ltr"
+          className="space-y-2 rounded-lg border border-calm-100 bg-white p-5 text-left"
+        >
+          <h2 className="text-lg font-semibold">Wellness assistant (prototype)</h2>
+          <p className="text-sm text-calm-700">
+            General wellness information with sources. Not a therapist or doctor.
+          </p>
+          <Link href="/chat" className="text-sm font-medium text-calm-700 underline">
+            Open the assistant
+          </Link>
+        </section>
+      ) : null}
 
       <form action={signOut} lang="en" dir="ltr" className="text-left">
         <button

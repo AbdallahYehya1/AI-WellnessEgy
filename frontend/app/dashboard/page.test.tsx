@@ -35,6 +35,7 @@ beforeEach(() => {
   backend.fetchMyConsent.mockResolvedValue(ok(myConsent("granted", "2026-09-29.draft-1")));
   backend.fetchMe.mockResolvedValue({ status: "ok", me: ME });
   backend.fetchMoodHistory.mockResolvedValue(ok({ checkins: [] }));
+  backend.fetchChatConfig.mockResolvedValue(fail(503, "service_unavailable"));
 });
 
 describe("DashboardPage", () => {
@@ -104,5 +105,16 @@ describe("DashboardPage", () => {
     backend.fetchMyConsent.mockResolvedValue(ok(myConsent("missing")));
     await expectRedirect(DashboardPage(props()));
     expect(backend.fetchMoodHistory).not.toHaveBeenCalled();
+  });
+
+  it("links to the assistant only when the server reports it as enabled", async () => {
+    render(await DashboardPage(props()));
+    expect(screen.queryByRole("link", { name: "Open the assistant" })).toBeNull();
+
+    backend.fetchChatConfig.mockResolvedValue(
+      ok({ enabled: true, age_band: "adult", age_band_label: "Adult", test_only_policy: true, prototype: true }),
+    );
+    render(await DashboardPage(props()));
+    expect(screen.getByRole("link", { name: "Open the assistant" }).getAttribute("href")).toBe("/chat");
   });
 });
