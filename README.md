@@ -15,8 +15,8 @@ planned for later.
 > ([docs/OPEN_DECISIONS.md](docs/OPEN_DECISIONS.md)). The service is for **adults (18+)
 > only**.
 
-**Current status:** Milestone 3 (consent and user-profile foundation). Built on M2 (Supabase
-email/password authentication). No wellness features exist yet. See
+**Current status:** Milestone 4 (mood check-in), built on M3 (consent and profile) and M2
+(Supabase auth). There is no AI companion yet. See
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
 ---
@@ -34,8 +34,8 @@ The system is a **modular monolith**: no microservices and no multi-agent AI.
 | Planned | pgvector (approved knowledge only), Redis only when there is a real need |
 | Ops | Docker, Docker Compose, GitHub Actions |
 
-Backend modules live in `backend/app/`. `core`, `common`, `auth`, `users`, `consent` and
-`audit` contain code; the rest are boundaries only:
+Backend modules live in `backend/app/`. `core`, `common`, `auth`, `users`, `consent`,
+`audit` and `mood` contain code; the rest are boundaries only:
 
 ```text
 core  auth  users  consent  conversations
@@ -99,6 +99,23 @@ sign-in / email confirmation ─▶ /dashboard ─(GET /consents/me)─▶ statu
   decision are written to the append-only `audit_events` table, in the same transaction.
 - The current consent text is a **draft placeholder** pending legal review (OPEN_DECISIONS
   D-24), shown with a prominent "DRAFT, NOT FINAL" notice.
+
+## Mood check-in (M4)
+
+```text
+consent accepted ─▶ /check-in (1–5 scale, "Skip for now") ─(POST /mood/checkins)─▶ /dashboard
+/dashboard ─(GET /mood/history?limit=7)─▶ recent check-ins (date + score)
+```
+
+- Both endpoints are self-only and require the current consent (`403 consent_required`).
+- The score is a strict JSON integer from 1 to 5. Tags accept only `[]` until a vocabulary
+  is approved (OPEN_DECISIONS D-30). **Notes are temporarily rejected server-side** (any
+  `note` string → 422; omitted or `null` is fine) and the UI offers no note field, until
+  D-32 is decided.
+- The 1–5 scale is keyboard-operable (Tab, then the arrow keys) and has a visible focus
+  outline that is separate from the "selected" style.
+- The check-in is described as "not a medical assessment". The UI copy is provisional
+  (D-31).
 
 ## Repository layout
 

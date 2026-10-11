@@ -57,6 +57,12 @@ export const backend = {
   fetchMyConsent: vi.fn(),
   fetchCurrentConsent: vi.fn(),
   recordConsent: vi.fn(),
+  recordMoodCheckin: vi.fn(),
+  fetchMoodHistory: vi.fn(),
 };
+
+export function moodCheckin(score: number, submittedAt: string, id = `c-${score}-${submittedAt}`) {
+  return { checkin_id: id, mood_score: score, tags: [], note: null, submitted_at: submittedAt };
+}
 
 export const getVerifiedSession = vi.fn<() => Promise<typeof SESSION | null>>();

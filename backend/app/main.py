@@ -18,6 +18,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import session_factory_for
 from app.core.health import router as health_router
 from app.core.logging import configure_logging, get_logger
+from app.mood.router import router as mood_router
 from app.users.router import router as users_router
 
 logger = get_logger(__name__)
@@ -86,6 +87,7 @@ def create_app(
     app.include_router(health_router)
     app.include_router(users_router)
     app.include_router(consent_router)
+    app.include_router(mood_router)
     return app
 
 

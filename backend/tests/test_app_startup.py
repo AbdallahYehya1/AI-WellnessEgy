@@ -38,6 +38,8 @@ def test_only_expected_routes_are_exposed() -> None:
         "/consents",
         "/consents/current",
         "/consents/me",
+        "/mood/checkins",
+        "/mood/history",
     }
 
 

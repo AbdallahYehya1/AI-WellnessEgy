@@ -71,7 +71,9 @@ def clean_database(test_database_url: str) -> Iterator[None]:
     # TRUNCATE is used for test isolation only; application code never
     # truncates, and row-level UPDATE/DELETE on audit_events is blocked.
     with engine_for(test_database_url).begin() as connection:
-        connection.execute(text("TRUNCATE app.audit_events, app.consents, app.users"))
+        connection.execute(
+            text("TRUNCATE app.audit_events, app.mood_checkins, app.consents, app.users")
+        )
 
 
 @pytest.fixture(autouse=True)

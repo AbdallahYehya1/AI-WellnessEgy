@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { recordConsent, updateProfile } from "@/lib/api/backend";
 import { getVerifiedSession } from "@/lib/auth/session";
+import { CHECK_IN_PATH } from "@/lib/mood/score";
 import { ONBOARDING_CONSENT } from "@/lib/onboarding/steps";
 import { validateDisplayName } from "@/lib/onboarding/validation";
 
@@ -67,5 +68,6 @@ export async function submitConsent(
     return { formError: SERVICE_UNAVAILABLE };
   }
   if (!accepting) return { declined: true };
-  redirect("/dashboard");
+  // Validation slice: consent → mood check-in → dashboard.
+  redirect(CHECK_IN_PATH);
 }
