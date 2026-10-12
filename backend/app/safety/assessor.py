@@ -14,8 +14,11 @@ from __future__ import annotations
 import concurrent.futures
 from typing import ClassVar, Protocol
 
+from app.core.logging import get_logger
 from app.safety.contracts import Assessment, RiskLevel, SafetyDecision
 from app.safety.policy import SafetyPolicy
+
+logger = get_logger(__name__)
 
 ASSESSMENT_TIMEOUT_SECONDS = 2.0
 
@@ -42,6 +45,9 @@ def assess_safety_risk(
         result = Assessment(RiskLevel.UNKNOWN, reason_code="assessor_timeout")
     except Exception:  # any assessor failure must block generation
         result = Assessment(RiskLevel.UNKNOWN, reason_code="assessor_error")
+    if result.reason_code.startswith("assessor_"):
+        # Fixed reason code only: never the window, the exception or its message.
+        logger.warning("chat_assessor_failed", extra={"reason": result.reason_code})
     return policy.decide(result)
 
 

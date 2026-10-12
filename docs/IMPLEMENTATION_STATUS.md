@@ -63,7 +63,7 @@ validation → chat UI.
 | Ingest CLI | `python -m app.knowledge.ingest app/knowledge/fixtures` → "ingested 4 documents", twice (idempotent: 4 sources, 4 chunks) |
 | `npm audit` | 5 high, all in the `eslint-config-next` development chain (D-39) |
 | CI | **Success**: PR #2 run 38133285109 on `21a5aa9`, 4/4 jobs (Backend: 332 passed, mypy clean, 83 files formatted; Frontend: 196 passed, build with `ƒ /chat`; Repository guards; Docker: db and api `Healthy`) |
-| Docker Compose | CI Docker job passed with the default configuration (chat **off**). Not run with chat enabled |
+| Docker Compose | CI Docker job passed with the default configuration (chat **off**). Locally (2026-10-12): with `docker-compose.yml` only, chat stays off when `CHAT_*` is unset (UI shows "isn't available yet", no dashboard link, `POST /chat/messages` → 503) and turns on with `CHAT_ENABLED=true` and `CHAT_SAFETY_POLICY=synthetic-test-v0`; `CHAT_ENABLED=true` without a policy stops the stack at the migrate step. Assessor failures log `chat_assessor_failed` with only a reason code |
 | Browser end-to-end | **Not run** |
 
 What the tests cover (each "no generation" case asserts the fake provider was **not called**):
@@ -86,6 +86,15 @@ What the tests cover (each "no generation" case asserts the fake provider was **
 
 ## M5-P.3 Limits and what this does not show
 
+- **Known low-severity findings (open, to be handled separately):**
+  - With `CHAT_ENABLED=true` and a blank `CHAT_SAFETY_POLICY` (Compose passes an empty string),
+    settings validation reports "not approved for this environment" rather than "requires
+    CHAT_SAFETY_POLICY". Because `migrate` shares the API settings, the stack stops at the
+    migrate step. It fails closed; only the message and the stopping point are imprecise.
+  - `test_message_and_reply_text_are_never_stored_or_logged` builds its app before `capsys`
+    starts capturing, so its log assertions may not see the app's log output. Its database
+    assertions are unaffected. The newer assessor-logging test avoids this by creating the app
+    inside the test.
 - **Nothing here is clinically validated.** The policy, assessor, notices and fixtures are
   synthetic test material; passing tests shows only that the engineering controls behave as
   designed.

@@ -3,7 +3,9 @@ knowledge ingestion and chat settings. No database needed."""
 
 from __future__ import annotations
 
+import logging
 import time
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -13,6 +15,7 @@ from app.ai.prompts.age_bands import ENABLEABLE_BANDS, AgeBand, band_enabled, re
 from app.ai.provider.base import GenerationResult
 from app.core.config import Settings
 from app.knowledge.ingest import IngestError, chunk, parse
+from app.safety.assessor import assess_safety_risk
 from app.safety.contracts import Assessment, Outcome, RiskLevel, SafetyDecision
 from app.safety.gate import (
     _GATE_KEY,
@@ -219,3 +222,78 @@ def test_chat_settings_fail_closed(values: dict[str, Any]) -> None:
 
 def test_chat_is_off_by_default() -> None:
     assert Settings().chat_enabled is False
+
+
+# --- Assessor failure logging -----------------------------------------------------------
+
+PRIVATE = "zz-private-window-text-zz"
+
+
+class _Raises:
+    def assess(self, window: list[str], age_band: str) -> Assessment:
+        raise RuntimeError(f"boom while reading {window[0]}")  # exception text holds the message
+
+
+class _Slow:
+    def assess(self, window: list[str], age_band: str) -> Assessment:
+        time.sleep(0.3)
+        return Assessment(RiskLevel.LOW)
+
+
+class _Malformed:
+    def assess(self, window: list[str], age_band: str) -> Assessment:
+        return {"risk": "low"}  # type: ignore[return-value]
+
+
+@pytest.mark.parametrize(
+    ("assessor", "reason"),
+    [
+        (_Raises(), "assessor_error"),
+        (_Slow(), "assessor_timeout"),
+        (_Malformed(), "assessor_malformed"),
+    ],
+)
+def test_assessor_failures_log_a_fixed_reason_code_only(
+    assessor: Any, reason: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.DEBUG, logger="app.safety.assessor"):
+        decision = assess_safety_risk(
+            assessor, SYNTHETIC_TEST_POLICY, [PRIVATE], "adult", timeout=0.05
+        )
+    assert decision.outcome is Outcome.UNAVAILABLE
+    assert not decision.generation_allowed
+    failures = [r for r in caplog.records if r.getMessage() == "chat_assessor_failed"]
+    assert len(failures) == 1
+    assert failures[0].levelno == logging.WARNING
+    assert getattr(failures[0], "reason", None) == reason
+    for record in caplog.records:
+        assert PRIVATE not in record.getMessage()
+        assert PRIVATE not in str(record.__dict__)
+        assert record.exc_info is None
+
+
+@pytest.mark.parametrize("level", [RiskLevel.LOW, RiskLevel.HIGH, RiskLevel.UNKNOWN])
+def test_successful_assessments_do_not_log_a_failure(
+    level: RiskLevel, caplog: pytest.LogCaptureFixture
+) -> None:
+    class _Fixed:
+        def assess(self, window: list[str], age_band: str) -> Assessment:
+            return Assessment(level, reason_code="synthetic")
+
+    with caplog.at_level(logging.DEBUG, logger="app.safety.assessor"):
+        assess_safety_risk(_Fixed(), SYNTHETIC_TEST_POLICY, [PRIVATE], "adult")
+    assert not [r for r in caplog.records if r.getMessage() == "chat_assessor_failed"]
+
+
+# --- Docker Compose passes the chat settings through ------------------------------------
+
+COMPOSE = Path(__file__).resolve().parents[2] / "docker-compose.yml"
+
+
+def test_compose_forwards_every_chat_setting_with_chat_off_by_default() -> None:
+    compose = COMPOSE.read_text(encoding="utf-8")
+    chat_settings = [name.upper() for name in Settings.model_fields if name.startswith("chat_")]
+    assert chat_settings  # guard against the prefix changing
+    for name in chat_settings:
+        assert f"{name}: ${{{name}:-" in compose, f"{name} is not passed to the API container"
+    assert "CHAT_ENABLED: ${CHAT_ENABLED:-false}" in compose

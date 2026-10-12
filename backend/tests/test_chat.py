@@ -448,3 +448,32 @@ def test_message_and_reply_text_are_never_stored_or_logged(
         for row in rows(db_engine, f"SELECT * FROM app.{table}"):  # noqa: S608 - fixed names
             assert private_text not in str(row)
             assert reply["text"] not in str(row)
+
+
+@pytest.mark.parametrize(
+    ("marker", "reason"),
+    [
+        ("[[synthetic-error]]", "assessor_error"),
+        ("[[synthetic-malformed]]", "assessor_malformed"),
+        ("[[synthetic-timeout]]", "assessor_timeout"),
+    ],
+)
+def test_assessor_failure_is_logged_without_message_text_and_blocks_generation(
+    knowledge: None, capsys: pytest.CaptureFixture[str], marker: str, reason: str
+) -> None:
+    rt = make_runtime()
+    private_text = "zz-private-assessor-zz"
+    # Create the app inside the test so its log handler writes to the captured stdout.
+    with chat_client(rt) as c:
+        consent(c)
+        assert send(c, f"{BREATHING} {private_text} {marker}").json()["status"] == "unavailable"
+    output = capsys.readouterr()
+    records = parse_log_lines(output.out)
+    assert any(r.get("path") == "/chat/messages" for r in records)  # logs were captured
+    failures = [r for r in records if r["message"] == "chat_assessor_failed"]
+    assert failures == [{**failures[0], "reason": reason, "level": "WARNING"}]
+    for record in records:
+        assert private_text not in str(record)
+        assert "Traceback" not in str(record)
+    assert private_text not in output.err
+    assert provider_calls(rt) == 0
