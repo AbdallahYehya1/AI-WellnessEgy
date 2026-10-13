@@ -14,6 +14,10 @@ export const MESSAGES = {
   signInFailed: "We couldn't sign you in right now. Please try again.",
   signUpFailed: "We couldn't create your account right now. Please try again.",
   notConfigured: "Sign-in isn't available yet. Please try again later.",
+  resetEmailFailed: "We couldn't send the reset email right now. Please try again in a few minutes.",
+  samePassword: "Choose a different password from the one you use now.",
+  passwordUpdateFailed: "We couldn't update your password right now. Please try again.",
+  resetUnavailable: "Password reset isn't available right now. Please try again later.",
 } as const;
 
 function isRateLimited(error: NonNullable<AuthErrorLike>): boolean {
@@ -58,5 +62,51 @@ export function signUpErrorOutcome(error: AuthErrorLike): SignUpOutcome {
       return { kind: "error", message: MESSAGES.signUpUnavailable };
     default:
       return { kind: "error", message: MESSAGES.signUpFailed };
+  }
+}
+
+export type ResetRequestOutcome = { kind: "sent" } | { kind: "error"; message: string };
+
+/**
+ * Outcome of asking for a password-reset email. To avoid revealing whether an
+ * account exists, every response that could depend on the account (unknown
+ * user, unconfirmed email, and so on) is reported as "sent". Only failures that
+ * say nothing about the account are shown: rate limits and service errors.
+ */
+export function resetRequestOutcome(error: AuthErrorLike): ResetRequestOutcome {
+  if (!error) return { kind: "sent" };
+  if (isRateLimited(error)) return { kind: "error", message: MESSAGES.rateLimited };
+  if (error.code === "email_address_invalid" || error.code === "validation_failed") {
+    return { kind: "error", message: MESSAGES.invalidEmail };
+  }
+  if (!error.status || error.status >= 500) {
+    return { kind: "error", message: MESSAGES.resetEmailFailed };
+  }
+  return { kind: "sent" };
+}
+
+export type PasswordUpdateOutcome =
+  | { kind: "field"; message: string }
+  | { kind: "form"; message: string }
+  | { kind: "expired" };
+
+/** Map an `updateUser({ password })` error. A lost or invalid session means the link can't be used. */
+export function passwordUpdateOutcome(error: NonNullable<AuthErrorLike>): PasswordUpdateOutcome {
+  if (isRateLimited(error)) return { kind: "form", message: MESSAGES.rateLimited };
+  switch (error.code) {
+    case "same_password":
+      return { kind: "field", message: MESSAGES.samePassword };
+    case "weak_password":
+      return { kind: "field", message: MESSAGES.weakPassword };
+    case "session_not_found":
+    case "session_expired":
+    case "bad_jwt":
+    case "user_not_found":
+    case "reauthentication_needed":
+      return { kind: "expired" };
+    default:
+      return error.status === 401 || error.status === 403
+        ? { kind: "expired" }
+        : { kind: "form", message: MESSAGES.passwordUpdateFailed };
   }
 }

@@ -34,6 +34,14 @@ describe("sign-in page", () => {
     expect(screen.getByRole("status").textContent).toBe("You've been signed out.");
   });
 
+  it("confirms a password reset and offers the forgot-password link", async () => {
+    render(await SignInPage(params({ status: "password-updated" })));
+    expect(screen.getByRole("status").textContent).toMatch(/password has been updated/);
+    expect(screen.getByRole("link", { name: "Forgot your password?" }).getAttribute("href")).toBe(
+      "/forgot-password",
+    );
+  });
+
   it("shows an understandable message for a failed confirmation link", async () => {
     render(await SignInPage(params({ status: "confirmation-failed" })));
     expect(screen.getByRole("alert").textContent).toContain("invalid or has expired");

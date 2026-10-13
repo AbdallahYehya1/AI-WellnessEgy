@@ -32,6 +32,11 @@ export function SignInForm({ action, next }: Props) {
         autoComplete="current-password"
         error={state.fieldErrors?.password}
       />
+      <p className="text-sm">
+        <Link href="/forgot-password" className="font-medium text-calm-700 underline">
+          Forgot your password?
+        </Link>
+      </p>
       <SubmitButton pendingText="Signing in…">Sign in</SubmitButton>
       <p className="text-sm">
         New here?{" "}
