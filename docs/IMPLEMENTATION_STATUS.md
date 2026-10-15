@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-10-11
+Last updated: 2026-10-15
 
 Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**, **BLOCKED**,
 **DEFERRED**.
@@ -12,6 +12,8 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 | **M3: Consent and user-profile foundation** | **COMPLETE — VERIFIED** locally and in CI (`78de377`, docs `9ff5b9d`). Migration `0001` is still a separately controlled deployment step for the real Supabase database (D-26). |
 | **M4: Mood check-in and wellness-data foundation** | **COMPLETE — VERIFIED** and **merged**: PR #1 merged on 2026-10-11 as `675b4a3` after the review fixes (`f2e4c28`; PR CI run 38129738286 green, 4/4). CI on `main` after the merge: run 38129868214, **success**. **Real Supabase migration: PENDING (D-26)**; runbook ready, not executed. **Launch blockers unresolved:** D-32, D-33 and the M5 entry gate (OPEN_DECISIONS §I). |
 | **M5 slice: chat prototype** | **IMPLEMENTED — VERIFIED locally and in CI** on branch `m5-chat-slice`, draft PR #2 (§M5-P). **Not merged.** Outstanding: Docker Compose with chat enabled, browser end-to-end, search-quality evaluation, clinical crisis content, clinical/legal review. Adult band only, disabled by default, fake provider, synthetic fixtures, test-only safety policy, no message storage. **Not clinically validated** and not available to real users. |
+| **M6.0: Password recovery** | **IMPLEMENTED — VERIFIED locally (mock auth) and in CI** (PR #3). **Real Supabase recovery: NOT VERIFIED.** See §M6.0 at the end of this file. |
+| **M7: Integration + UI/UX (M6.1–M6.5)** | **ENGINEERING INTEGRATION COMPLETE — VERIFIED locally** on `m7-integration` (§M7). **Not merged:** the production domain is public (D-40). Not verified against the real Supabase project or a deployed backend. |
 | Later milestones | Not started. |
 
 **Repository:**
@@ -961,3 +963,57 @@ password change", session lifetime), which are not changed here.
 | Browser, secret not configured | no email sent, reset refused (3/3) |
 | Browser, existing journeys | 16/16 |
 | Logs (Next.js, API) | no passwords, markers, tokens or secret names |
+
+---
+
+# M7: Integration, UI/UX redesign and verification (2026-10-15)
+
+Branch `m7-integration` from `main` (`675b4a3`): merges PR #2 (`24c3fc3`, chat
+prototype) then PR #3 (`f7975ec`, password recovery) — both merged cleanly — and adds
+the M6 design system, Arabic/English, redesigned journeys and a Playwright suite.
+**Not merged to `main`:** the production domain was verified public (D-40), so the
+merge gate fails.
+
+## What changed
+- Semantic light/dark tokens (lavender/sage) with measured AA contrast; IBM Plex Sans
+  Arabic self-hosted; one visible focus style; reduced motion respected.
+- Arabic/English with per-request `lang`/`dir`, language switch, theme preference.
+- App shell (skip link, desktop nav ≥ 1024px, mobile/tablet bottom tab bar, sign-out);
+  public shell; branded 404 and error boundary; favicon.
+- Redesigned landing, auth, onboarding (step indicator), dashboard (assistant only when
+  enabled; honest "not available yet" otherwise; no email or engineering copy),
+  check-in, chat; new progress page (accessible SVG chart + table) and settings
+  (display name, language, theme, consent status, privacy; unsupported export/delete/
+  withdraw explained as text, not buttons).
+- Sign-up tells a signed-in user "You already have an account. Continue to your
+  dashboard."; the check-email page tells everyone "If you already have an account, you
+  can sign in or reset your password." No account-existence lookup was added.
+- Chat: stable layout, starters (fill, don't send), Enter/Shift+Enter, scroll-follow,
+  distinct outcome titles, confirmed start-over, retention notice, specific messages for
+  "switched off" (503) and "not available for your account" (403). Backend safety
+  behaviour unchanged.
+
+## Verification (local, 2026-10-15)
+
+| Check | Result |
+|---|---|
+| Backend (ruff, format, mypy, pytest) on the merged code | clean; **342 passed**, 99% coverage |
+| Frontend lint / typecheck | clean |
+| Frontend unit tests (Vitest) | **309 passed** (19 files) |
+| Production build | pass (font downloaded at build) |
+| `npm audit --omit=dev` | 0 vulnerabilities (5 dev-only remain, D-39) |
+| Migrations on a fresh Postgres 17 (Compose) | `0001` → `0002` → `0003` applied in order |
+| **Playwright, 20 tests** (production build + Compose API + test-only mock auth) | **20 passed** |
+| — journeys | sign-up/confirmation/onboarding/consent/check-in/dashboard; duplicate sign-up (no new email, original password still valid); signed-in `/sign-up`; check-in → progress → settings (name, dark theme, Arabic RTL); chat test mode (starter, cited synthetic reply, signed follow-up, blocked `support`, `unavailable`, no browser storage); sign-out protects 6 routes; lost session → sign-in → back |
+| — recovery | neutral request (no email for unknown accounts, identical message), reset, old password rejected, new works, reused link refused, other-browser link refused, original forged-cookie exploit refused, stolen marker refused, replay after success refused |
+| — accessibility & layout | axe WCAG 2.2 A/AA: **0 violations** on 12 pages × ar/en × light/dark; no horizontal overflow at 320/375/390/768/1024/1280/1440; no visible control < 24px; skip link; reduced motion |
+
+Defects found by the browser suite and fixed: language switch failed WCAG 2.5.3 (label
+in name); crowded mobile header; 768px overflow (desktop navigation moved to ≥ 1024px).
+
+## Not verified / still blocked
+- Real Supabase email flows (recovery, confirmation), Supabase settings, custom SMTP.
+- Deployed backend (Render) and production migrations (D-26).
+- Manual screen-reader testing (automated axe covers only part of WCAG).
+- Search-quality evaluation; clinical crisis content (D-13); clinical/legal review.
+- Browser tests are not in CI (D-42). Arabic copy is provisional (D-43).

@@ -181,6 +181,8 @@ consent accepted ─▶ /check-in (1–5 scale, "Skip for now") ─(POST /mood/c
 
 ## Chat prototype (M5 slice, not for real users)
 
+Deployment and configuration for every service: `docs/DEPLOYMENT_RUNBOOK.md`.
+
 ```text
 consent accepted ─▶ /chat (Adult · Prototype) ─(POST /chat/messages)─▶ signed reply + citations
 ```
@@ -286,6 +288,32 @@ npm run build
 ```
 
 If the API runs on a port other than 8000, set `API_BASE_URL` in `frontend/.env.local`.
+
+### Design system, languages and themes (M6)
+
+- **Tokens:** `app/globals.css` defines semantic colours (lavender primary, sage
+  secondary, warm neutrals) for light and dark themes; every text/background pair was
+  checked for WCAG AA (≥ 4.5:1; control borders, focus and chart marks ≥ 3:1). Use the
+  token utilities (`bg-surface`, `text-ink`, `border-line-strong`, …), not raw colours.
+- **Font:** IBM Plex Sans Arabic via `next/font/google` — downloaded at build time and
+  served from this site (no runtime requests to Google).
+- **Components:** `components/ui/primitives.tsx` (buttons, cards, notices, badges,
+  24px checkbox), `components/shell/` (app shell with skip link, desktop navigation
+  from 1024px and a bottom tab bar below it; public shell).
+- **Languages:** Arabic and English. The locale comes from the `aw_locale` cookie (the
+  language switch), else the browser's `Accept-Language` (Arabic or English), else
+  Arabic. `<html lang dir>` is set per request. Copy lives in `lib/i18n/messages.ts`;
+  fixed server-action messages are translated at display time (`lib/i18n/translate.ts`,
+  with a test that every one has Arabic). **The Arabic is provisional (D-19).** Legal
+  consent text is shown in English until a reviewed translation exists.
+- **Theme:** system / light / dark, stored in the `aw_theme` cookie (device only).
+- **Dates:** shown in Cairo time (`Africa/Cairo`), in the visitor's language.
+
+### Browser tests (Playwright)
+
+`npm run e2e` runs the end-to-end, recovery-security and accessibility suite (axe,
+WCAG 2.2 A/AA rules, 320–1440px, Arabic/English, light/dark) against a local stack with
+a test-only mock auth server. See `frontend/e2e/README.md`. Not part of CI yet.
 
 ## Docker
 

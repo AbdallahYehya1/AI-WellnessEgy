@@ -1,6 +1,6 @@
 # Open Decisions
 
-Last updated: 2026-10-11 (M4 merged; M5 chat prototype on `m5-chat-slice`; D-35 to D-39).
+Last updated: 2026-10-15 (M7 integration; D-40 to D-43).
 
 Engineering does not make the decisions below. Some are clinical, legal or
 crisis-procedure calls, and some belong to the founder. Until each one is
@@ -447,3 +447,32 @@ with no real-user access.
   not in the production bundle. The only automatic fix is a breaking `--force` upgrade.
 - **Proposed:** upgrade when `eslint-config-next` publishes a compatible fix; re-check before
   launch.
+
+---
+
+## K. Raised during M7 integration (2026-10-15)
+
+### D-40. Production domain publicly reachable with unmerged code — OPEN (founder; blocks any merge to `main` and any release)
+- Verified on 2026-10-14 and again on 2026-10-15 from an unauthenticated client:
+  `https://ai-wellness-egy.vercel.app` returns 200 with no Vercel login and serves
+  PR #3's code (`f7975ec`, GitHub deployment "Production"), with Supabase configured
+  (the proxy's signed-out redirect carries `next=`). Branch and deployment URLs are
+  protected, which matches *Standard Protection*, not *All Deployments*.
+- **Required:** Vercel → Settings → Deployment Protection → **All Deployments + Vercel
+  Authentication**; production branch `main`; Supabase/recovery variables scoped
+  deliberately. Re-probe before any merge (`docs/DEPLOYMENT_RUNBOOK.md` §0).
+- Until resolved, verified work is kept on `m7-integration` and **not merged**.
+
+### D-41. Dates shown in Cairo time — RESOLVED (engineering, 2026-10-15)
+- Dates render on the server; they are shown in `Africa/Cairo` time (previously UTC)
+  for the Egypt-first audience. Revisit if non-Egyptian users are targeted.
+
+### D-42. Browser tests not yet in CI — OPEN (engineering)
+- The Playwright suite runs locally against Docker Compose and a test-only mock auth
+  server. Running it in CI needs a job that starts the stack and a browser. Until then
+  its results are recorded manually in IMPLEMENTATION_STATUS.
+
+### D-43. Arabic UI copy — OPEN (extends D-19 and D-31)
+- All primary journeys now have Arabic copy (provisional Egyptian Arabic, written by
+  engineering). It needs native-speaker and, for consent-adjacent wording, legal
+  review before launch. The consent document itself remains English-only.
