@@ -71,7 +71,12 @@ function errorCode(body: unknown): string {
 
 async function request<T>(
   path: string,
-  options: { token?: string; method?: "GET" | "POST" | "PATCH"; body?: unknown } = {},
+  options: {
+    token?: string;
+    method?: "GET" | "POST" | "PATCH";
+    body?: unknown;
+    timeoutMs?: number;
+  } = {},
 ): Promise<ApiResult<T>> {
   const headers: Record<string, string> = {};
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
@@ -82,7 +87,7 @@ async function request<T>(
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       cache: "no-store",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS),
     });
     const body: unknown = await response.json().catch(() => null);
     if (!response.ok) return { ok: false, status: response.status, error: errorCode(body) };
@@ -152,5 +157,58 @@ export function recordMoodCheckin(token: string, moodScore: number) {
 export function fetchMoodHistory(token: string, limit: number) {
   return request<{ checkins: MoodCheckin[] }>(`/mood/history?limit=${encodeURIComponent(limit)}`, {
     token,
+  });
+}
+
+// --- Chat prototype (adult only, fake provider, synthetic knowledge) ---
+
+export type ChatStatus =
+  | "reply"
+  | "support"
+  | "out_of_scope"
+  | "no_evidence"
+  | "unable_to_answer"
+  | "unavailable";
+
+export type ChatCitation = {
+  chunk_id: string;
+  source_title: string;
+  publisher: string;
+  source_ref: string;
+  version_label: string;
+  synthetic: boolean;
+};
+
+export type ChatResponse = {
+  status: ChatStatus;
+  reply: { text: string; signature: string; citations: ChatCitation[] } | null;
+  notice: string | null;
+  prototype: boolean;
+};
+
+export type ChatConfig = {
+  enabled: boolean;
+  age_band: string;
+  age_band_label: string;
+  test_only_policy: boolean;
+  prototype: boolean;
+};
+
+/** A turn sent back to the server. Assistant turns carry the server signature. */
+export type ChatTurn = { role: "user" | "assistant"; text: string; signature?: string };
+
+// Safety assessment (2s) plus generation (10s) can exceed the default timeout.
+const CHAT_TIMEOUT_MS = 15000;
+
+export function fetchChatConfig(token: string) {
+  return request<ChatConfig>("/chat/config", { token });
+}
+
+export function sendChatMessage(token: string, message: string, history: ChatTurn[]) {
+  return request<ChatResponse>("/chat/messages", {
+    token,
+    method: "POST",
+    body: { message, history },
+    timeoutMs: CHAT_TIMEOUT_MS,
   });
 }

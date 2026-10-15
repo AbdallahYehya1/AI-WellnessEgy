@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -14,6 +15,8 @@ from app.auth.tokens import SupabaseTokenVerifier
 from app.common.errors import register_error_handlers
 from app.consent.catalog import DEFAULT_CATALOG, ConsentCatalog
 from app.consent.router import router as consent_router
+from app.conversations.router import router as chat_router
+from app.conversations.service import ChatRuntime
 from app.core.config import Settings, get_settings
 from app.core.db import session_factory_for
 from app.core.health import router as health_router
@@ -29,6 +32,7 @@ def create_app(
     token_verifier: SupabaseTokenVerifier | None = None,
     session_factory: sessionmaker[Session] | None = None,
     consent_catalog: ConsentCatalog | None = None,
+    chat_runtime: ChatRuntime | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
@@ -82,13 +86,41 @@ def create_app(
     app.state.token_verifier = token_verifier or SupabaseTokenVerifier(settings)
     app.state.session_factory = session_factory or session_factory_for(settings)
     app.state.consent_catalog = consent_catalog or DEFAULT_CATALOG
+    app.state.chat_runtime = chat_runtime or build_chat_runtime(settings)
     app.dependency_overrides[get_settings] = lambda: settings
     register_error_handlers(app)
     app.include_router(health_router)
     app.include_router(users_router)
     app.include_router(consent_router)
     app.include_router(mood_router)
+    app.include_router(chat_router)
     return app
+
+
+def build_chat_runtime(settings: Settings) -> ChatRuntime | None:
+    """Chat runs only when enabled with a policy allowed in this environment
+    (validated in Settings) and only ever with the fake provider here."""
+    if not settings.chat_enabled or settings.chat_safety_policy is None:
+        return None
+    from app.ai.provider.fake import FakeProvider
+    from app.safety.assessor import SyntheticTestAssessor
+    from app.safety.policy import get_policy
+
+    policy = get_policy(settings.chat_safety_policy)
+    if not policy.synthetic:  # no approved policy or real assessor exists yet (D-7)
+        return None
+    key = (
+        settings.chat_signing_key.get_secret_value().encode()
+        if settings.chat_signing_key is not None
+        else secrets.token_bytes(32)  # non-production only (production requires a key)
+    )
+    return ChatRuntime(
+        policy=policy,
+        assessor=SyntheticTestAssessor(),
+        provider=FakeProvider(),
+        signing_key=key,
+        rate_limit_per_minute=settings.chat_rate_limit_per_minute,
+    )
 
 
 app = create_app()

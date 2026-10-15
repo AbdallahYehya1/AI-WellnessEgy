@@ -117,6 +117,26 @@ consent accepted ─▶ /check-in (1–5 scale, "Skip for now") ─(POST /mood/c
 - The check-in is described as "not a medical assessment". The UI copy is provisional
   (D-31).
 
+## Chat prototype (M5 slice, not for real users)
+
+```text
+consent accepted ─▶ /chat (Adult · Prototype) ─(POST /chat/messages)─▶ signed reply + citations
+```
+
+- **Disabled by default.** Enable locally with `CHAT_ENABLED=true` and
+  `CHAT_SAFETY_POLICY=synthetic-test-v0`, then load the synthetic fixtures:
+  `python -m app.knowledge.ingest app/knowledge/fixtures` (from `backend/`).
+- Pipeline: consent → adult-only band check → signed-history check → PostgreSQL rate limit
+  (fails closed) → safety assessment of the whole window → approved/age-applicable full-text
+  retrieval → single-use generation permit → **fake provider** → output and citation
+  validation. Every failure ends without generation.
+- The safety policy, the assessor and all knowledge are **synthetic test material**. Nothing
+  here is clinically reviewed or validated. Production refuses to start with chat enabled
+  until an approved policy exists (OPEN_DECISIONS D-7).
+- No message text is stored server-side, logged, or written to audit or safety events. The
+  browser holds the conversation; only the last 6 turns are sent back, and assistant turns
+  must carry the server's signature.
+
 ## Repository layout
 
 ```text

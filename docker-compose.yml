@@ -16,6 +16,11 @@ x-api-environment: &api-environment
   SUPABASE_JWT_AUDIENCE: ${SUPABASE_JWT_AUDIENCE:-authenticated}
   # Legacy HS256 projects only; empty means unset.
   SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
+  # Chat prototype: off unless CHAT_ENABLED=true with an allowed policy (see .env.example).
+  CHAT_ENABLED: ${CHAT_ENABLED:-false}
+  CHAT_SAFETY_POLICY: ${CHAT_SAFETY_POLICY:-}
+  CHAT_SIGNING_KEY: ${CHAT_SIGNING_KEY:-}
+  CHAT_RATE_LIMIT_PER_MINUTE: ${CHAT_RATE_LIMIT_PER_MINUTE:-10}
 
 services:
   db:

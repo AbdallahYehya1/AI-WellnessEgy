@@ -123,8 +123,12 @@ def test_tables_live_in_app_schema_with_rls_enabled(db_engine: Engine) -> None:
         ).scalar_one()
     assert [(name, rls) for name, rls in found if name != "alembic_version"] == [
         ("audit_events", True),
+        ("chat_rate_events", True),
         ("consents", True),
+        ("knowledge_chunks", True),
+        ("knowledge_sources", True),
         ("mood_checkins", True),
+        ("safety_events", True),
         ("users", True),
     ]
     assert public == 0
@@ -160,6 +164,18 @@ CREATE_SUPABASE_ROLES = (
 )
 
 
+SUPABASE_GUARDED_TABLES = (
+    "app.users",
+    "app.consents",
+    "app.audit_events",
+    "app.mood_checkins",
+    "app.knowledge_sources",
+    "app.knowledge_chunks",
+    "app.safety_events",
+    "app.chat_rate_events",
+)
+
+
 def test_supabase_data_api_roles_get_no_access(test_database_url: str, db_engine: Engine) -> None:
     """Simulate Supabase's `anon`/`authenticated` roles and re-run the migration."""
     config = alembic_config(test_database_url)
@@ -175,7 +191,7 @@ def test_supabase_data_api_roles_get_no_access(test_database_url: str, db_engine
             assert not _has_privilege(
                 db_engine, "SELECT has_schema_privilege(:r, 'app', 'USAGE')", r=role
             )
-            for table in ("app.users", "app.consents", "app.audit_events", "app.mood_checkins"):
+            for table in SUPABASE_GUARDED_TABLES:
                 assert not _has_privilege(
                     db_engine, "SELECT has_table_privilege(:r, :t, 'SELECT')", r=role, t=table
                 )
@@ -188,15 +204,28 @@ def test_supabase_data_api_roles_get_no_access(test_database_url: str, db_engine
 EXPECTED_CONSTRAINTS = {
     ("audit_events", "fk_audit_events_actor_user_id_users"),
     ("audit_events", "pk_audit_events"),
+    ("chat_rate_events", "fk_chat_rate_events_user_id_users"),
+    ("chat_rate_events", "pk_chat_rate_events"),
     ("consents", "ck_consents_consent_type_valid"),
     ("consents", "ck_consents_withdrawal_only_for_optional"),
     ("consents", "fk_consents_user_id_users"),
     ("consents", "pk_consents"),
+    ("knowledge_chunks", "ck_knowledge_chunks_content_length"),
+    ("knowledge_chunks", "fk_knowledge_chunks_source_id_knowledge_sources"),
+    ("knowledge_chunks", "pk_knowledge_chunks"),
+    ("knowledge_chunks", "uq_knowledge_chunks_source_id_chunk_index"),
+    ("knowledge_sources", "ck_knowledge_sources_age_bands_valid"),
+    ("knowledge_sources", "ck_knowledge_sources_approved_requires_reviewer"),
+    ("knowledge_sources", "ck_knowledge_sources_review_status_valid"),
+    ("knowledge_sources", "pk_knowledge_sources"),
+    ("knowledge_sources", "uq_knowledge_sources_slug_version_label"),
     ("mood_checkins", "ck_mood_checkins_mood_score_range"),
     ("mood_checkins", "ck_mood_checkins_note_length"),
     ("mood_checkins", "ck_mood_checkins_tags_count"),
     ("mood_checkins", "fk_mood_checkins_user_id_users"),
     ("mood_checkins", "pk_mood_checkins"),
+    ("safety_events", "fk_safety_events_actor_user_id_users"),
+    ("safety_events", "pk_safety_events"),
     ("users", "ck_users_display_name_length"),
     ("users", "ck_users_goals_is_array"),
     ("users", "ck_users_preferences_is_object"),

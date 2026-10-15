@@ -64,7 +64,7 @@ describe("updateSession (proxy)", () => {
   });
 
   it("protects the onboarding steps too", async () => {
-    for (const path of ["/onboarding", "/onboarding/consent", "/check-in"]) {
+    for (const path of ["/onboarding", "/onboarding/consent", "/check-in", "/chat"]) {
       const target = location(await updateSession(request(path)));
       expect(target?.pathname).toBe("/sign-in");
       expect(target?.searchParams.get("next")).toBe(path);

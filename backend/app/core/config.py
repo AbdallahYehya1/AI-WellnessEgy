@@ -14,7 +14,7 @@ from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["development", "test", "staging", "production"]
@@ -51,6 +51,18 @@ class Settings(BaseSettings):
     database_url: SecretStr | None = None
     supabase_service_role_key: SecretStr | None = None
 
+    # Conversational assistant (prototype). Off by default.
+    chat_enabled: bool = False
+    # Identifier of the safety policy the chat pipeline runs under. Production
+    # refuses to start chat unless this names a clinically approved policy;
+    # none exists yet (OPEN_DECISIONS D-7), so chat cannot run in production.
+    chat_safety_policy: str | None = None
+    # HMAC key for signing assistant turns held in the browser. Required in
+    # production; outside production an ephemeral per-process key is used.
+    chat_signing_key: SecretStr | None = None
+    # Per-user messages per minute (placeholder until D-21 sets real values).
+    chat_rate_limit_per_minute: int = Field(default=10, gt=0, le=600)
+
     @field_validator("supabase_url")
     @classmethod
     def _normalise_supabase_url(cls, value: str | None) -> str | None:
@@ -65,7 +77,9 @@ class Settings(BaseSettings):
             raise ValueError("SUPABASE_URL must use https (http is allowed only for localhost)")
         return value
 
-    @field_validator("supabase_jwt_secret", "database_url", "supabase_service_role_key")
+    @field_validator(
+        "supabase_jwt_secret", "database_url", "supabase_service_role_key", "chat_signing_key"
+    )
     @classmethod
     def _blank_secret_is_unset(cls, value: SecretStr | None) -> SecretStr | None:
         # `.env.example` ships these as `NAME=`; an empty string must mean
@@ -80,6 +94,25 @@ class Settings(BaseSettings):
         if value is not None and len(value.get_secret_value()) < 32:
             raise ValueError("SUPABASE_JWT_SECRET is too short to be a Supabase JWT secret")
         return value
+
+    @model_validator(mode="after")
+    def _chat_policy_is_allowed(self) -> Settings:
+        # Imported lazily to keep config free of import cycles.
+        from app.safety.policy import policy_allowed_in
+
+        if self.chat_enabled:
+            if self.chat_safety_policy is None:
+                raise ValueError("CHAT_ENABLED requires CHAT_SAFETY_POLICY")
+            if not policy_allowed_in(self.chat_safety_policy, self.environment):
+                raise ValueError(
+                    "CHAT_SAFETY_POLICY is not approved for this environment; "
+                    "chat cannot start (OPEN_DECISIONS D-7)"
+                )
+            if self.is_production and (
+                self.chat_signing_key is None or len(self.chat_signing_key.get_secret_value()) < 32
+            ):
+                raise ValueError("CHAT_SIGNING_KEY (32+ characters) is required in production")
+        return self
 
     @property
     def is_production(self) -> bool:

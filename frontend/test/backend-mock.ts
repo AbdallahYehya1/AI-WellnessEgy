@@ -59,6 +59,8 @@ export const backend = {
   recordConsent: vi.fn(),
   recordMoodCheckin: vi.fn(),
   fetchMoodHistory: vi.fn(),
+  fetchChatConfig: vi.fn(),
+  sendChatMessage: vi.fn(),
 };
 
 export function moodCheckin(score: number, submittedAt: string, id = `c-${score}-${submittedAt}`) {

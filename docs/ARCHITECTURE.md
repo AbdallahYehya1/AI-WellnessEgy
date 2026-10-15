@@ -200,6 +200,26 @@ coverage, not clinical correctness):
 - Attempts to get the AI to promise confidentiality it cannot guarantee, or to discourage
   the user from seeking real human help.
 
+### 4.1 Prototype implementation (M5 chat slice, branch `m5-chat-slice`)
+
+The order is fixed in `app/conversations/service.py`: consent → age-band allowlist (adult
+only) → signed history → PostgreSQL rate limit → `assess_safety_risk()` over the whole window
+→ policy decision → retrieval → `GenerationGate.authorize()` → `generate_with_permit()` →
+`validate_output()` → metadata-only `safety_events` row. The provider is reachable only
+through `generate_with_permit()`, which consumes a single-use permit bound to the request id
+and message hash. The permit is valid for 30 s and only the gate can construct one.
+
+Deliberate differences from the target design above, all more conservative:
+- **UNKNOWN and MEDIUM do not generate** under the test-only policy (only LOW does), instead of
+  "treat as MEDIUM, constrained generation".
+- **A safety-dependency failure returns `unavailable`** (no generation) rather than the
+  escalation flow, because escalation content is not approved (D-13). HIGH returns a
+  placeholder `support` notice.
+- **No message storage** (D-37); the browser holds the conversation.
+- **Full-text search, not embeddings**, for the first retrieval prototype.
+- The assessor and policy are **synthetic and test-only**; deterministic rules and a real
+  classifier do not exist yet (D-7).
+
 ---
 
 ## 5. Database Overview
