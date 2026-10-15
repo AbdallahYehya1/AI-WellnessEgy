@@ -1,20 +1,27 @@
+import { buttonStyles } from "@/components/ui/primitives";
 import { signOut } from "@/lib/auth/actions";
+import { messages, type Messages } from "@/lib/i18n/messages";
 
 // Shown when the account state can't be checked. The app fails closed: no
 // consent-gated content is shown until the API confirms consent.
-export function ServiceUnavailable() {
+export function ServiceUnavailable({ t = messages.en }: { t?: Messages }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-6 py-16">
-      <h1 className="text-3xl font-bold">عذرًا</h1>
-      <div lang="en" dir="ltr" className="space-y-4 text-left">
-        <p role="alert">
-          We can&apos;t load your account right now. Please try again in a few minutes.
+    <main id="main" className="flex min-h-dvh items-center justify-center px-4">
+      <div className="w-full max-w-md space-y-5 rounded-2xl border border-line bg-surface p-6 shadow-sm">
+        <h1 className="text-2xl font-bold">{t.errors.unavailableTitle}</h1>
+        <p role="alert" className="text-ink-muted">
+          {t.errors.unavailableBody}
         </p>
-        <form action={signOut}>
-          <button type="submit" className="text-sm font-medium text-calm-700 underline">
-            Sign out
-          </button>
-        </form>
+        <div className="flex flex-wrap gap-3">
+          <a href="" className={buttonStyles("primary")}>
+            {t.common.tryAgain}
+          </a>
+          <form action={signOut}>
+            <button type="submit" className={buttonStyles("secondary")}>
+              {t.common.signOut}
+            </button>
+          </form>
+        </div>
       </div>
     </main>
   );

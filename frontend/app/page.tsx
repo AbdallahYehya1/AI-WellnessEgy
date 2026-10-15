@@ -1,52 +1,57 @@
-import Link from "next/link";
+import { PublicShell } from "@/components/shell/public-shell";
+import { ButtonLink, Card } from "@/components/ui/primitives";
+import { getMessages } from "@/lib/i18n/server";
 
-// Placeholder landing page. Copy is non-clinical and pending product and
-// legal review before any public launch (docs/OPEN_DECISIONS.md).
-export default function HomePage() {
+// Public welcome page. Claims are limited to what exists today; copy is
+// pending product and legal review before any public launch (D-11, D-19).
+export default async function HomePage() {
+  const { locale, t } = await getMessages();
+  const l = t.landing;
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-10 px-6 py-16">
-      <section className="space-y-4">
-        <p className="text-sm font-medium text-calm-700">AI Wellness Egypt</p>
-        <h1 className="text-4xl font-bold leading-tight">مساحة هادية تهتم فيها بنفسك</h1>
-        <p className="text-lg leading-relaxed">
-          رفيق رقمي للعافية النفسية، بالعامية المصرية. المنصة لسه تحت التطوير.
-        </p>
-      </section>
+    <PublicShell locale={locale} t={t} wide>
+      <div className="space-y-10 py-4">
+        <section className="space-y-5">
+          <p className="text-sm font-semibold text-primary-strong">{l.eyebrow}</p>
+          <h1 className="max-w-2xl text-4xl font-bold leading-tight sm:text-5xl">{l.title}</h1>
+          <p className="max-w-2xl text-lg text-ink-muted">{l.lead}</p>
+          <nav aria-label={t.common.signIn} className="flex flex-wrap gap-3">
+            <ButtonLink href="/sign-up">{l.getStarted}</ButtonLink>
+            <ButtonLink href="/sign-in" variant="secondary">
+              {l.haveAccount}
+            </ButtonLink>
+          </nav>
+        </section>
 
-      <section lang="en" dir="ltr" className="space-y-2 text-left">
-        <h2 className="text-xl font-semibold">A calm space to look after yourself</h2>
-        <p className="leading-relaxed">
-          An Egyptian Arabic-first digital wellness companion. This platform is currently in
-          development.
-        </p>
-      </section>
+        <section aria-labelledby="how" className="space-y-4">
+          <h2 id="how" className="text-xl font-bold">
+            {l.howTitle}
+          </h2>
+          <ol className="grid gap-4 sm:grid-cols-3">
+            {l.steps.map((step, index) => (
+              <li key={step.title}>
+                <Card as="div" className="h-full">
+                  <span className="mb-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-muted font-bold text-primary-strong">
+                    {index + 1}
+                  </span>
+                  <h3 className="font-semibold">{step.title}</h3>
+                  <p className="mt-1 text-sm text-ink-muted">{step.body}</p>
+                </Card>
+              </li>
+            ))}
+          </ol>
+        </section>
 
-      <nav lang="en" dir="ltr" className="flex flex-wrap gap-3 text-left" aria-label="Account">
-        <Link
-          href="/sign-up"
-          className="rounded-md bg-calm-700 px-4 py-2.5 font-medium text-white transition hover:bg-calm-900"
-        >
-          إنشاء حساب · Create an account
-        </Link>
-        <Link
-          href="/sign-in"
-          className="rounded-md border border-calm-700 px-4 py-2.5 font-medium text-calm-700 transition hover:bg-calm-100"
-        >
-          تسجيل الدخول · Sign in
-        </Link>
-      </nav>
-
-      <aside className="rounded-lg border border-calm-100 bg-white p-5 text-sm leading-relaxed">
-        <p>
-          المنصة دي للدعم والعافية بس. مش خدمة طبية، ومش بتشخّص أي حالة، ومش بتوصف أدوية،
-          ومش بديل عن المتخصصين.
-        </p>
-        <p lang="en" dir="ltr" className="mt-3 text-left">
-          This is a wellness-support product only. It is not a medical service, does not
-          diagnose conditions or recommend medication, and is not a replacement for
-          professional care.
-        </p>
-      </aside>
-    </main>
+        <section className="grid gap-4 sm:grid-cols-2">
+          <Card>
+            <h2 className="font-bold">{l.privacyTitle}</h2>
+            <p className="mt-1 text-sm text-ink-muted">{l.privacyBody}</p>
+          </Card>
+          <Card>
+            <h2 className="font-bold">{l.limitsTitle}</h2>
+            <p className="mt-1 text-sm text-ink-muted">{l.limitsBody}</p>
+          </Card>
+        </section>
+      </div>
+    </PublicShell>
   );
 }

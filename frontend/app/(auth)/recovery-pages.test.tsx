@@ -8,14 +8,16 @@ import { authError, createFakeAuth, TEST_SESSION_ID, TEST_USER, type FakeAuth } 
 
 let auth: FakeAuth;
 let host = "localhost:3000";
+let acceptLanguage = "en";
 const jar = new Map<string, string>();
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: (name: string) => (jar.has(name) ? { name, value: jar.get(name) } : undefined) }),
-  headers: async () => new Headers({ host }),
+  headers: async () => new Headers({ host, "accept-language": acceptLanguage }),
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn(async () => ({ auth })) }));
 vi.mock("@/lib/auth/recovery-actions", () => ({ requestPasswordReset: vi.fn(), updatePassword: vi.fn() }));
+vi.mock("@/lib/preferences/actions", () => ({ setLocale: vi.fn(), setTheme: vi.fn() }));
 vi.mock("next/link", () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>,
 }));
@@ -30,6 +32,7 @@ function props(values: Record<string, string> = {}) {
 beforeEach(() => {
   auth = createFakeAuth({ signedIn: true });
   host = "localhost:3000";
+  acceptLanguage = "en";
   jar.clear();
   vi.stubEnv("SITE_URL", "http://localhost:3000");
   vi.stubEnv("RECOVERY_MARKER_SECRET", randomBytes(32).toString("base64url"));
@@ -66,6 +69,13 @@ describe("forgot-password page", () => {
   it("explains when password reset is unavailable", async () => {
     render(await ForgotPasswordPage(props({ status: "unavailable" })));
     expect(screen.getByRole("alert").textContent).toMatch(/isn't available right now/);
+  });
+
+  it("is shown in Arabic when the browser prefers Arabic", async () => {
+    acceptLanguage = "ar-EG,ar;q=0.9,en;q=0.5";
+    render(await ForgotPasswordPage(props({ status: "sent" })));
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("نسيت كلمة السر؟");
+    expect(screen.getByLabelText("البريد الإلكتروني")).toBeTruthy();
   });
 
   it("warns in development when the host differs from SITE_URL", async () => {

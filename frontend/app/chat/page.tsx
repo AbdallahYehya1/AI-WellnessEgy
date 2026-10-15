@@ -1,26 +1,32 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { AuthShell } from "@/components/auth/form-parts";
 import { ChatClient } from "@/components/chat/chat-client";
 import { ServiceUnavailable } from "@/components/onboarding/service-unavailable";
+import { AppShell } from "@/components/shell/app-shell";
+import { Badge, ButtonLink, Notice } from "@/components/ui/primitives";
 import { fetchChatConfig, fetchMyConsent } from "@/lib/api/backend";
 import { getVerifiedSession } from "@/lib/auth/session";
 import { sendChat } from "@/lib/chat/actions";
 import { CHAT_PATH } from "@/lib/chat/limits";
+import { getMessages } from "@/lib/i18n/server";
 import { requiredOnboardingStep } from "@/lib/onboarding/steps";
 
 export const metadata: Metadata = { title: "Assistant (prototype) · AI Wellness Egypt" };
 
+/**
+ * Adult-only prototype, disabled unless the server enables it. Every safety
+ * decision is made by the backend; this page only presents its responses.
+ */
 export default async function ChatPage() {
+  const { locale, t } = await getMessages();
   const session = await getVerifiedSession();
   if (!session) redirect(`/sign-in?next=${CHAT_PATH}`);
 
   const consent = await fetchMyConsent(session.accessToken);
   if (!consent.ok) {
     if (consent.status === 401) redirect(`/sign-in?next=${CHAT_PATH}`);
-    return <ServiceUnavailable />;
+    return <ServiceUnavailable t={t} />;
   }
   const step = requiredOnboardingStep(consent.data.status);
   if (step) redirect(step);
@@ -28,36 +34,39 @@ export default async function ChatPage() {
   const config = await fetchChatConfig(session.accessToken);
   if (!config.ok) {
     if (config.status === 401) redirect(`/sign-in?next=${CHAT_PATH}`);
-    return <ServiceUnavailable />;
+    return <ServiceUnavailable t={t} />;
   }
+  const c = t.chat;
+  const bandLabel = config.data.age_band === "adult" ? c.adult : config.data.age_band_label;
 
   return (
-    // Arabic title is provisional copy pending native review (D-19).
-    <AuthShell titleAr="مساعد العافية" title="Wellness assistant">
-      <p className="flex gap-2 text-xs font-semibold">
-        <span className="rounded bg-calm-100 px-2 py-0.5">{config.data.age_band_label}</span>
-        <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">Prototype</span>
-      </p>
-      <p className="text-sm">
-        This assistant shares general wellness information from reviewed sources. It is not a
-        therapist or doctor, can&apos;t diagnose anything and can&apos;t advise on medication.
-      </p>
-      {config.data.test_only_policy ? (
-        <p role="note" className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs">
-          Test mode: replies come from a scripted test generator and synthetic test content. They
-          are not clinically reviewed.
-        </p>
-      ) : null}
+    <AppShell current="chat" locale={locale} t={t} chatEnabled={config.data.enabled} fullHeight>
+      <header className="space-y-2 border-b border-line py-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-xl font-bold">{c.title}</h1>
+          <Badge tone="info">{bandLabel}</Badge>
+          <Badge tone="warning">{t.common.prototype}</Badge>
+        </div>
+        <p className="text-sm text-ink-muted">{c.scope}</p>
+        {config.data.test_only_policy ? (
+          <Notice tone="warning" role="note" className="py-2">
+            {c.testMode}
+          </Notice>
+        ) : null}
+        {config.data.enabled ? <p className="text-xs text-ink-muted">{c.notSaved}</p> : null}
+      </header>
       {config.data.enabled ? (
-        <ChatClient send={sendChat} />
+        <ChatClient send={sendChat} locale={locale} />
       ) : (
-        <p role="status" className="text-sm text-calm-700">
-          The assistant isn&apos;t available yet.
-        </p>
+        <div className="space-y-4 py-6">
+          <p role="status" className="text-ink-muted">
+            {c.unavailableYet}
+          </p>
+          <ButtonLink href="/dashboard" variant="secondary">
+            {t.common.backToDashboard}
+          </ButtonLink>
+        </div>
       )}
-      <Link href="/dashboard" className="inline-block text-sm font-medium text-calm-700 underline">
-        Back to dashboard
-      </Link>
-    </AuthShell>
+    </AppShell>
   );
 }

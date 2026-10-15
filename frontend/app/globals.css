@@ -1,13 +1,133 @@
 @import "tailwindcss";
 
-@theme {
-  --color-calm-50: #f3f8f6;
-  --color-calm-100: #e0eee8;
-  --color-calm-700: #2f5d50;
-  --color-calm-900: #1c3830;
-  --font-sans: "Segoe UI", Tahoma, "Noto Sans Arabic", system-ui, sans-serif;
+/*
+ * Design tokens (M6). Every colour below was checked for WCAG 2.2 AA contrast
+ * in both themes (text pairs >= 4.5:1, control borders and focus >= 3:1).
+ * Use the semantic utilities (bg-surface, text-ink, border-line-strong...)
+ * rather than raw colours.
+ */
+:root {
+  --canvas: #faf9f7;
+  --surface: #ffffff;
+  --surface-muted: #f3f0ff;
+  --ink: #24243a;
+  --ink-muted: #5d6070;
+  --primary: #7061d8;
+  --primary-strong: #5144b3;
+  --on-primary: #ffffff;
+  --secondary: #3f7465;
+  --line: #e4e1ee;
+  --line-strong: #8a84b8;
+  --focus: #5144b3;
+  --success-bg: #e7f2ee;
+  --success-ink: #245446;
+  --warning-bg: #fdf3e1;
+  --warning-ink: #7a4a06;
+  --danger-bg: #fdecec;
+  --danger-ink: #9b1c1c;
+  --info-bg: #f3f0ff;
+  --info-ink: #4337a0;
+  --chart-series: #7061d8;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --canvas: #171824;
+    --surface: #202233;
+    --surface-muted: #2a2c42;
+    --ink: #f3f0ff;
+    --ink-muted: #b5b7c6;
+    --primary: #a99df0;
+    --primary-strong: #c3baf6;
+    --on-primary: #171824;
+    --secondary: #8cc5b3;
+    --line: #34364d;
+    --line-strong: #7d78a8;
+    --focus: #c3baf6;
+    --success-bg: #1d3a32;
+    --success-ink: #a9dccb;
+    --warning-bg: #3d2e12;
+    --warning-ink: #f5cf8e;
+    --danger-bg: #4a1d24;
+    --danger-ink: #f7b4bc;
+    --info-bg: #2a2c42;
+    --info-ink: #cfc7fa;
+    /* Validated chart mark: L 0.48-0.67 band and >= 3:1 on the dark surface. */
+    --chart-series: #8a7ae5;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --canvas: #171824;
+  --surface: #202233;
+  --surface-muted: #2a2c42;
+  --ink: #f3f0ff;
+  --ink-muted: #b5b7c6;
+  --primary: #a99df0;
+  --primary-strong: #c3baf6;
+  --on-primary: #171824;
+  --secondary: #8cc5b3;
+  --line: #34364d;
+  --line-strong: #7d78a8;
+  --focus: #c3baf6;
+  --success-bg: #1d3a32;
+  --success-ink: #a9dccb;
+  --warning-bg: #3d2e12;
+  --warning-ink: #f5cf8e;
+  --danger-bg: #4a1d24;
+  --danger-ink: #f7b4bc;
+  --info-bg: #2a2c42;
+  --info-ink: #cfc7fa;
+  /* Validated chart mark: L 0.48-0.67 band and >= 3:1 on the dark surface. */
+  --chart-series: #8a7ae5;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-on-primary: var(--on-primary);
+  --color-secondary: var(--secondary);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-focus: var(--focus);
+  --color-success-bg: var(--success-bg);
+  --color-success-ink: var(--success-ink);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-ink: var(--warning-ink);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-ink: var(--danger-ink);
+  --color-info-bg: var(--info-bg);
+  --color-info-ink: var(--info-ink);
+  --color-chart-series: var(--chart-series);
+  --font-sans: var(--font-plex), "Segoe UI", Tahoma, system-ui, sans-serif;
 }
 
 body {
-  @apply bg-calm-50 text-calm-900 antialiased;
+  @apply bg-canvas text-ink antialiased;
+  line-height: 1.6;
+}
+
+/* One visible focus style everywhere: 2px ring in the focus colour (>= 3:1). */
+:where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

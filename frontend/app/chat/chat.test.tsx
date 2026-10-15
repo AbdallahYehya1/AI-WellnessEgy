@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +11,8 @@ import { expectRedirect, redirectMock } from "@/test/supabase-mock";
 vi.mock("next/navigation", () => ({ redirect: (url: string) => redirectMock(url) }));
 vi.mock("@/lib/auth/session", () => ({ getVerifiedSession: () => getVerifiedSession() }));
 vi.mock("@/lib/api/backend", () => backend);
+vi.mock("@/lib/auth/actions", () => ({ signOut: vi.fn() }));
+vi.mock("@/lib/preferences/actions", () => ({ setLocale: vi.fn(), setTheme: vi.fn() }));
 vi.mock("next/link", () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => (
     <a href={href}>{children}</a>
@@ -119,6 +121,8 @@ describe("sendChat", () => {
     ["rate_limited", /wait a minute/],
     ["invalid_history", /start over/],
     ["network_error", /couldn.t respond/],
+    ["chat_unavailable", /switched off/],
+    ["age_band_unavailable", /isn.t available for your account/],
   ])("maps %s to a safe message", async (code, pattern) => {
     backend.sendChatMessage.mockResolvedValue(fail(code === "rate_limited" ? 429 : 0, code));
     const result = await sendChat("hi", []);
@@ -182,8 +186,69 @@ describe("chat client", () => {
     render(<ChatClient send={send} />);
     await type("hello");
     await screen.findByText("Answer.");
-    await userEvent.setup().click(screen.getByRole("button", { name: "Start over" }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Start over" }));
+    // Clearing asks for confirmation first; cancelling keeps the conversation.
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByText("Answer.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Start over" }));
+    await user.click(screen.getByRole("button", { name: "Yes, clear it" }));
     await waitFor(() => expect(screen.queryByText("Answer.")).toBeNull());
+  });
+
+  it("sends with Enter and adds a new line with Shift+Enter", async () => {
+    const send = vi.fn().mockResolvedValue({ kind: "response", response: reply("Answer.") });
+    render(<ChatClient send={send} />);
+    const user = userEvent.setup();
+    const box = screen.getByLabelText("Your message") as HTMLTextAreaElement;
+    await user.type(box, "first line{Shift>}{Enter}{/Shift}second line");
+    expect(box.value).toBe("first line\nsecond line");
+    expect(send).not.toHaveBeenCalled();
+    await user.type(box, "{Enter}");
+    await screen.findByText("Answer.");
+    expect(send.mock.calls[0]?.[0]).toBe("first line\nsecond line");
+  });
+
+  it("offers starters that fill the message box without sending", async () => {
+    const send = vi.fn();
+    render(<ChatClient send={send} />);
+    const starters = screen.getByRole("list", { name: "Conversation starters" });
+    await userEvent.setup().click(within(starters).getByRole("button", { name: "Can we talk about my day?" }));
+    expect((screen.getByLabelText("Your message") as HTMLTextAreaElement).value).toBe("Can we talk about my day?");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("offers to start over when the conversation can't be verified", async () => {
+    const send = vi.fn().mockResolvedValue({
+      kind: "error",
+      code: "invalid_history",
+      message: "This conversation couldn't be verified. Please start over.",
+    });
+    render(<ChatClient send={send} />);
+    await type("hello");
+    expect((await screen.findByRole("alert")).textContent).toMatch(/couldn.t be verified/);
+    expect(screen.getByRole("button", { name: "Start over" })).toBeTruthy();
+  });
+
+  it("never stores the conversation in browser storage", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    const send = vi.fn().mockResolvedValue({ kind: "response", response: reply("Private answer.") });
+    render(<ChatClient send={send} />);
+    await type("a private message");
+    await screen.findByText("Private answer.");
+    expect(setItem).not.toHaveBeenCalled();
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it("titles each non-reply outcome distinctly", async () => {
+    const send = vi.fn().mockResolvedValue({ kind: "response", response: notice("out_of_scope", "I can't diagnose.") });
+    render(<ChatClient send={send} />);
+    await type("diagnose me");
+    const note = await screen.findByRole("note");
+    expect(note.getAttribute("data-status")).toBe("out_of_scope");
+    expect(note.textContent).toContain("Outside what I can help with");
+    expect(note.textContent).toContain("I can't diagnose.");
   });
 
   it("does not send an empty message", () => {

@@ -1,10 +1,14 @@
 "use client";
 
-import { type FormEvent, useState, useTransition } from "react";
+import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState, useTransition } from "react";
 
+import { buttonStyles } from "@/components/ui/primitives";
 import type { ChatCitation, ChatStatus, ChatTurn } from "@/lib/api/backend";
-import type { ChatActionResult } from "@/lib/chat/actions";
+import type { ChatActionResult, ChatErrorCode } from "@/lib/chat/actions";
 import { MAX_HISTORY_TURNS, MAX_MESSAGE_CHARS } from "@/lib/chat/limits";
+import type { Locale } from "@/lib/i18n/config";
+import { messages } from "@/lib/i18n/messages";
+import { translateMessage } from "@/lib/i18n/translate";
 
 type Entry =
   | { id: number; kind: "user"; text: string }
@@ -13,6 +17,7 @@ type Entry =
 
 type Props = {
   send: (message: string, history: ChatTurn[]) => Promise<ChatActionResult>;
+  locale?: Locale;
 };
 
 /** Only user turns and server-signed assistant turns go back to the server. */
@@ -25,26 +30,70 @@ function historyFrom(entries: Entry[]): ChatTurn[] {
   return turns.slice(-MAX_HISTORY_TURNS);
 }
 
-export function ChatClient({ send }: Props) {
+const NOTICE_TONE: Record<ChatStatus, string> = {
+  reply: "bg-surface-muted text-ink",
+  support: "bg-info-bg text-info-ink",
+  out_of_scope: "bg-info-bg text-info-ink",
+  no_evidence: "bg-surface-muted text-ink",
+  unable_to_answer: "bg-warning-bg text-warning-ink",
+  unavailable: "bg-warning-bg text-warning-ink",
+};
+
+/**
+ * The conversation lives only in this component's state: it is never written
+ * to localStorage, sessionStorage, cookies or analytics, and it disappears on
+ * refresh (D-37). Server notices are shown as the server wrote them.
+ */
+export function ChatClient({ send, locale = "en" }: Props) {
+  const t = messages[locale].chat;
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; code?: ChatErrorCode } | null>(null);
   const [pending, startTransition] = useTransition();
   const [nextId, setNextId] = useState(1);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [unseen, setUnseen] = useState(false);
+  const logRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const atBottom = useRef(true);
 
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  // Follow new messages only while the reader is at the bottom; otherwise
+  // offer a "new message" button instead of yanking the scroll position.
+  useEffect(() => {
+    const el = logRef.current;
+    if (!el || entries.length === 0) return;
+    if (atBottom.current) el.scrollTop = el.scrollHeight;
+    else setUnseen(true);
+  }, [entries]);
+
+  function onScroll() {
+    const el = logRef.current;
+    if (!el) return;
+    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    if (atBottom.current) setUnseen(false);
+  }
+
+  function jumpToLatest() {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    atBottom.current = true;
+    setUnseen(false);
+  }
+
+  function submit(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
     const message = draft.trim();
     if (!message || pending) return;
     const history = historyFrom(entries);
     const userEntry: Entry = { id: nextId, kind: "user", text: message };
     setNextId((n) => n + 2);
     setError(null);
+    atBottom.current = true;
     startTransition(async () => {
       const result = await send(message, history);
       if (result.kind === "error") {
-        setError(result.message);
-        return;
+        setError({ message: result.message, code: result.code });
+        return; // the draft is kept so nothing the user typed is lost
       }
       const { response } = result;
       const answer: Entry =
@@ -56,120 +105,200 @@ export function ChatClient({ send }: Props) {
               signature: response.reply.signature,
               citations: response.reply.citations,
             }
-          : {
-              id: userEntry.id + 1,
-              kind: "notice",
-              status: response.status,
-              text: response.notice ?? "The assistant couldn't answer that.",
-            };
+          : { id: userEntry.id + 1, kind: "notice", status: response.status, text: response.notice ?? t.fallbackNotice };
       setEntries((current) => [...current, userEntry, answer]);
       setDraft("");
     });
   }
 
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    // Enter sends; Shift+Enter adds a line. Never interrupt IME composition.
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      submit();
+    }
+  }
+
+  function applyStarter(text: string) {
+    setDraft(text); // fills the box for review; it is not sent automatically
+    inputRef.current?.focus();
+  }
+
+  function startOver() {
+    setEntries([]);
+    setError(null);
+    setConfirmingReset(false);
+    setUnseen(false);
+    inputRef.current?.focus();
+  }
+
   return (
-    <div className="space-y-4">
-      <ol aria-label="Conversation" aria-live="polite" className="space-y-3">
-        {entries.map((entry) => (
-          <li key={entry.id}>
-            {entry.kind === "user" ? (
-              <div className="ml-8 rounded-lg bg-calm-100 p-3 text-sm">
-                <span className="sr-only">You: </span>
-                <p className="whitespace-pre-wrap" dir="auto">{entry.text}</p>
-              </div>
-            ) : entry.kind === "assistant" ? (
-              <div className="mr-8 space-y-2 rounded-lg border border-calm-100 bg-white p-3 text-sm">
-                <span className="sr-only">Assistant: </span>
-                <p className="whitespace-pre-wrap" dir="auto">{entry.text}</p>
-                <Citations citations={entry.citations} />
-              </div>
-            ) : (
-              <div
-                role="note"
-                data-status={entry.status}
-                className="mr-8 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm"
-              >
-                <span className="sr-only">Assistant notice: </span>
-                <p>{entry.text}</p>
-              </div>
-            )}
-          </li>
-        ))}
-      </ol>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div ref={logRef} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto py-4">
+        {entries.length === 0 ? (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-lg font-bold">{t.welcomeTitle}</h2>
+              <p className="text-sm text-ink-muted">{t.welcomeBody}</p>
+            </div>
+            <ul aria-label={t.startersLabel} className="grid gap-2 sm:grid-cols-2">
+              {t.starters.map((starter) => (
+                <li key={starter}>
+                  <button
+                    type="button"
+                    onClick={() => applyStarter(starter)}
+                    className="min-h-11 w-full rounded-xl border border-line-strong bg-surface px-4 py-2.5 text-start text-sm hover:bg-surface-muted"
+                  >
+                    {starter}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
-      {pending ? (
-        <p role="status" className="text-sm text-calm-700">
-          The assistant is replying…
-        </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="text-sm text-red-700">
-          {error}
-        </p>
-      ) : null}
+        <ol aria-label={t.conversationLabel} aria-live="polite" className="space-y-3">
+          {entries.map((entry) => (
+            <li key={entry.id}>
+              {entry.kind === "user" ? (
+                <div className="ms-10 rounded-2xl rounded-ee-md bg-primary px-4 py-3 text-sm text-on-primary">
+                  <span className="sr-only">{t.you}: </span>
+                  <p className="whitespace-pre-wrap" dir="auto">
+                    {entry.text}
+                  </p>
+                </div>
+              ) : entry.kind === "assistant" ? (
+                <div className="me-10 space-y-2 rounded-2xl rounded-es-md border border-line bg-surface px-4 py-3 text-sm">
+                  <span className="sr-only">{t.assistant}: </span>
+                  <p className="whitespace-pre-wrap" dir="auto">
+                    {entry.text}
+                  </p>
+                  <Citations citations={entry.citations} sourcesLabel={t.sources} syntheticLabel={t.synthetic} />
+                </div>
+              ) : (
+                <div role="note" data-status={entry.status} className={`me-10 rounded-2xl px-4 py-3 text-sm ${NOTICE_TONE[entry.status]}`}>
+                  <span className="sr-only">{t.assistantNotice}: </span>
+                  {entry.status !== "reply" ? (
+                    <p className="font-semibold">{t.noticeTitles[entry.status]}</p>
+                  ) : null}
+                  {/* Server-written notice text (English until translated server-side). */}
+                  <p dir="auto">{entry.text}</p>
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
 
-      <form onSubmit={submit} className="space-y-2" noValidate>
-        <label htmlFor="chat-message" className="text-sm font-medium">
-          Your message
-        </label>
-        <textarea
-          id="chat-message"
-          name="message"
-          dir="auto"
-          rows={3}
-          maxLength={MAX_MESSAGE_CHARS}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          aria-describedby="chat-hint"
-          className="w-full rounded-md border border-calm-100 bg-white p-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-calm-900"
-        />
-        <p id="chat-hint" className="text-xs text-calm-700">
-          Arabic, English or Arabizi. Don&apos;t include names or details that identify you.
-        </p>
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={pending || !draft.trim()}
-            className="rounded-md bg-calm-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-calm-900"
-          >
-            Send
+        {pending ? (
+          <p role="status" className="mt-3 flex items-center gap-2 text-sm text-ink-muted">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" aria-hidden />
+            {t.replying}
+          </p>
+        ) : null}
+      </div>
+
+      {unseen ? (
+        <div className="flex justify-center">
+          <button type="button" onClick={jumpToLatest} className={`${buttonStyles("secondary")} -mt-14 shadow`}>
+            {t.newMessages}
           </button>
-          {entries.length > 0 ? (
+        </div>
+      ) : null}
+
+      <div className="space-y-2 border-t border-line bg-canvas pt-3">
+        {error ? (
+          <div className="space-y-2">
+            <p role="alert" className="rounded-xl bg-danger-bg px-4 py-3 text-sm text-danger-ink">
+              {translateMessage(locale, error.message)}
+            </p>
+            {error.code === "invalid_history" ? (
+              <button type="button" onClick={startOver} className={buttonStyles("secondary")}>
+                {t.startOver}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <form onSubmit={submit} className="space-y-2" noValidate>
+          <label htmlFor="chat-message" className="text-sm font-semibold">
+            {t.inputLabel}
+          </label>
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={inputRef}
+              id="chat-message"
+              name="message"
+              dir="auto"
+              rows={2}
+              maxLength={MAX_MESSAGE_CHARS}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={onKeyDown}
+              aria-describedby="chat-hint"
+              className="block max-h-40 min-h-12 w-full resize-y rounded-xl border border-line-strong bg-surface px-3 py-2 text-base text-ink"
+            />
+            <button type="submit" disabled={pending || !draft.trim()} className={buttonStyles("primary")}>
+              {t.send}
+            </button>
+          </div>
+          <p id="chat-hint" className="text-xs text-ink-muted">
+            {t.inputHint}
+          </p>
+        </form>
+
+        {entries.length > 0 ? (
+          confirmingReset ? (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span>{t.startOverConfirm}</span>
+              <button type="button" onClick={startOver} disabled={pending} className={buttonStyles("secondary")}>
+                {t.startOverYes}
+              </button>
+              <button type="button" onClick={() => setConfirmingReset(false)} className={buttonStyles("ghost")}>
+                {t.cancel}
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={() => {
-                setEntries([]);
-                setError(null);
-              }}
+              onClick={() => setConfirmingReset(true)}
               disabled={pending}
-              className="text-sm font-medium text-calm-700 underline"
+              className="inline-flex min-h-11 items-center text-sm font-semibold text-primary-strong underline underline-offset-4"
             >
-              Start over
+              {t.startOver}
             </button>
-          ) : null}
-        </div>
-      </form>
+          )
+        ) : null}
+      </div>
     </div>
   );
 }
 
-function Citations({ citations }: { citations: ChatCitation[] }) {
+function Citations({
+  citations,
+  sourcesLabel,
+  syntheticLabel,
+}: {
+  citations: ChatCitation[];
+  sourcesLabel: string;
+  syntheticLabel: string;
+}) {
   if (citations.length === 0) return null;
   return (
-    <div className="border-t border-calm-100 pt-2">
-      <p className="text-xs font-medium text-calm-700">Sources</p>
-      <ul className="space-y-1 text-xs text-calm-700">
+    <details className="border-t border-line pt-2 text-xs text-ink-muted" open>
+      <summary className="min-h-6 cursor-pointer font-semibold">
+        {sourcesLabel} ({citations.length})
+      </summary>
+      <ul className="mt-1 space-y-1">
         {citations.map((c) => (
-          <li key={c.chunk_id}>
+          <li key={c.chunk_id} dir="auto">
+            {/* Source fields are rendered as text, never as HTML or links. */}
             {c.source_title} · {c.publisher} · v{c.version_label}
             {c.synthetic ? (
-              <span className="ml-1 rounded bg-amber-100 px-1 font-semibold text-amber-900">
-                Synthetic test content
-              </span>
+              <span className="ms-1 rounded bg-warning-bg px-1.5 font-semibold text-warning-ink">{syntheticLabel}</span>
             ) : null}
           </li>
         ))}
       </ul>
-    </div>
+    </details>
   );
 }
