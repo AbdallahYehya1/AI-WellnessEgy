@@ -1,0 +1,4 @@
+
+# Playwright output (screenshots, traces)
+/test-results/
+/playwright-report/

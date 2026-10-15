@@ -1,0 +1,23 @@
+# LOCAL END-TO-END TESTS ONLY. Adds a mock Supabase Auth server that runs in
+# the API container's network namespace, so the API and the browser both reach
+# it at http://127.0.0.1:54321. Use with the main compose file:
+#
+#   docker compose -p aiwe-e2e -f docker-compose.yml -f frontend/e2e/compose.e2e.yml up -d --build
+#
+# Chat stays off unless CHAT_ENABLED=true and CHAT_SAFETY_POLICY=synthetic-test-v0
+# are set in the shell (test-only policy, fake provider, synthetic fixtures).
+services:
+  api:
+    environment:
+      SUPABASE_URL: http://127.0.0.1:54321
+    ports:
+      - "127.0.0.1:54321:54321"
+  gotrue:
+    build:
+      context: ./backend
+    network_mode: "service:api"
+    command: ["python", "/mock/mock_gotrue.py"]
+    volumes:
+      - ./frontend/e2e/mock:/mock:ro
+    depends_on:
+      - api

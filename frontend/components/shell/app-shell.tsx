@@ -22,7 +22,7 @@ type Props = {
 
 /**
  * Signed-in layout: skip link, top bar (brand, desktop navigation, language,
- * sign-out) and a bottom tab bar on small screens. Logical properties
+ * sign-out) and a bottom tab bar on phones and tablets (below 1024px). Logical properties
  * (ms/me/ps/pe, start/end) keep it correct in both RTL and LTR.
  */
 export function AppShell({ current, locale, t, chatEnabled, children, fullHeight = false }: Props) {
@@ -47,13 +47,13 @@ export function AppShell({ current, locale, t, chatEnabled, children, fullHeight
 
       <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-5xl items-center gap-4 px-4">
-          <Link href="/dashboard" className="flex min-h-11 items-center gap-2 font-bold">
+          <Link href="/dashboard" className="flex min-h-11 shrink-0 items-center gap-2 font-bold">
             <LogoMark />
-            <span lang="en" dir="ltr">
+            <span lang="en" dir="ltr" className="whitespace-nowrap">
               {t.app.name}
             </span>
           </Link>
-          <nav aria-label={t.nav.label} className="ms-4 hidden md:block">
+          <nav aria-label={t.nav.label} className="ms-4 hidden lg:block">
             <ul className="flex items-center gap-1">
               {items.map((item) => (
                 <li key={item.section}>
@@ -70,10 +70,11 @@ export function AppShell({ current, locale, t, chatEnabled, children, fullHeight
           </nav>
           <div className="ms-auto flex items-center gap-1">
             <LanguageSwitch locale={locale} t={t} />
-            <form action={signOut}>
+            {/* Below the desktop breakpoint sign-out lives in Settings, keeping this bar uncluttered. */}
+            <form action={signOut} className="hidden lg:block">
               <button
                 type="submit"
-                className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-ink-muted hover:bg-surface-muted hover:text-ink"
+                className="inline-flex min-h-11 items-center whitespace-nowrap rounded-xl px-3 text-sm font-semibold text-ink-muted hover:bg-surface-muted hover:text-ink"
               >
                 {t.common.signOut}
               </button>
@@ -87,8 +88,8 @@ export function AppShell({ current, locale, t, chatEnabled, children, fullHeight
         tabIndex={-1}
         className={
           fullHeight
-            ? "mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4 pb-20 md:pb-4"
-            : "mx-auto w-full max-w-3xl flex-1 space-y-6 px-4 py-8 pb-28 md:pb-12"
+            ? "mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4 pb-20 lg:pb-4"
+            : "mx-auto w-full max-w-3xl flex-1 space-y-6 px-4 py-8 pb-28 lg:pb-12"
         }
       >
         {children}
@@ -96,7 +97,7 @@ export function AppShell({ current, locale, t, chatEnabled, children, fullHeight
 
       <nav
         aria-label={t.nav.label}
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden"
       >
         <ul className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
           {items.map((item) => (

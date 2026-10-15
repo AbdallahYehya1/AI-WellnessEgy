@@ -8,13 +8,13 @@ export function LanguageSwitch({ locale, t }: { locale: Locale; t: Messages }) {
   return (
     <form action={setLocale}>
       <input type="hidden" name="locale" value={target} />
+      {/* The accessible name contains the visible text (WCAG 2.5.3 Label in Name). */}
       <button
         type="submit"
-        lang={target}
-        aria-label={t.common.switchLanguageLabel}
         className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-primary-strong hover:bg-surface-muted"
       >
-        {target === "ar" ? t.common.switchToArabic : t.common.switchToEnglish}
+        <span className="sr-only">{t.common.switchLanguageLabel}: </span>
+        <span lang={target}>{target === "ar" ? t.common.switchToArabic : t.common.switchToEnglish}</span>
       </button>
     </form>
   );

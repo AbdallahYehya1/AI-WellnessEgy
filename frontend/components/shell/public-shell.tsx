@@ -31,7 +31,7 @@ export function PublicShell({
       <header className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4">
         <Link href="/" className="flex min-h-11 items-center gap-2 font-bold">
           <LogoMark />
-          <span lang="en" dir="ltr">
+          <span lang="en" dir="ltr" className="whitespace-nowrap">
             {t.app.name}
           </span>
         </Link>
