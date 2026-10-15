@@ -13,6 +13,7 @@ export type FieldErrors = Partial<Record<"email" | "password" | "confirmPassword
 
 export type SignInInput = { email: string; password: string };
 export type SignUpInput = SignInInput & { confirmPassword: string; ageConfirmed: boolean };
+export type NewPasswordInput = { password: string; confirmPassword: string };
 
 function text(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -29,6 +30,10 @@ export function readSignUp(formData: FormData): SignUpInput {
     confirmPassword: text(formData, "confirmPassword"),
     ageConfirmed: formData.get("ageConfirmed") === "on",
   };
+}
+
+export function readNewPassword(formData: FormData): NewPasswordInput {
+  return { password: text(formData, "password"), confirmPassword: text(formData, "confirmPassword") };
 }
 
 export function validateEmail(email: string): string | undefined {
@@ -50,11 +55,9 @@ export function validateSignIn(input: SignInInput): FieldErrors {
   return errors;
 }
 
-export function validateSignUp(input: SignUpInput): FieldErrors {
+/** Rules for choosing a password, shared by sign-up and password reset. */
+export function validateNewPassword(input: NewPasswordInput): FieldErrors {
   const errors: FieldErrors = {};
-  const email = validateEmail(input.email);
-  if (email) errors.email = email;
-
   const bytes = new TextEncoder().encode(input.password).length;
   if (input.password.length < PASSWORD_MIN_LENGTH) {
     errors.password = `Use at least ${PASSWORD_MIN_LENGTH} characters.`;
@@ -64,6 +67,14 @@ export function validateSignUp(input: SignUpInput): FieldErrors {
   if (input.confirmPassword !== input.password) {
     errors.confirmPassword = "The passwords don't match.";
   }
+  return errors;
+}
+
+export function validateSignUp(input: SignUpInput): FieldErrors {
+  const errors: FieldErrors = {};
+  const email = validateEmail(input.email);
+  if (email) errors.email = email;
+  Object.assign(errors, validateNewPassword(input));
   // The service is for adults only (docs/OPEN_DECISIONS.md, D-12).
   if (!input.ageConfirmed) {
     errors.ageConfirmed = "You must be 18 or older to create an account.";

@@ -78,6 +78,68 @@ Sign out ──(Server Action: signOut)──▶ cookies cleared ──▶ /sign
   token-derived identity. Every failure is a uniform `401`; if Supabase isn't configured,
   it fails closed with `503`.
 
+### Password recovery (M6.0)
+
+```text
+/sign-in ─▶ /forgot-password ──(resetPasswordForEmail)──▶ "If an account exists…" (same for every email)
+email link ──▶ Supabase verify ──▶ /auth/confirm?code=… ──(recovery verified)──▶ /reset-password
+/reset-password ──(updateUser({ password }))──▶ signOut({ scope: "global" }) ──▶ /sign-in?status=password-updated
+```
+
+- **What authorises the reset page and its action.** Three checks must all pass:
+  1. A valid access token (`getClaims()`), giving the user id and Supabase session id.
+  2. A live session according to the Auth server (`getUser()`). `getClaims()` alone can't
+     see a revoked session, because an access token stays valid until it expires.
+  3. A **signed recovery marker** (`aw_password_reset`: `httpOnly`, `SameSite=Lax`, path
+     `/reset-password`, 10 minutes). It is HMAC-SHA256-signed with the server-only
+     `RECOVERY_MARKER_SECRET` and binds the user id, the session id, an expiry and a random
+     token id. Signatures are compared in constant time.
+- **Only `/auth/confirm` issues the marker**, and only after Supabase has verified a
+  recovery. That means either the PKCE verifier created by `resetPasswordForEmail`, or a
+  `type=recovery` token hash. The marker is bound to the session in the token Supabase just
+  returned, verified with `getClaims(token)`. `next=/reset-password` alone grants nothing.
+- **Without a valid secret, recovery fails closed.** No reset email is sent, and the reset
+  page and action refuse every request.
+- **Not strictly single-use.** Nothing server-side records that a marker was used, so it is
+  **short-lived, signed and session-bound, not single-use**:
+  - Before a successful reset, the same session can use it more than once, for example
+    after a validation error.
+  - Two simultaneous submissions from that session could both reach Supabase.
+  - After a successful reset, the app calls `signOut({ scope: "global" })`. Supabase then
+    revokes the refresh tokens and sessions, so a replay with that session fails the
+    `getUser()` check. This relies on the Auth server rejecting revoked sessions
+    (`session_not_found`). It was tested against a mock and still needs a manual check
+    against the real project. If the sign-out call fails, the session stays valid until the
+    marker expires.
+- **Residual risk: an already stolen session.** The marker only controls this app's
+  recovery page. Anyone holding a valid Supabase session, which means its access and
+  refresh tokens, can call Supabase's `updateUser` directly with them, without using this
+  page. Supabase's own controls are what limit that: session lifetime, and the project
+  setting **"Secure password change"**, which requires a recent sign-in. Enabling that
+  setting is a project decision, and it is not changed here.
+- Invalid, expired, reused or other-browser links go to `/forgot-password?status=link-invalid`.
+  Redirects stay on this site (`safeNextPath`). The "sent" message is identical whether or
+  not an account exists. Passwords, markers and tokens are never echoed or logged.
+
+**Development setup for recovery (and sign-up) links:**
+
+- Open the app on **the same host as `SITE_URL`** (default `http://localhost:3000`). The
+  PKCE verifier cookie belongs to the host where the email was requested; a link opened on
+  `127.0.0.1` when `SITE_URL` is `localhost` (or the reverse) can't complete. In
+  development, `/forgot-password` shows a note when the hosts differ.
+- If the browser upgrades `http://localhost` to HTTPS ("localhost sent an invalid
+  response"), it has an HSTS entry for `localhost`. Either remove that entry yourself
+  (Edge/Chrome: `edge://net-internals/#hsts` → "Delete domain security policies" →
+  `localhost`), or use `http://127.0.0.1:3000` with `SITE_URL=http://127.0.0.1:3000`, which
+  also needs that URL in the Supabase redirect allow-list.
+- The Supabase project's **Redirect URLs** must allow
+  `<SITE_URL>/auth/confirm?next=/reset-password` (for example `<SITE_URL>/**`). If they
+  don't, Supabase sends the user to the Site URL instead and the reset can't finish.
+- Set `RECOVERY_MARKER_SECRET` in `frontend/.env.local` (see `frontend/.env.example`). It is
+  read by the Next.js server only; never give it a `NEXT_PUBLIC_` prefix or commit it.
+- Automated tests use a mock auth server. The real email flow, and Supabase's rejection of
+  revoked sessions, must be checked by hand against the Supabase project.
+
 ## Onboarding, profile and consent (M3)
 
 ```text

@@ -923,3 +923,41 @@ Also in this pass:
   - frontend (with `npm ci`, and npm itself on Node 22.23.3): 0 vulnerabilities, lint,
     typecheck, 138 tests and build all pass;
   - `docker compose config` OK.
+
+---
+
+# M6.0: Password recovery (branch `m6-auth-recovery`, 2026-10-13)
+
+Status: **IMPLEMENTED — VERIFIED locally against a mock auth server.** Not pushed, not
+merged. **Real Supabase email recovery: NOT VERIFIED** (manual step for the founder).
+Placed at the end of this file to avoid conflicting with PR #2's edits above.
+
+**What it does:** "Forgot your password?" → `/forgot-password` (identical message for every
+email) → Supabase recovery email → `/auth/confirm` → `/reset-password` → `updateUser` →
+`signOut({ scope: "global" })` → `/sign-in?status=password-updated`. Details and limits are
+in README "Password recovery".
+
+**Security review finding fixed before commit:** the first version used a marker cookie
+whose value was the user id. A local probe showed that an ordinary signed-in session could
+set that cookie itself, open the reset form and change the password. It was replaced by an
+HMAC-SHA256-signed marker (server-only `RECOVERY_MARKER_SECRET`) bound to the user id,
+Supabase session id, expiry and a random token id. The page and action also require a live
+session (`getUser()`). The same probe now fails.
+
+**Not claimed:** the marker is short-lived, signed and session-bound, but **not strictly
+single-use**. No server-side record of consumption exists. Replay after a successful reset
+is refused because the session is revoked; this depends on the Auth server rejecting
+revoked sessions, verified against the mock only. A session that was already stolen can call
+Supabase `updateUser` directly; that is limited only by Supabase's own controls ("Secure
+password change", session lifetime), which are not changed here.
+
+| Check (local) | Result |
+|---|---|
+| Frontend unit tests | 252 passed (175 on `main`) |
+| Lint / typecheck / build | pass |
+| Mutation check | tests fail when the signature check, session match, expiry, live-session check or the "secret required" rule is removed |
+| Browser, recovery journey (mock auth) | 27/27 |
+| Browser, security probes | original exploit refused; stolen valid marker with another session refused; tampered marker refused; replay after success refused; other session can't reset afterwards (8/8) |
+| Browser, secret not configured | no email sent, reset refused (3/3) |
+| Browser, existing journeys | 16/16 |
+| Logs (Next.js, API) | no passwords, markers, tokens or secret names |

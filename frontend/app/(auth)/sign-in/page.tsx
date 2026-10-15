@@ -10,6 +10,10 @@ export const metadata: Metadata = { title: "Sign in · AI Wellness Egypt" };
 // Only these fixed notices can be shown; the query string can't inject text.
 const NOTICES: Record<string, { tone: "info" | "error"; text: string }> = {
   "signed-out": { tone: "info", text: "You've been signed out." },
+  "password-updated": {
+    tone: "info",
+    text: "Your password has been updated. We've also ended your other sessions, which can take a little while to apply on every device. Sign in with your new password.",
+  },
   "sign-in-to-continue": {
     tone: "info",
     text: "If you just confirmed your email, sign in below to continue.",
