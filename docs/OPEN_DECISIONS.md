@@ -1,6 +1,6 @@
 # Open Decisions
 
-Last updated: 2026-10-15 (M7 integration; D-40 to D-43).
+Last updated: 2026-10-18 (M8 controlled deployment; D-44 and D-45).
 
 Engineering does not make the decisions below. Some are clinical, legal or
 crisis-procedure calls, and some belong to the founder. Until each one is
@@ -483,3 +483,23 @@ with no real-user access.
 - All primary journeys now have Arabic copy (provisional Egyptian Arabic, written by
   engineering). It needs native-speaker and, for consent-adjacent wording, legal
   review before launch. The consent document itself remains English-only.
+
+---
+
+## L. Raised during M8 controlled deployment (2026-10-18)
+
+### D-44. First migration of the real Supabase database — OPEN (founder approval)
+- Target: project `xchigpviedftrkxldclk`, through the session pooler. Command:
+  `cd backend && alembic upgrade 0002`. `0003` stays deferred.
+- Preconditions:
+  - the read-only checker reports `state: fresh` (or `fresh_empty_app_schema`) for the
+    right project (SUPABASE_MIGRATION_RUNBOOK §8.2);
+  - the backup time is recorded (§8.3).
+- Rehearsed only on a local Supabase Postgres image (§8.8), so the real database's state
+  is still **unknown**.
+
+### D-45. Render paid instance — OPEN (founder approval of the displayed price)
+- `0.5c-512mb` is listed at US$7/month, billed per second. The Hobby workspace is US$0,
+  so expect about US$7/month plus any bandwidth beyond the allowance.
+- Don't create the service before D-44 is done: an unmigrated database makes `/me`
+  fail.

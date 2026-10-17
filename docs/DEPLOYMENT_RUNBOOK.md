@@ -55,12 +55,19 @@ Blueprint is created from it in the Render dashboard, and auto-deploy is off.
   `uvicorn app.main:app` on port 8000) — the same image CI's Docker job builds.
 - **Port:** set `PORT=8000` (Render routes to `$PORT`, default 10000).
 - **Health check path:** `/health` (the image also has a Docker `HEALTHCHECK`).
-- **Plan / region:** a paid instance (`0.5c-512mb`, formerly "Starter": 0.5 CPU, 512 MB,
-  listed at **US$7/month**, billed by the second, on render.com/pricing and
-  render.com/docs/compute-plans as of 2026-10-18; confirm in the dashboard before
-  creating it). Free instances sleep after inactivity and the cold start exceeds the
-  frontend's 5-second API timeout. The workspace plan, bandwidth and build minutes may add
-  cost. Pick the region closest to the Supabase project (Frankfurt is offered).
+- **Plan / region:** a paid instance (`0.5c-512mb`, formerly "Starter": 0.5 CPU,
+  512 MB). As of 2026-10-18 it's listed at **US$7/month**, billed by the second
+  (render.com/pricing, render.com/docs/compute-plans). The workspace plan is billed
+  separately: **Hobby** is US$0 for one member, and **Pro** is US$25/month flat. Expected
+  cost for controlled testing on Hobby is **about US$7/month**, plus bandwidth beyond
+  the included allowance. **Confirm the price the dashboard shows before creating the
+  service [approval].** Free instances sleep when idle, and their cold start exceeds the
+  frontend's 5-second API timeout. Pick the region closest to the Supabase project
+  (Frankfurt is offered).
+- **Token verification:** the real project signs tokens with **ES256** and publishes the
+  key at `<SUPABASE_URL>/auth/v1/.well-known/jwks.json` (checked 2026-10-18). Render
+  therefore needs only `SUPABASE_URL`. Don't set `SUPABASE_JWT_SECRET` there; HS256
+  tokens are then refused (`unsupported_algorithm`).
 - **Database outages:** connections time out after 3 seconds (`CONNECT_TIMEOUT_SECONDS`)
   and the API answers `503 service_unavailable` with the standard error body. Only the
   error type is logged, never the connection string.
@@ -83,6 +90,19 @@ Blueprint is created from it in the Render dashboard, and auto-deploy is off.
   `PORT=8000` → `/health` ok and Docker `healthy`; `/docs` and `/openapi.json` 404;
   `/me`, `/mood/history`, `/chat/config` 401 without a token; startup log reports auth and
   database configured.
+- **Re-verified on 2026-10-18** with the `main` image (`3dd5941` plus checker changes),
+  against the real project's JWKS and a local Supabase-image database at `0002`:
+  - uid 10001, Python 3.12.15, Docker `healthy`;
+  - `/docs`, `/openapi.json` and `/redoc` 404;
+  - `/me`, `/mood/history` and `/chat/config` 401 without a token;
+  - a forged ES256 token gets 401 `unknown_key` (the real JWKS was fetched); a forged
+    HS256 token gets 401 `unsupported_algorithm`;
+  - logs contain only method, path, status, request id and rejection reasons.
+- **Do not start it against an unmigrated database:** create the service only after
+  §4 is done. Otherwise `/me` returns 500 because the tables are missing.
+- **Rollback:** Render → the service → Events → *Rollback* to the previous deploy, or
+  *Suspend* the service. The kill switch is suspending it: the frontend then shows
+  "We can't load your account", and no data is touched.
 - Migrations are **not** run by the service (§4).
 - After it is healthy, set Vercel's `API_BASE_URL` to the Render URL and redeploy.
 
