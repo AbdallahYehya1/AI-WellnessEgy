@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import Engine, text
 
 from tests.auth_helpers import EMAIL, EMAIL_B, USER_B_ID, USER_ID, api_client, bearer
@@ -64,11 +65,15 @@ def test_profile_is_created_once(db_engine: Engine) -> None:
 
 
 def test_concurrent_first_requests_create_one_profile(db_engine: Engine) -> None:
-    def fetch(_: int) -> str:
-        return str(api_client().get("/profile", headers=bearer()).json()["user_id"])
+    # Apps are built up front: building them in parallel races in pydantic's
+    # schema cache, which is not what this test is about (the database is).
+    clients = [api_client() for _ in range(6)]
+
+    def fetch(client: TestClient) -> str:
+        return str(client.get("/profile", headers=bearer()).json()["user_id"])
 
     with ThreadPoolExecutor(max_workers=6) as pool:
-        ids = set(pool.map(fetch, range(6)))
+        ids = set(pool.map(fetch, clients))
     assert len(ids) == 1
     assert len(rows(db_engine, "SELECT id FROM app.users")) == 1
     assert audit_actions(db_engine) == ["user.created"]
