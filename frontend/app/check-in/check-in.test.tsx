@@ -22,6 +22,7 @@ vi.mock("next/navigation", () => ({ redirect: (url: string) => redirectMock(url)
 vi.mock("@/lib/auth/session", () => ({ getVerifiedSession: () => getVerifiedSession() }));
 vi.mock("@/lib/api/backend", () => backend);
 vi.mock("@/lib/auth/actions", () => ({ signOut: vi.fn() }));
+vi.mock("@/lib/preferences/actions", () => ({ setLocale: vi.fn(), setTheme: vi.fn() }));
 vi.mock("next/link", () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => (
     <a href={href}>{children}</a>
@@ -209,8 +210,14 @@ describe("MoodHistory", () => {
     );
     const item = screen.getByRole("listitem");
     expect(item.textContent).toContain("2 / 5");
-    expect(item.textContent).toContain("UTC");
+    // 09:30 UTC is shown in Cairo time (UTC+3 in October).
+    expect(item.textContent).toContain("2 Oct 2026, 12:30");
     expect(document.body.textContent).not.toContain("private text");
+  });
+
+  it("formats dates in Arabic for Arabic visitors", () => {
+    render(<MoodHistory checkins={[moodCheckin(4, "2026-10-02T09:30:00Z")]} locale="ar" />);
+    expect(screen.getByRole("list", { name: "آخر التسجيلات" }).textContent).toContain("١٢:٣٠");
   });
 
   it("has an empty state", () => {
@@ -223,7 +230,7 @@ describe("MoodForm keyboard accessibility", () => {
   const FOCUS_CLASSES = [
     "has-focus-visible:outline-2",
     "has-focus-visible:outline-offset-2",
-    "has-focus-visible:outline-calm-900",
+    "has-focus-visible:outline-focus",
   ];
 
   it("gives every score a visible focus style distinct from the selected style", () => {
@@ -233,7 +240,9 @@ describe("MoodForm keyboard accessibility", () => {
       expect(label).not.toBeNull();
       for (const cls of FOCUS_CLASSES) expect(label?.classList.contains(cls)).toBe(true);
       // Selection is shown differently (background + border), not by the outline.
-      expect(label?.classList.contains("has-checked:bg-calm-100")).toBe(true);
+      expect(label?.classList.contains("has-checked:bg-surface-muted")).toBe(true);
+      // ...and the focus outline is not the selection colour.
+      expect(label?.classList.contains("has-checked:outline-focus")).toBe(false);
     }
   });
 

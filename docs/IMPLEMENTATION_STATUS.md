@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-10-02
+Last updated: 2026-10-15
 
 Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**, **BLOCKED**,
 **DEFERRED**.
@@ -10,15 +10,103 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 | **M1: Repository and engineering foundation** | **COMPLETE — VERIFIED** (`d525820`). |
 | **M2: Supabase authentication** | **COMPLETE — VERIFIED** (`9474bbf`, evidence `207fc13`). The founder reported (2026-10-01) that the last three real-account checks passed: successful sign-in, session persistence after reload, and sign-out with the protected-dashboard redirect. The earlier live checks are in §M3-9. |
 | **M3: Consent and user-profile foundation** | **COMPLETE — VERIFIED** locally and in CI (`78de377`, docs `9ff5b9d`). Migration `0001` is still a separately controlled deployment step for the real Supabase database (D-26). |
-| **M4: Mood check-in and wellness-data foundation** | **Implementation COMPLETE — VERIFIED** (local) and **CI COMPLETE — VERIFIED** (PR #1, two runs). **PR review and merge: PENDING.** The review in §M4-R found no blocking defects; both Medium findings are **fixed locally** (§M4-R.4) and await commit, push and re-review. **Real Supabase migration: PENDING (D-26)**; runbook ready, not executed. **Real-Supabase end-to-end: PARTIAL**: real Supabase **auth** with a **local** database was exercised by the founder (§M4-R.3); with the Supabase **database** it is not verified. **Launch blockers unresolved:** D-32, D-33 and the M5 entry gate (OPEN_DECISIONS §I). |
-| M5 and later | Not started. Awaiting approval. |
+| **M4: Mood check-in and wellness-data foundation** | **COMPLETE — VERIFIED** and **merged**: PR #1 merged on 2026-10-11 as `675b4a3` after the review fixes (`f2e4c28`; PR CI run 38129738286 green, 4/4). CI on `main` after the merge: run 38129868214, **success**. **Real Supabase migration: PENDING (D-26)**; runbook ready, not executed. **Launch blockers unresolved:** D-32, D-33 and the M5 entry gate (OPEN_DECISIONS §I). |
+| **M5 slice: chat prototype** | **IMPLEMENTED — VERIFIED locally and in CI** on branch `m5-chat-slice`, draft PR #2 (§M5-P). **Not merged.** Outstanding: Docker Compose with chat enabled, browser end-to-end, search-quality evaluation, clinical crisis content, clinical/legal review. Adult band only, disabled by default, fake provider, synthetic fixtures, test-only safety policy, no message storage. **Not clinically validated** and not available to real users. |
+| **M6.0: Password recovery** | **IMPLEMENTED — VERIFIED locally (mock auth) and in CI** (PR #3). **Real Supabase recovery: NOT VERIFIED.** See §M6.0 at the end of this file. |
+| **M7: Integration + UI/UX (M6.1–M6.5)** | **ENGINEERING INTEGRATION COMPLETE — VERIFIED locally** on `m7-integration` (§M7). **Not merged:** the production domain is public (D-40). Not verified against the real Supabase project or a deployed backend. |
+| Later milestones | Not started. |
 
 **Repository:**
-- `main` = `9ff5b9d` (M1 → M2 → M2 evidence → M3 → docs).
-- M4 work is on **`m4-mood-checkin`**, branched from `main`. It is opened as a pull request
-  for review and CI, and is not merged.
-- The milestone branches `m1-foundation`, `m2-supabase-auth` and `m3-consent-profile` are
-  retained.
+- `main` = `675b4a3` (merge of PR #1, M4).
+- **`m5-chat-slice`**, branched from `675b4a3`, holds three local commits: `14cea91` (npm
+  audit patch), `0d2c243` (backend chat pipeline) and `00c6169` (chat UI), plus the docs
+  commits that record this section. Pushed on 2026-10-11 as draft
+  [PR #2](https://github.com/AbdallahYehya1/AI-WellnessEgy/pull/2); not merged.
+- The milestone branches `m1-foundation`, `m2-supabase-auth`, `m3-consent-profile` and
+  `m4-mood-checkin` are retained.
+
+---
+
+# M5-P: Chat prototype (first vertical slice, 2026-10-11)
+
+Approved by the founder on 2026-10-11 (decisions recorded in OPEN_DECISIONS §I update and
+D-35 to D-39). It covers one end-to-end path: authenticated adult user → consent → safety
+gate → approved (here: synthetic) knowledge retrieval → fake provider → citation and output
+validation → chat UI.
+
+## M5-P.1 What was built
+
+| Area | Implementation |
+|---|---|
+| Age bands | `child`, `teen`, `adult` defined as **draft** boundaries (under 13, 13–17, 18+; not legally approved). A hard-coded allowlist means only `adult` can ever be enabled. Every account resolves to `adult` (18+ attestation, D-12). |
+| Safety | `assess_safety_risk()` runs the assessor with a 2 s timeout; a timeout, exception or malformed result becomes UNKNOWN with an `assessor_*` reason → `unavailable`. The test-only policy `synthetic-test-v0` lets only LOW generate; HIGH, MEDIUM and UNKNOWN → `support` (placeholder notice, D-13); diagnosis or medication requests → `out_of_scope`. The `SyntheticTestAssessor` reacts only to explicit test markers and a few placeholder phrases; it is not a classifier. |
+| Generation gate | `GenerationGate.authorize()` issues a permit only for a GENERATE decision. The permit is single-use, bound to the request id and message hash, expires after 30 s, and can't be constructed outside the gate. `generate_with_permit()` is the only path to the provider and consumes the permit first. |
+| Retrieval | PostgreSQL full-text search over a stored tsvector (English + Arabic + simple configurations, GIN index), OR-matched, filtered by age band, review status (`approved`, plus `synthetic` only under the test-only policy) and expiry. Returns at most 4 passages. |
+| Provider | `FakeProvider` only: deterministic, no network. It builds a reply from the retrieved passages and cites them. Test markers trigger its failure modes. |
+| Output validation | Requires non-empty text within the band's length limit and at least one citation, all from this request's retrieval. A small regex screen rejects diagnosis, medication and "I am a doctor" phrasing (EN/AR). This is an engineering heuristic, not a clinical review. |
+| Rate limiting | Per-user, 60-second window in PostgreSQL, serialised by a row lock. A limiter error means no generation. |
+| Conversation state | Held in the browser. Assistant turns carry an HMAC-SHA256 signature (user id + text); forged, altered or other-user turns → `422 invalid_history`. At most 6 turns are sent back, and the whole window is re-assessed on every request. |
+| Privacy | No message or reply text in the database, logs, audit events or `safety_events` (which holds decision metadata only). |
+| Configuration | `CHAT_ENABLED` (default off), `CHAT_SAFETY_POLICY`, `CHAT_SIGNING_KEY`, `CHAT_RATE_LIMIT_PER_MINUTE`. Settings validation refuses chat in production unless the policy is approved (none is), and requires a 32+ character signing key there. |
+| Knowledge | Migration `0003` adds `knowledge_sources`, `knowledge_chunks`, `safety_events` and `chat_rate_events` (RLS on, Data API roles revoked). Ingestion requires provenance fields, requires reviewer details for `approved`, and rejects instruction-like text. Four **synthetic** fixtures: adult EN breathing, adult AR/Arabizi sleep, teen-only school stress, and a withdrawn note. |
+| UI | `/chat` (protected by the proxy and gated on session, consent and server config) shows "Adult" and "Prototype" badges, a scope statement and a test-mode notice. It has an accessible conversation log, loading, error and notice states, citations labelled "Synthetic test content", and "Start over". The dashboard links to it only when the server reports chat as enabled. |
+
+## M5-P.2 Verification (local, 2026-10-11)
+
+| Check | Result |
+|---|---|
+| Backend `ruff check` / `ruff format` | All checks passed; formatted |
+| Backend `mypy app tests` | Success: no issues found in 75 source files |
+| Backend `pytest` (testcontainers Postgres 17) | **332 passed** (241 before this slice), 99% coverage |
+| Frontend `npm run lint` / `typecheck` | Pass (0 warnings) |
+| Frontend `npm test` | **15 files, 196 tests passed** (175 before) |
+| Frontend `npm run build` | Pass; `ƒ /chat` is dynamic |
+| Migrations on a throwaway Postgres 17 | `upgrade head`, `alembic check` ("No new upgrade operations detected"), `downgrade 0002`, `upgrade head` all succeeded |
+| Ingest CLI | `python -m app.knowledge.ingest app/knowledge/fixtures` → "ingested 4 documents", twice (idempotent: 4 sources, 4 chunks) |
+| `npm audit` | 5 high, all in the `eslint-config-next` development chain (D-39) |
+| CI | **Success**: PR #2 run 38133285109 on `21a5aa9`, 4/4 jobs (Backend: 332 passed, mypy clean, 83 files formatted; Frontend: 196 passed, build with `ƒ /chat`; Repository guards; Docker: db and api `Healthy`) |
+| Docker Compose | CI Docker job passed with the default configuration (chat **off**). Locally (2026-10-12): with `docker-compose.yml` only, chat stays off when `CHAT_*` is unset (UI shows "isn't available yet", no dashboard link, `POST /chat/messages` → 503) and turns on with `CHAT_ENABLED=true` and `CHAT_SAFETY_POLICY=synthetic-test-v0`; `CHAT_ENABLED=true` without a policy stops the stack at the migrate step. Assessor failures log `chat_assessor_failed` with only a reason code |
+| Browser end-to-end | **Not run** |
+
+What the tests cover (each "no generation" case asserts the fake provider was **not called**):
+- the allowed path, with citations, a valid signature and a `reply` safety event;
+- Arabic, Arabizi, English and mixed-language retrieval;
+- HIGH, MEDIUM and UNKNOWN; assessor error, timeout and malformed results; out-of-scope requests;
+- a risky earlier turn in the window;
+- missing, forged, foreign, expired, reused and mismatched permits;
+- mutation checks: a removed permit, and an all-permissive policy still blocked by assessor failure;
+- no evidence; teen-only, withdrawn and expired content excluded for adults; synthetic content excluded under a non-synthetic policy;
+- a disabled age band (403);
+- invalid provider output (a bad citation, diagnosis text, empty text) and provider error or timeout;
+- message-side injection that can't bypass output validation, and rejection of injected documents at ingestion;
+- forged, unsigned and other-user history turns;
+- payload validation;
+- rate limit 429, per-user isolation, and fail-closed on limiter and retrieval failure;
+- auth 401, consent 403, the feature disabled by default (503);
+- production settings refusing the synthetic policy;
+- no message or reply text in logs or in any table.
+
+## M5-P.3 Limits and what this does not show
+
+- **Known low-severity findings (open, to be handled separately):**
+  - With `CHAT_ENABLED=true` and a blank `CHAT_SAFETY_POLICY` (Compose passes an empty string),
+    settings validation reports "not approved for this environment" rather than "requires
+    CHAT_SAFETY_POLICY". Because `migrate` shares the API settings, the stack stops at the
+    migrate step. It fails closed; only the message and the stopping point are imprecise.
+  - `test_message_and_reply_text_are_never_stored_or_logged` builds its app before `capsys`
+    starts capturing, so its log assertions may not see the app's log output. Its database
+    assertions are unaffected. The newer assessor-logging test avoids this by creating the app
+    inside the test.
+- **Nothing here is clinically validated.** The policy, assessor, notices and fixtures are
+  synthetic test material; passing tests shows only that the engineering controls behave as
+  designed.
+- The `support` notice is a placeholder; no crisis resources exist (D-13).
+- Retrieval quality has not been evaluated against a labelled set; pgvector is deferred.
+- The permit store is in-process memory, so it suits one API process; multiple workers would
+  each hold their own gate (which is still fail-closed).
+- Child and teen experiences stay disabled until legal and clinical approval (D-12).
+- Not done, and needing separate approval: pushing or opening a PR, production migrations,
+  enabling for real users, a real provider (D-36), and real clinical content.
 
 ---
 
@@ -837,3 +925,95 @@ Also in this pass:
   - frontend (with `npm ci`, and npm itself on Node 22.23.3): 0 vulnerabilities, lint,
     typecheck, 138 tests and build all pass;
   - `docker compose config` OK.
+
+---
+
+# M6.0: Password recovery (branch `m6-auth-recovery`, 2026-10-13)
+
+Status: **IMPLEMENTED — VERIFIED locally against a mock auth server.** Not pushed, not
+merged. **Real Supabase email recovery: NOT VERIFIED** (manual step for the founder).
+Placed at the end of this file to avoid conflicting with PR #2's edits above.
+
+**What it does:** "Forgot your password?" → `/forgot-password` (identical message for every
+email) → Supabase recovery email → `/auth/confirm` → `/reset-password` → `updateUser` →
+`signOut({ scope: "global" })` → `/sign-in?status=password-updated`. Details and limits are
+in README "Password recovery".
+
+**Security review finding fixed before commit:** the first version used a marker cookie
+whose value was the user id. A local probe showed that an ordinary signed-in session could
+set that cookie itself, open the reset form and change the password. It was replaced by an
+HMAC-SHA256-signed marker (server-only `RECOVERY_MARKER_SECRET`) bound to the user id,
+Supabase session id, expiry and a random token id. The page and action also require a live
+session (`getUser()`). The same probe now fails.
+
+**Not claimed:** the marker is short-lived, signed and session-bound, but **not strictly
+single-use**. No server-side record of consumption exists. Replay after a successful reset
+is refused because the session is revoked; this depends on the Auth server rejecting
+revoked sessions, verified against the mock only. A session that was already stolen can call
+Supabase `updateUser` directly; that is limited only by Supabase's own controls ("Secure
+password change", session lifetime), which are not changed here.
+
+| Check (local) | Result |
+|---|---|
+| Frontend unit tests | 252 passed (175 on `main`) |
+| Lint / typecheck / build | pass |
+| Mutation check | tests fail when the signature check, session match, expiry, live-session check or the "secret required" rule is removed |
+| Browser, recovery journey (mock auth) | 27/27 |
+| Browser, security probes | original exploit refused; stolen valid marker with another session refused; tampered marker refused; replay after success refused; other session can't reset afterwards (8/8) |
+| Browser, secret not configured | no email sent, reset refused (3/3) |
+| Browser, existing journeys | 16/16 |
+| Logs (Next.js, API) | no passwords, markers, tokens or secret names |
+
+---
+
+# M7: Integration, UI/UX redesign and verification (2026-10-15)
+
+Branch `m7-integration` from `main` (`675b4a3`): merges PR #2 (`24c3fc3`, chat
+prototype) then PR #3 (`f7975ec`, password recovery) — both merged cleanly — and adds
+the M6 design system, Arabic/English, redesigned journeys and a Playwright suite.
+**Not merged to `main`:** the production domain was verified public (D-40), so the
+merge gate fails.
+
+## What changed
+- Semantic light/dark tokens (lavender/sage) with measured AA contrast; IBM Plex Sans
+  Arabic self-hosted; one visible focus style; reduced motion respected.
+- Arabic/English with per-request `lang`/`dir`, language switch, theme preference.
+- App shell (skip link, desktop nav ≥ 1024px, mobile/tablet bottom tab bar, sign-out);
+  public shell; branded 404 and error boundary; favicon.
+- Redesigned landing, auth, onboarding (step indicator), dashboard (assistant only when
+  enabled; honest "not available yet" otherwise; no email or engineering copy),
+  check-in, chat; new progress page (accessible SVG chart + table) and settings
+  (display name, language, theme, consent status, privacy; unsupported export/delete/
+  withdraw explained as text, not buttons).
+- Sign-up tells a signed-in user "You already have an account. Continue to your
+  dashboard."; the check-email page tells everyone "If you already have an account, you
+  can sign in or reset your password." No account-existence lookup was added.
+- Chat: stable layout, starters (fill, don't send), Enter/Shift+Enter, scroll-follow,
+  distinct outcome titles, confirmed start-over, retention notice, specific messages for
+  "switched off" (503) and "not available for your account" (403). Backend safety
+  behaviour unchanged.
+
+## Verification (local, 2026-10-15)
+
+| Check | Result |
+|---|---|
+| Backend (ruff, format, mypy, pytest) on the merged code | clean; **342 passed**, 99% coverage |
+| Frontend lint / typecheck | clean |
+| Frontend unit tests (Vitest) | **309 passed** (19 files) |
+| Production build | pass (font downloaded at build) |
+| `npm audit --omit=dev` | 0 vulnerabilities (5 dev-only remain, D-39) |
+| Migrations on a fresh Postgres 17 (Compose) | `0001` → `0002` → `0003` applied in order |
+| **Playwright, 20 tests** (production build + Compose API + test-only mock auth) | **20 passed** |
+| — journeys | sign-up/confirmation/onboarding/consent/check-in/dashboard; duplicate sign-up (no new email, original password still valid); signed-in `/sign-up`; check-in → progress → settings (name, dark theme, Arabic RTL); chat test mode (starter, cited synthetic reply, signed follow-up, blocked `support`, `unavailable`, no browser storage); sign-out protects 6 routes; lost session → sign-in → back |
+| — recovery | neutral request (no email for unknown accounts, identical message), reset, old password rejected, new works, reused link refused, other-browser link refused, original forged-cookie exploit refused, stolen marker refused, replay after success refused |
+| — accessibility & layout | axe WCAG 2.2 A/AA: **0 violations** on 12 pages × ar/en × light/dark; no horizontal overflow at 320/375/390/768/1024/1280/1440; no visible control < 24px; skip link; reduced motion |
+
+Defects found by the browser suite and fixed: language switch failed WCAG 2.5.3 (label
+in name); crowded mobile header; 768px overflow (desktop navigation moved to ≥ 1024px).
+
+## Not verified / still blocked
+- Real Supabase email flows (recovery, confirmation), Supabase settings, custom SMTP.
+- Deployed backend (Render) and production migrations (D-26).
+- Manual screen-reader testing (automated axe covers only part of WCAG).
+- Search-quality evaluation; clinical crisis content (D-13); clinical/legal review.
+- Browser tests are not in CI (D-42). Arabic copy is provisional (D-43).

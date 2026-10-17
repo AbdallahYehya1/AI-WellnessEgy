@@ -1,70 +1,54 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState } from "react";
 
 import { Field, FormAlert, SubmitButton } from "@/components/auth/form-parts";
+import { Checkbox, TextLink } from "@/components/ui/primitives";
 import type { AuthFormState } from "@/lib/auth/actions";
-import { PASSWORD_MIN_LENGTH } from "@/lib/auth/validation";
+import type { Locale } from "@/lib/i18n/config";
+import { messages } from "@/lib/i18n/messages";
+import { translateMessage } from "@/lib/i18n/translate";
 
 type Props = {
   action: (state: AuthFormState, formData: FormData) => Promise<AuthFormState>;
+  locale?: Locale;
 };
 
-export function SignUpForm({ action }: Props) {
+export function SignUpForm({ action, locale = "en" }: Props) {
   const [state, formAction] = useActionState(action, {});
-  const ageError = state.fieldErrors?.ageConfirmed;
+  const t = messages[locale];
   return (
-    <form action={formAction} noValidate className="space-y-4">
-      <FormAlert message={state.formError} />
-      <Field
-        id="email"
-        label="Email"
-        type="email"
-        autoComplete="email"
-        defaultValue={state.email}
-        error={state.fieldErrors?.email}
-      />
+    <form action={formAction} noValidate className="space-y-5">
+      <FormAlert message={state.formError} locale={locale} />
+      <Field id="email" label={t.forms.email} type="email" autoComplete="email" defaultValue={state.email} error={state.fieldErrors?.email} locale={locale} />
       <Field
         id="password"
-        label="Password"
+        label={t.forms.password}
         type="password"
         autoComplete="new-password"
-        hint={`At least ${PASSWORD_MIN_LENGTH} characters.`}
+        hint={t.forms.passwordHint}
         error={state.fieldErrors?.password}
+        locale={locale}
       />
       <Field
         id="confirmPassword"
-        label="Confirm password"
+        label={t.forms.confirmPassword}
         type="password"
         autoComplete="new-password"
         error={state.fieldErrors?.confirmPassword}
+        locale={locale}
       />
-      <div className="space-y-1">
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="ageConfirmed"
-            required
-            aria-invalid={ageError ? true : undefined}
-            aria-describedby={ageError ? "ageConfirmed-error" : undefined}
-            className="mt-1"
-          />
-          <span>I confirm that I am 18 or older.</span>
-        </label>
-        {ageError ? (
-          <p id="ageConfirmed-error" className="text-sm text-red-700">
-            {ageError}
-          </p>
-        ) : null}
+      {/* The service is for adults only (D-12); the server checks this too. */}
+      <Checkbox id="ageConfirmed" name="ageConfirmed" required label={t.forms.ageConfirm} error={translateMessage(locale, state.fieldErrors?.ageConfirmed)} />
+      <SubmitButton pendingText={t.forms.creatingAccount}>{t.forms.createAccountSubmit}</SubmitButton>
+      <div className="space-y-2 text-sm">
+        <p>
+          {t.forms.alreadyHaveAccount} <TextLink href="/sign-in">{t.forms.signInLink}</TextLink>
+        </p>
+        <p>
+          <TextLink href="/forgot-password">{t.auth.forgotPasswordLink}</TextLink>
+        </p>
       </div>
-      <SubmitButton pendingText="Creating account…">Create account</SubmitButton>
-      <p className="text-sm">
-        Already have an account?{" "}
-        <Link href="/sign-in" className="font-medium text-calm-700 underline">
-          Sign in
-        </Link>
-      </p>
     </form>
   );
 }

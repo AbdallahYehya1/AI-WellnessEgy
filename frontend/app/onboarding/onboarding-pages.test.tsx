@@ -18,6 +18,7 @@ vi.mock("next/navigation", () => ({ redirect: (url: string) => redirectMock(url)
 vi.mock("@/lib/auth/session", () => ({ getVerifiedSession: () => getVerifiedSession() }));
 vi.mock("@/lib/api/backend", () => backend);
 vi.mock("@/lib/auth/actions", () => ({ signOut: vi.fn() }));
+vi.mock("@/lib/preferences/actions", () => ({ setLocale: vi.fn(), setTheme: vi.fn() }));
 vi.mock("@/lib/onboarding/actions", () => ({ saveProfile: vi.fn(), submitConsent: vi.fn() }));
 
 const { default: ProfilePage } = await import("@/app/onboarding/page");

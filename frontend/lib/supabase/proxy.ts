@@ -4,8 +4,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 
 // Routes that need a signed-in user, and auth pages a signed-in user skips.
-const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/check-in"];
-const AUTH_PAGES = ["/sign-in", "/sign-up"];
+// /sign-up is not skipped: it tells a signed-in visitor they already have an
+// account and links to the dashboard.
+const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/check-in", "/chat", "/history", "/settings"];
+const AUTH_PAGES = ["/sign-in"];
 
 function matches(pathname: string, prefixes: string[]): boolean {
   return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

@@ -1,26 +1,40 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
-export function SubmitButton({ children, pendingText }: { children: ReactNode; pendingText: string }) {
+import { buttonStyles } from "@/components/ui/primitives";
+import type { Locale } from "@/lib/i18n/config";
+import { messages } from "@/lib/i18n/messages";
+import { translateMessage } from "@/lib/i18n/translate";
+
+export function SubmitButton({
+  children,
+  pendingText,
+  variant = "primary",
+  name,
+  value,
+}: {
+  children: ReactNode;
+  pendingText: string;
+  variant?: "primary" | "secondary";
+  name?: string;
+  value?: string;
+}) {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full rounded-md bg-calm-700 px-4 py-2.5 font-medium text-white transition hover:bg-calm-900 disabled:cursor-not-allowed disabled:opacity-60"
-    >
+    <button type="submit" name={name} value={value} disabled={pending} aria-disabled={pending} className={buttonStyles(variant, true)}>
       {pending ? pendingText : children}
     </button>
   );
 }
 
-export function FormAlert({ message }: { message?: string }) {
+/** A form-level error from a server action, shown in the visitor's language. */
+export function FormAlert({ message, locale = "en" }: { message?: string; locale?: Locale }) {
   if (!message) return null;
   return (
-    <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-      {message}
+    <p role="alert" className="rounded-xl bg-danger-bg px-4 py-3 text-sm text-danger-ink">
+      {translateMessage(locale, message)}
     </p>
   );
 }
@@ -28,68 +42,76 @@ export function FormAlert({ message }: { message?: string }) {
 type FieldProps = {
   id: string;
   label: string;
-  type: "email" | "password";
+  type: "email" | "password" | "text";
   autoComplete: string;
   error?: string;
   defaultValue?: string;
   hint?: string;
+  locale?: Locale;
+  required?: boolean;
+  maxLength?: number;
 };
 
-export function Field({ id, label, type, autoComplete, error, defaultValue, hint }: FieldProps) {
-  const describedBy = [hint ? `${id}-hint` : null, error ? `${id}-error` : null]
-    .filter(Boolean)
-    .join(" ");
+export const inputClasses =
+  "block min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base text-ink placeholder:text-ink-muted aria-invalid:border-danger-ink";
+
+export function Field({
+  id,
+  label,
+  type,
+  autoComplete,
+  error,
+  defaultValue,
+  hint,
+  locale = "en",
+  required = true,
+  maxLength,
+}: FieldProps) {
+  const [visible, setVisible] = useState(false);
+  const t = messages[locale];
+  const describedBy = [hint ? `${id}-hint` : null, error ? `${id}-error` : null].filter(Boolean).join(" ");
+  const isPassword = type === "password";
   return (
-    <div className="space-y-1">
-      <label htmlFor={id} className="block text-sm font-medium">
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="block text-sm font-semibold">
         {label}
       </label>
-      <input
-        id={id}
-        name={id}
-        type={type}
-        autoComplete={autoComplete}
-        defaultValue={defaultValue}
-        required
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy || undefined}
-        className="w-full rounded-md border border-calm-100 bg-white px-3 py-2 outline-none focus:border-calm-700 focus:ring-2 focus:ring-calm-100 aria-invalid:border-red-400"
-      />
+      <div className="relative">
+        <input
+          id={id}
+          name={id}
+          type={isPassword && visible ? "text" : type}
+          autoComplete={autoComplete}
+          defaultValue={defaultValue}
+          required={required}
+          maxLength={maxLength}
+          dir={type === "email" || isPassword ? "ltr" : "auto"}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy || undefined}
+          className={`${inputClasses} ${isPassword ? "pe-24" : ""}`}
+        />
+        {isPassword ? (
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            aria-pressed={visible}
+            aria-controls={id}
+            className="absolute inset-y-0 end-1 my-1 rounded-lg px-3 text-xs font-semibold text-primary-strong hover:bg-surface-muted"
+          >
+            {visible ? t.forms.hidePassword : t.forms.showPassword}
+          </button>
+        ) : null}
+      </div>
       {hint ? (
-        <p id={`${id}-hint`} className="text-xs text-calm-700">
+        <p id={`${id}-hint`} className="text-sm text-ink-muted">
           {hint}
         </p>
       ) : null}
       {error ? (
-        <p id={`${id}-error`} className="text-sm text-red-700">
-          {error}
+        <p id={`${id}-error`} className="text-sm font-medium text-danger-ink">
+          {translateMessage(locale, error)}
         </p>
       ) : null}
     </div>
-  );
-}
-
-export function AuthShell({
-  titleAr,
-  title,
-  children,
-}: {
-  titleAr: string;
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-6 py-16">
-      <header className="space-y-1">
-        <p className="text-sm font-medium text-calm-700">AI Wellness Egypt</p>
-        <h1 className="text-3xl font-bold">{titleAr}</h1>
-        <p lang="en" dir="ltr" className="text-left text-lg text-calm-700">
-          {title}
-        </p>
-      </header>
-      <div lang="en" dir="ltr" className="space-y-5 text-left">
-        {children}
-      </div>
-    </main>
   );
 }

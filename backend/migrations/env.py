@@ -8,8 +8,11 @@ from alembic import context
 from sqlalchemy import create_engine, pool, text
 
 import app.audit.models
+import app.common.ratelimit
 import app.consent.models
+import app.knowledge.models
 import app.mood.models
+import app.safety.models
 import app.users.models  # noqa: F401  (register models on the metadata)
 from app.core.config import Settings
 from app.core.db import SCHEMA, Base, sqlalchemy_url

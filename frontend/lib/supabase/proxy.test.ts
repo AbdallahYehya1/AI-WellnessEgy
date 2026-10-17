@@ -64,7 +64,7 @@ describe("updateSession (proxy)", () => {
   });
 
   it("protects the onboarding steps too", async () => {
-    for (const path of ["/onboarding", "/onboarding/consent", "/check-in"]) {
+    for (const path of ["/onboarding", "/onboarding/consent", "/check-in", "/chat", "/history", "/settings"]) {
       const target = location(await updateSession(request(path)));
       expect(target?.pathname).toBe("/sign-in");
       expect(target?.searchParams.get("next")).toBe(path);
@@ -91,11 +91,14 @@ describe("updateSession (proxy)", () => {
     expect(auth.getSession).not.toHaveBeenCalled();
   });
 
-  it("sends a signed-in user away from the auth pages", async () => {
+  it("sends a signed-in user away from sign-in", async () => {
     auth = createFakeAuth({ signedIn: true });
-    for (const path of ["/sign-in", "/sign-up"]) {
-      expect(location(await updateSession(request(path)))?.pathname).toBe("/dashboard");
-    }
+    expect(location(await updateSession(request("/sign-in")))?.pathname).toBe("/dashboard");
+  });
+
+  it("lets a signed-in user reach /sign-up, which explains they already have an account", async () => {
+    auth = createFakeAuth({ signedIn: true });
+    expect(location(await updateSession(request("/sign-up")))).toBeNull();
   });
 
   it("leaves public pages alone for anonymous visitors", async () => {

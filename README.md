@@ -78,6 +78,68 @@ Sign out ──(Server Action: signOut)──▶ cookies cleared ──▶ /sign
   token-derived identity. Every failure is a uniform `401`; if Supabase isn't configured,
   it fails closed with `503`.
 
+### Password recovery (M6.0)
+
+```text
+/sign-in ─▶ /forgot-password ──(resetPasswordForEmail)──▶ "If an account exists…" (same for every email)
+email link ──▶ Supabase verify ──▶ /auth/confirm?code=… ──(recovery verified)──▶ /reset-password
+/reset-password ──(updateUser({ password }))──▶ signOut({ scope: "global" }) ──▶ /sign-in?status=password-updated
+```
+
+- **What authorises the reset page and its action.** Three checks must all pass:
+  1. A valid access token (`getClaims()`), giving the user id and Supabase session id.
+  2. A live session according to the Auth server (`getUser()`). `getClaims()` alone can't
+     see a revoked session, because an access token stays valid until it expires.
+  3. A **signed recovery marker** (`aw_password_reset`: `httpOnly`, `SameSite=Lax`, path
+     `/reset-password`, 10 minutes). It is HMAC-SHA256-signed with the server-only
+     `RECOVERY_MARKER_SECRET` and binds the user id, the session id, an expiry and a random
+     token id. Signatures are compared in constant time.
+- **Only `/auth/confirm` issues the marker**, and only after Supabase has verified a
+  recovery. That means either the PKCE verifier created by `resetPasswordForEmail`, or a
+  `type=recovery` token hash. The marker is bound to the session in the token Supabase just
+  returned, verified with `getClaims(token)`. `next=/reset-password` alone grants nothing.
+- **Without a valid secret, recovery fails closed.** No reset email is sent, and the reset
+  page and action refuse every request.
+- **Not strictly single-use.** Nothing server-side records that a marker was used, so it is
+  **short-lived, signed and session-bound, not single-use**:
+  - Before a successful reset, the same session can use it more than once, for example
+    after a validation error.
+  - Two simultaneous submissions from that session could both reach Supabase.
+  - After a successful reset, the app calls `signOut({ scope: "global" })`. Supabase then
+    revokes the refresh tokens and sessions, so a replay with that session fails the
+    `getUser()` check. This relies on the Auth server rejecting revoked sessions
+    (`session_not_found`). It was tested against a mock and still needs a manual check
+    against the real project. If the sign-out call fails, the session stays valid until the
+    marker expires.
+- **Residual risk: an already stolen session.** The marker only controls this app's
+  recovery page. Anyone holding a valid Supabase session, which means its access and
+  refresh tokens, can call Supabase's `updateUser` directly with them, without using this
+  page. Supabase's own controls are what limit that: session lifetime, and the project
+  setting **"Secure password change"**, which requires a recent sign-in. Enabling that
+  setting is a project decision, and it is not changed here.
+- Invalid, expired, reused or other-browser links go to `/forgot-password?status=link-invalid`.
+  Redirects stay on this site (`safeNextPath`). The "sent" message is identical whether or
+  not an account exists. Passwords, markers and tokens are never echoed or logged.
+
+**Development setup for recovery (and sign-up) links:**
+
+- Open the app on **the same host as `SITE_URL`** (default `http://localhost:3000`). The
+  PKCE verifier cookie belongs to the host where the email was requested; a link opened on
+  `127.0.0.1` when `SITE_URL` is `localhost` (or the reverse) can't complete. In
+  development, `/forgot-password` shows a note when the hosts differ.
+- If the browser upgrades `http://localhost` to HTTPS ("localhost sent an invalid
+  response"), it has an HSTS entry for `localhost`. Either remove that entry yourself
+  (Edge/Chrome: `edge://net-internals/#hsts` → "Delete domain security policies" →
+  `localhost`), or use `http://127.0.0.1:3000` with `SITE_URL=http://127.0.0.1:3000`, which
+  also needs that URL in the Supabase redirect allow-list.
+- The Supabase project's **Redirect URLs** must allow
+  `<SITE_URL>/auth/confirm?next=/reset-password` (for example `<SITE_URL>/**`). If they
+  don't, Supabase sends the user to the Site URL instead and the reset can't finish.
+- Set `RECOVERY_MARKER_SECRET` in `frontend/.env.local` (see `frontend/.env.example`). It is
+  read by the Next.js server only; never give it a `NEXT_PUBLIC_` prefix or commit it.
+- Automated tests use a mock auth server. The real email flow, and Supabase's rejection of
+  revoked sessions, must be checked by hand against the Supabase project.
+
 ## Onboarding, profile and consent (M3)
 
 ```text
@@ -116,6 +178,28 @@ consent accepted ─▶ /check-in (1–5 scale, "Skip for now") ─(POST /mood/c
   outline that is separate from the "selected" style.
 - The check-in is described as "not a medical assessment". The UI copy is provisional
   (D-31).
+
+## Chat prototype (M5 slice, not for real users)
+
+Deployment and configuration for every service: `docs/DEPLOYMENT_RUNBOOK.md`.
+
+```text
+consent accepted ─▶ /chat (Adult · Prototype) ─(POST /chat/messages)─▶ signed reply + citations
+```
+
+- **Disabled by default.** Enable locally with `CHAT_ENABLED=true` and
+  `CHAT_SAFETY_POLICY=synthetic-test-v0`, then load the synthetic fixtures:
+  `python -m app.knowledge.ingest app/knowledge/fixtures` (from `backend/`).
+- Pipeline: consent → adult-only band check → signed-history check → PostgreSQL rate limit
+  (fails closed) → safety assessment of the whole window → approved/age-applicable full-text
+  retrieval → single-use generation permit → **fake provider** → output and citation
+  validation. Every failure ends without generation.
+- The safety policy, the assessor and all knowledge are **synthetic test material**. Nothing
+  here is clinically reviewed or validated. Production refuses to start with chat enabled
+  until an approved policy exists (OPEN_DECISIONS D-7).
+- No message text is stored server-side, logged, or written to audit or safety events. The
+  browser holds the conversation; only the last 6 turns are sent back, and assistant turns
+  must carry the server's signature.
 
 ## Repository layout
 
@@ -204,6 +288,32 @@ npm run build
 ```
 
 If the API runs on a port other than 8000, set `API_BASE_URL` in `frontend/.env.local`.
+
+### Design system, languages and themes (M6)
+
+- **Tokens:** `app/globals.css` defines semantic colours (lavender primary, sage
+  secondary, warm neutrals) for light and dark themes; every text/background pair was
+  checked for WCAG AA (≥ 4.5:1; control borders, focus and chart marks ≥ 3:1). Use the
+  token utilities (`bg-surface`, `text-ink`, `border-line-strong`, …), not raw colours.
+- **Font:** IBM Plex Sans Arabic via `next/font/google` — downloaded at build time and
+  served from this site (no runtime requests to Google).
+- **Components:** `components/ui/primitives.tsx` (buttons, cards, notices, badges,
+  24px checkbox), `components/shell/` (app shell with skip link, desktop navigation
+  from 1024px and a bottom tab bar below it; public shell).
+- **Languages:** Arabic and English. The locale comes from the `aw_locale` cookie (the
+  language switch), else the browser's `Accept-Language` (Arabic or English), else
+  Arabic. `<html lang dir>` is set per request. Copy lives in `lib/i18n/messages.ts`;
+  fixed server-action messages are translated at display time (`lib/i18n/translate.ts`,
+  with a test that every one has Arabic). **The Arabic is provisional (D-19).** Legal
+  consent text is shown in English until a reviewed translation exists.
+- **Theme:** system / light / dark, stored in the `aw_theme` cookie (device only).
+- **Dates:** shown in Cairo time (`Africa/Cairo`), in the visitor's language.
+
+### Browser tests (Playwright)
+
+`npm run e2e` runs the end-to-end, recovery-security and accessibility suite (axe,
+WCAG 2.2 A/AA rules, 320–1440px, Arabic/English, light/dark) against a local stack with
+a test-only mock auth server. See `frontend/e2e/README.md`. Not part of CI yet.
 
 ## Docker
 

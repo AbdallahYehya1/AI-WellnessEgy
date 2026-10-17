@@ -182,6 +182,17 @@ self-only user data.
 | notes | text | |
 | reviewed_at | timestamp | |
 
+**Prototype implementation (migration `0003`, branch `m5-chat-slice`):** a simpler
+`knowledge_sources` (slug, title, publisher, `source_ref`, `version_label`, `published_on`,
+`content_type`, `language`, `age_bands text[]` ⊆ {child, teen, adult}, `review_status` ∈
+{synthetic, draft, approved, withdrawn}, `reviewed_by`/`reviewed_at` required when approved,
+`expires_at`; unique on slug + version) and `knowledge_chunks` (content ≤ 4000 chars and a
+stored `search_vector` tsvector over the English, Arabic and simple configurations with a GIN
+index). No embeddings: PostgreSQL full-text search comes first, and pgvector is deferred
+until retrieval quality is evaluated. Retrieval returns only `approved` sources (plus
+`synthetic` under the test-only policy) that match the age band and are not expired. The
+separate `knowledge_reviews` table is not implemented yet.
+
 **Rule:** `retrieve_relevant_knowledge()` only queries chunks whose parent document has
 `status = approved`. **Access:** read by `ai` module internally; write/approve restricted to
 admin/reviewer roles.
@@ -238,6 +249,14 @@ table on user request.
 | version | string, unique | |
 | config | jsonb | thresholds/behavior — clinical values pending validation, see `OPEN_DECISIONS.md` |
 | published_at | timestamp | |
+
+**Prototype implementation (migration `0003`):** only `safety_events` exists, holding
+`actor_user_id`, `request_id`, `age_band`, `risk_level`, `outcome`, `final_status`,
+`policy_version`, `reason_code` and `created_at`, and **no message text**. There is no
+`risk_assessments` or `safety_policies` table; the only policy is the code-defined, test-only
+`synthetic-test-v0`. Also added: `chat_rate_events` (user id + timestamp) for the PostgreSQL
+rate limiter; a user's rows older than a day are pruned on each request. No
+`conversations`/`messages` rows are written (D-37).
 
 **Retention:** `safety_events` retained longer than general conversation data by default —
 pending legal confirmation, not assumed. **Access:** restricted, audited access only.

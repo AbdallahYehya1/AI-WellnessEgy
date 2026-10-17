@@ -1,6 +1,6 @@
 # Open Decisions
 
-Last updated: 2026-10-02 (M4 review and M5 entry gate).
+Last updated: 2026-10-15 (M7 integration; D-40 to D-43).
 
 Engineering does not make the decisions below. Some are clinical, legal or
 crisis-procedure calls, and some belong to the founder. Until each one is
@@ -391,17 +391,88 @@ evidence listed exists. Nothing here records an approval that hasn't happened.
 |---|---|---|---|---|
 | G-1 | **D-7 clinical risk framework** | Clinical owner + founder | PENDING | (1) A written risk taxonomy and LOW / MEDIUM / HIGH / UNKNOWN definitions, with signed, dated approval by the named clinical owner, stored in `docs/`. (2) An approved labelled evaluation set, including Egyptian Arabic, Arabizi and mixed-language cases, with an agreed minimum sensitivity target for HIGH (the number is set by the clinical owner, not by engineering). (3) The policy is versioned (`policy_version`) and its changes require re-approval. |
 | G-2 | **D-13 crisis content and resources** | Clinical + legal owners | PENDING | (1) Every resource (service name, contact method, hours, languages) is verified as current by a named reviewer on a recorded date. Engineering supplies **no** numbers. (2) Escalation copy is approved in Arabic and English. (3) A re-verification schedule is set (for example, quarterly) with a named owner. (4) Until approved, the escalation UI shows a loud non-final placeholder, and no real user can reach AI features. |
-| G-3 | **Safety-pipeline invariants** (architectural, engineering-owned) | Security owner | PENDING (design) | (1) The only message path is: authentication → authorisation → consent → safety assessment → safety decision → context → generation → output validation → response. (2) The generation entrypoint's signature requires a safety-decision object, so it can't be called without one. A test proves it. (3) HIGH never reaches the LLM; tests use a provider mock that fails if called. (4) UNKNOWN is treated at least as MEDIUM; there is a test. (5) A classifier or policy **failure, timeout or exception blocks generation** and routes to escalation, **never** to unrestricted generation; there are fault-injection tests for each dependency. (6) A mutation test shows that removing the gate fails the suite. |
+| G-3 | **Safety-pipeline invariants** (architectural, engineering-owned) | Security owner | DESIGN APPROVED by the founder (2026-10-11); **prototype implemented and tested** on `m5-chat-slice` (IMPLEMENTATION_STATUS §M5-P); security-owner review PENDING | (1) The only message path is: authentication → authorisation → consent → safety assessment → safety decision → context → generation → output validation → response. (2) The generation entrypoint's signature requires a safety-decision object, so it can't be called without one. A test proves it. (3) HIGH never reaches the LLM; tests use a provider mock that fails if called. (4) UNKNOWN is treated at least as MEDIUM; there is a test. (5) A classifier or policy **failure, timeout or exception blocks generation** and routes to escalation, **never** to unrestricted generation; there are fault-injection tests for each dependency. (6) A mutation test shows that removing the gate fails the suite. |
 | G-4 | **D-20 Content Security Policy** | Security owner | PENDING | (1) A CSP is sent on every page, with no `unsafe-inline` for scripts, using nonces or hashes as Next.js supports. (2) `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`. (3) `connect-src` is limited to the app, the API and the Supabase project origin. (4) An automated test asserts the header, and a browser run shows zero CSP violations on every route. (5) A decision is recorded on whether auth cookies can be `HttpOnly` with `@supabase/ssr`. |
-| G-5 | **D-21 rate limiting** | Security owner + founder | PENDING | (1) Per-user and per-IP limits on message sending (and on `POST /mood/checkins`), with values agreed by the founder. (2) A 429 response with the standard error body, and the UI explains it. (3) Limiter-store failure behaviour is decided and tested. For message generation it must **fail closed**: no generation without the limiter. (4) Load test evidence that the limits hold. |
-| G-6 | **D-32 notes before the safety layer** | Clinical + legal owners + founder | PENDING (decision); interim server-side rejection **in place** | (1) A recorded decision between options (a), (b) and (c). (2) Interim: server-side rejection implemented and tested (done on `m4-mood-checkin`, not yet merged). (3) If notes are enabled: they pass through the M5 safety assessment before storage or display, and approved "not monitored" copy, if used, is shown. |
+| G-5 | **D-21 rate limiting** | Security owner + founder | PARTIAL: prototype per-user PostgreSQL limiter that fails closed (D-38); limit values, per-IP limits and load tests PENDING | (1) Per-user and per-IP limits on message sending (and on `POST /mood/checkins`), with values agreed by the founder. (2) A 429 response with the standard error body, and the UI explains it. (3) Limiter-store failure behaviour is decided and tested. For message generation it must **fail closed**: no generation without the limiter. (4) Load test evidence that the limits hold. |
+| G-6 | **D-32 notes before the safety layer** | Clinical + legal owners + founder | PENDING (decision); interim server-side rejection **in place** | (1) A recorded decision between options (a), (b) and (c). (2) Interim: server-side rejection implemented and tested (merged to `main` in PR #1, `675b4a3`). (3) If notes are enabled: they pass through the M5 safety assessment before storage or display, and approved "not monitored" copy, if used, is shown. |
 | G-7 | **D-33 note encryption and retention** | Security + legal owners | PENDING | (1) A recorded encryption approach (platform-only, app-level with a named KMS, or `pgcrypto`) with key rotation documented. (2) A retention period set by counsel, a scheduled purge job, and a test showing notes older than N days are removed while scores remain. (3) The same decision is applied to M5 conversation messages (ARCHITECTURE §5 groups them together). |
 | G-8 | **Consent and terms** (D-11, D-24, D-25) | Legal owner | PENDING | (1) Final terms and privacy text, published as a new consent version (which forces re-consent; tested in M3). (2) Whether AI processing needs its own optional consent is decided, and if so modelled with withdrawal (D-25). (3) No `pending_legal_review: true` documents remain current at launch. |
 | G-9 | **Age eligibility** (D-12) | Legal owner | PENDING (wording) | (1) Counsel confirms whether self-attestation suffices and what wording to use. (2) If the attestation must be recorded, the data model is extended through a reviewed migration. |
 | G-10 | **Privacy, residency and deletion** (D-8, D-9, D-10, D-27, D-28) | Legal + security owners | PENDING | (1) A written regulatory position (D-8) and data-residency decision (D-9), with the LLM provider's data handling assessed against it. (2) Retention periods for every sensitive table (D-10). (3) A deletion workflow that covers Supabase `auth.users` deletion (D-27). (4) A staff access model with logged reasons (D-28). |
-| G-11 | **Deployment baseline** | Founder | PENDING | (1) PR #1 merged with CI green on `main`. (2) Migrations applied to Supabase per the runbook, with recorded evidence. (3) A real-Supabase end-to-end run (sign in → consent → mood → dashboard) recorded. (4) Branch protection on `main` requiring the four CI checks. |
+| G-11 | **Deployment baseline** | Founder | PARTIAL: (1) done (PR #1 merged, `main` CI run 38129868214 green); (2)–(4) PENDING, and (4) is blocked by D-35 | (1) PR #1 merged with CI green on `main`. (2) Migrations applied to Supabase per the runbook, with recorded evidence. (3) A real-Supabase end-to-end run (sign in → consent → mood → dashboard) recorded. (4) Branch protection on `main` requiring the four CI checks. |
 
 **The M5 implementation may start only when** G-3 is designed and agreed and G-11 is
-complete. M5 may only be exposed to any user outside the team when **every** item from G-1
+complete. *Update 2026-10-11:* the founder approved the G-3 design and explicitly approved a
+first prototype slice on a separate branch before G-11 is complete, restricted to the fake
+provider, synthetic fixtures, a test-only policy, the adult band only, no message storage
+and no real-user access. M5 may only be exposed to any user outside the team when **every** item from G-1
 to G-11 meets its criteria. Until then, M5 work runs only against mocks, behind the gate,
 with no real-user access.
+
+---
+
+## J. Raised in the M5 chat prototype (2026-10-11)
+
+### D-35. Branch protection on `main` — OPEN (founder; blocks G-11 item 4)
+- The GitHub API returns 403 for branch protection on this private repository: the feature
+  needs a paid plan (GitHub Pro or Team) or a public repository.
+- **Options:** (a) upgrade the plan and require the four CI checks; (b) make the repository
+  public (not recommended before a security review); (c) accept the risk and keep the
+  "merge only after green CI and review" rule as a manual practice.
+- **Current practice:** (c). No GitHub settings were changed.
+
+### D-36. AI provider, data residency and transmission of user messages — OPEN (founder + legal + security; blocks any real provider)
+- The prototype uses only a deterministic fake provider. No message leaves the server.
+- **Needs:** a provider choice; its data-retention, training-use and region terms assessed
+  against D-8/D-9; a decision on whether AI processing needs its own consent (D-25); a DPA.
+- **Blocks:** connecting any real model or sending any user text to an external service.
+
+### D-37. No server-side message storage in the prototype — RESOLVED for the prototype (founder, 2026-10-11)
+- Decided: the browser holds the conversation; the server signs assistant turns (HMAC-SHA256
+  over user id + text) and accepts at most 6 turns back. Every request is re-assessed.
+  Message text is never stored, logged, or written to audit or safety events.
+- **Still open for launch:** whether conversations are stored at all, with which encryption
+  and retention (G-7, D-10). Signed turns don't expire and aren't bound to a session; that's
+  acceptable for a prototype because the whole window is re-assessed each time.
+
+### D-38. PostgreSQL rate limiter — RESOLVED for the prototype (founder, 2026-10-11)
+- Decided: a per-user sliding 60-second window in `app.chat_rate_events`, serialised by a
+  row lock on the user. Any limiter error means no generation (`status = "unavailable"`).
+- **Still open (G-5):** the limit values (the default of 10 per minute is an engineering
+  placeholder), per-IP limits, a limit on `POST /mood/checkins`, and load-test evidence.
+
+### D-39. Remaining npm advisories in development tooling — OPEN (engineering; not launch-blocking unless shipped)
+- After patching `next` (16.4.0) and `source-map-js` (`14cea91`), `npm audit` still reports
+  five high-severity advisories, all in the `eslint-config-next` development chain. They are
+  not in the production bundle. The only automatic fix is a breaking `--force` upgrade.
+- **Proposed:** upgrade when `eslint-config-next` publishes a compatible fix; re-check before
+  launch.
+
+---
+
+## K. Raised during M7 integration (2026-10-15)
+
+### D-40. Production domain publicly reachable with unmerged code — OPEN (founder; blocks any merge to `main` and any release)
+- Verified on 2026-10-14 and again on 2026-10-15 from an unauthenticated client:
+  `https://ai-wellness-egy.vercel.app` returns 200 with no Vercel login and serves
+  PR #3's code (`f7975ec`, GitHub deployment "Production"), with Supabase configured
+  (the proxy's signed-out redirect carries `next=`). Branch and deployment URLs are
+  protected, which matches *Standard Protection*, not *All Deployments*.
+- **Required:** Vercel → Settings → Deployment Protection → **All Deployments + Vercel
+  Authentication**; production branch `main`; Supabase/recovery variables scoped
+  deliberately. Re-probe before any merge (`docs/DEPLOYMENT_RUNBOOK.md` §0).
+- Until resolved, verified work is kept on `m7-integration` and **not merged**.
+
+### D-41. Dates shown in Cairo time — RESOLVED (engineering, 2026-10-15)
+- Dates render on the server; they are shown in `Africa/Cairo` time (previously UTC)
+  for the Egypt-first audience. Revisit if non-Egyptian users are targeted.
+
+### D-42. Browser tests not yet in CI — OPEN (engineering)
+- The Playwright suite runs locally against Docker Compose and a test-only mock auth
+  server. Running it in CI needs a job that starts the stack and a browser. Until then
+  its results are recorded manually in IMPLEMENTATION_STATUS.
+
+### D-43. Arabic UI copy — OPEN (extends D-19 and D-31)
+- All primary journeys now have Arabic copy (provisional Egyptian Arabic, written by
+  engineering). It needs native-speaker and, for consent-adjacent wording, legal
+  review before launch. The consent document itself remains English-only.
