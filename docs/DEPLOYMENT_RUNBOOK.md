@@ -15,7 +15,7 @@ email through Supabase SMTP. Each is configured independently.
 
 | Gate | How to verify |
 |---|---|
-| Production domain is protected until release | From a browser that is **not** signed in to Vercel, every URL (production domain and deployment URLs) shows Vercel's login wall. As of 2026-10-15 the production domain was **public** (see OPEN_DECISIONS D-40). |
+| Production domain is protected until release | From a browser that is **not** signed in to Vercel, every URL (production domain and deployment URLs) shows Vercel's login wall. On 2026-10-15 the production domain was **public**; on 2026-10-17 every probed path (production and previews) redirected to Vercel login (OPEN_DECISIONS D-40). |
 | The deployed commit is the intended one | Vercel → Deployments → Production shows the expected commit SHA from `main`. |
 | Backend reachable from the frontend | Signed-in dashboard loads (not "We can't load your account"). |
 | Database migrated under the runbook | `docs/SUPABASE_MIGRATION_RUNBOOK.md` evidence recorded (D-26). |
@@ -48,24 +48,37 @@ email through Supabase SMTP. Each is configured independently.
 
 ## 2. Render (FastAPI backend) **[approval before creating or deploying]**
 
-- Web Service, root `backend`, Python 3.12 (`PYTHON_VERSION=3.12`).
-- Build: `pip install .` · Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
-- Health check path: `/health`.
-- Environment (Render secrets, never committed):
+`render.yaml` (repository root) is a Blueprint for this service. It is inert until a
+Blueprint is created from it in the Render dashboard, and auto-deploy is off.
+
+- **Runtime:** Docker, using `backend/Dockerfile` (Python 3.12-slim, non-root user,
+  `uvicorn app.main:app` on port 8000) — the same image CI's Docker job builds.
+- **Port:** set `PORT=8000` (Render routes to `$PORT`, default 10000).
+- **Health check path:** `/health` (the image also has a Docker `HEALTHCHECK`).
+- **Plan / region:** a paid instance (`0.5c-512mb`); free instances sleep and the cold
+  start exceeds the frontend's 5-second API timeout. Pick the region closest to the
+  Supabase project (Frankfurt is offered).
+- **Environment** (secrets are `sync: false`, entered in the dashboard, never committed):
 
 | Variable | Notes |
 |---|---|
-| `ENVIRONMENT` | `production` disables `/docs` and refuses the synthetic chat policy. |
+| `PORT` | `8000`. |
+| `ENVIRONMENT` | `production`: API docs off, synthetic chat policy refused. |
 | `LOG_LEVEL` | `INFO`. |
-| `SUPABASE_URL` | Project URL; tokens are verified against its JWKS. |
-| `DATABASE_URL` | Supabase **session pooler** connection string (the direct host is IPv6-only; Render egress is IPv4). |
-| `CHAT_ENABLED` | Leave unset/false for real users. |
+| `SUPABASE_URL` | `https://<project-ref>.supabase.co`; tokens are verified against its JWKS. |
+| `DATABASE_URL` | Supabase **session pooler** string (IPv4; the direct host is IPv6-only). |
+| `CHAT_ENABLED` | `false` for real users. |
 
-- No service-role key is needed. No CORS configuration is needed: only the Next.js
-  server calls the API.
-- Free Render instances sleep; the first request can exceed the frontend's API
-  timeout and users see "We can't load your account". Use a paid instance for users.
-- Migrations are **not** run by the service start command (§4).
+- **Network:** the service is internet-reachable (Render web services always are); every
+  data endpoint requires a verified Supabase token, and `/docs` and `/openapi.json` are
+  off in production. No CORS is configured because only the Next.js server calls it.
+  Outbound access needed: Supabase (JWKS over HTTPS, Postgres pooler).
+- **Verified locally (2026-10-17):** the image run with `ENVIRONMENT=production`,
+  `PORT=8000` → `/health` ok and Docker `healthy`; `/docs` and `/openapi.json` 404;
+  `/me`, `/mood/history`, `/chat/config` 401 without a token; startup log reports auth and
+  database configured.
+- Migrations are **not** run by the service (§4).
+- After it is healthy, set Vercel's `API_BASE_URL` to the Render URL and redeploy.
 
 ## 3. Supabase Auth **[approval for every settings change]**
 

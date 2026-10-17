@@ -14,6 +14,7 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 | **M5 slice: chat prototype** | **IMPLEMENTED — VERIFIED locally and in CI** on branch `m5-chat-slice`, draft PR #2 (§M5-P). **Not merged.** Outstanding: Docker Compose with chat enabled, browser end-to-end, search-quality evaluation, clinical crisis content, clinical/legal review. Adult band only, disabled by default, fake provider, synthetic fixtures, test-only safety policy, no message storage. **Not clinically validated** and not available to real users. |
 | **M6.0: Password recovery** | **IMPLEMENTED — VERIFIED locally (mock auth) and in CI** (PR #3). **Real Supabase recovery: NOT VERIFIED.** See §M6.0 at the end of this file. |
 | **M7: Integration + UI/UX (M6.1–M6.5)** | **ENGINEERING INTEGRATION COMPLETE — VERIFIED locally** on `m7-integration` (§M7). **Not merged:** the production domain is public (D-40). Not verified against the real Supabase project or a deployed backend. |
+| **M8: Controlled deployment preparation** | **PREPARED, NOT DEPLOYED** on `m8-deploy-prep`: `render.yaml` (inert Blueprint, verified locally in production mode), migration runbook §8 (staged `0001`–`0002`, `0003` later), `docs/REAL_AUTH_TEST_PLAN.md`. Production protection verified 2026-10-17. PR #4 merge awaits the founder (merging deploys production). |
 | Later milestones | Not started. |
 
 **Repository:**
