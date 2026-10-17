@@ -13,8 +13,8 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 | **M4: Mood check-in and wellness-data foundation** | **COMPLETE — VERIFIED** and **merged**: PR #1 merged on 2026-10-11 as `675b4a3` after the review fixes (`f2e4c28`; PR CI run 38129738286 green, 4/4). CI on `main` after the merge: run 38129868214, **success**. **Real Supabase migration: PENDING (D-26)**; runbook ready, not executed. **Launch blockers unresolved:** D-32, D-33 and the M5 entry gate (OPEN_DECISIONS §I). |
 | **M5 slice: chat prototype** | **IMPLEMENTED — VERIFIED locally and in CI** on branch `m5-chat-slice`, draft PR #2 (§M5-P). **Not merged.** Outstanding: Docker Compose with chat enabled, browser end-to-end, search-quality evaluation, clinical crisis content, clinical/legal review. Adult band only, disabled by default, fake provider, synthetic fixtures, test-only safety policy, no message storage. **Not clinically validated** and not available to real users. |
 | **M6.0: Password recovery** | **IMPLEMENTED — VERIFIED locally (mock auth) and in CI** (PR #3). **Real Supabase recovery: NOT VERIFIED.** See §M6.0 at the end of this file. |
-| **M7: Integration + UI/UX (M6.1–M6.5)** | **ENGINEERING INTEGRATION COMPLETE — VERIFIED locally** on `m7-integration` (§M7). **Not merged:** the production domain is public (D-40). Not verified against the real Supabase project or a deployed backend. |
-| **M8: Controlled deployment preparation** | **PREPARED, NOT DEPLOYED** on `m8-deploy-prep`: `render.yaml` (inert Blueprint, verified locally in production mode), migration runbook §8 (staged `0001`–`0002`, `0003` later), `docs/REAL_AUTH_TEST_PLAN.md`. Production protection verified 2026-10-17. PR #4 merge awaits the founder (merging deploys production). |
+| **M7: Integration + UI/UX (M6.1–M6.5)** | **MERGED to `main`** by the founder on 2026-10-17 (PR #4, merge commit `4cfa0b9`; CI run 39030158182 green). Vercel production serves `4cfa0b9` behind Vercel Authentication (D-40). The frontend has no backend yet, and nothing has been verified against the real Supabase project. |
+| **M8: Controlled deployment preparation** | **PREPARED, NOT DEPLOYED** on `m8-deploy-prep`: `render.yaml` (inert Blueprint, verified locally in production mode), migration runbook §8 (staged `0001`–`0002`, `0003` later), a read-only pre-migration checker (`python -m app.ops.check_migration_target`), a 3-second DB connect timeout with a standard 503 on database outages, and `docs/REAL_AUTH_TEST_PLAN.md`. Render deploy, migrations and real-auth tests all await founder approval. |
 | Later milestones | Not started. |
 
 **Repository:**
@@ -972,8 +972,11 @@ password change", session lifetime), which are not changed here.
 Branch `m7-integration` from `main` (`675b4a3`): merges PR #2 (`24c3fc3`, chat
 prototype) then PR #3 (`f7975ec`, password recovery) — both merged cleanly — and adds
 the M6 design system, Arabic/English, redesigned journeys and a Playwright suite.
-**Not merged to `main`:** the production domain was verified public (D-40), so the
-merge gate fails.
+At first this was **not merged to `main`**, because the production domain was verified
+public (D-40) and the merge gate failed. **Update 2026-10-17:** once protection was
+verified, the founder merged PR #4 (`4cfa0b9`). `main`'s tree is identical to
+`m7-integration` at `59c3d52`. PRs #2 and #3 are fully contained, and both are marked
+superseded.
 
 ## What changed
 - Semantic light/dark tokens (lavender/sage) with measured AA contrast; IBM Plex Sans

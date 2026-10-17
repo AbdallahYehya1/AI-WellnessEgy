@@ -15,8 +15,8 @@ email through Supabase SMTP. Each is configured independently.
 
 | Gate | How to verify |
 |---|---|
-| Production domain is protected until release | From a browser that is **not** signed in to Vercel, every URL (production domain and deployment URLs) shows Vercel's login wall. On 2026-10-15 the production domain was **public**; on 2026-10-17 every probed path (production and previews) redirected to Vercel login (OPEN_DECISIONS D-40). |
-| The deployed commit is the intended one | Vercel → Deployments → Production shows the expected commit SHA from `main`. |
+| Production domain is protected until release | From a browser that is **not** signed in to Vercel, every URL (production domain and deployment URLs) shows Vercel's login wall. On 2026-10-15 the production domain was **public**; on 2026-10-17 and 2026-10-18 every probed path (production and previews) redirected to Vercel login (OPEN_DECISIONS D-40). |
+| The deployed commit is the intended one | Vercel → Deployments → Production shows the expected commit SHA from `main` (2026-10-17: `4cfa0b9`, the PR #4 merge). |
 | Backend reachable from the frontend | Signed-in dashboard loads (not "We can't load your account"). |
 | Database migrated under the runbook | `docs/SUPABASE_MIGRATION_RUNBOOK.md` evidence recorded (D-26). |
 | Custom SMTP verified | A real reset email arrives at a non-member address. |
@@ -55,9 +55,15 @@ Blueprint is created from it in the Render dashboard, and auto-deploy is off.
   `uvicorn app.main:app` on port 8000) — the same image CI's Docker job builds.
 - **Port:** set `PORT=8000` (Render routes to `$PORT`, default 10000).
 - **Health check path:** `/health` (the image also has a Docker `HEALTHCHECK`).
-- **Plan / region:** a paid instance (`0.5c-512mb`); free instances sleep and the cold
-  start exceeds the frontend's 5-second API timeout. Pick the region closest to the
-  Supabase project (Frankfurt is offered).
+- **Plan / region:** a paid instance (`0.5c-512mb`, formerly "Starter": 0.5 CPU, 512 MB,
+  listed at **US$7/month**, billed by the second, on render.com/pricing and
+  render.com/docs/compute-plans as of 2026-10-18; confirm in the dashboard before
+  creating it). Free instances sleep after inactivity and the cold start exceeds the
+  frontend's 5-second API timeout. The workspace plan, bandwidth and build minutes may add
+  cost. Pick the region closest to the Supabase project (Frankfurt is offered).
+- **Database outages:** connections time out after 3 seconds (`CONNECT_TIMEOUT_SECONDS`)
+  and the API answers `503 service_unavailable` with the standard error body. Only the
+  error type is logged, never the connection string.
 - **Environment** (secrets are `sync: false`, entered in the dashboard, never committed):
 
 | Variable | Notes |

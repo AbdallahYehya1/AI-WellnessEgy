@@ -168,7 +168,18 @@ All three were applied in order on fresh Postgres 17 in CI (Docker job) and loca
 
 1. The approved commit is checked out (`main` after PR #4, CI green); `git status` clean.
 2. §2 target verification passes (host is the Supabase project; `alembic current` empty;
-   no unexpected `app` tables).
+   no unexpected `app` tables). One read-only command covers checks 2 and 4:
+   ```bash
+   cd backend
+   python -m app.ops.check_migration_target
+   ```
+   It opens a `READ ONLY` transaction and prints host, port, database, user (never the
+   password), `alembic_revision`, `app_schema_exists`, `app_tables`,
+   `tables_match_revision`, `supabase_roles_present` and `can_create_schema`. Expected
+   before the first run: `alembic_revision: null`, `app_tables: []`,
+   `supabase_roles_present: ["anon", "authenticated"]`, `can_create_schema: true`, and the
+   host is the project's session pooler. Re-run it after §8.4: `alembic_revision: "0002"`,
+   `tables_match_revision: true`.
 3. Exposed schemas (Settings → API) do not include `app`.
 4. The Supabase roles `anon` and `authenticated` exist (the migrations revoke them):
    ```sql

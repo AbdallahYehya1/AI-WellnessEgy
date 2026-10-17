@@ -14,7 +14,7 @@ account's password, and only during the recovery checks.
 |---|---|---|
 | P1 | Vercel: All Deployments + Vercel Authentication (verified 2026-10-17 from outside: production and previews redirect to Vercel login) | done |
 | P2 | Vercel: production branch `main`; Supabase variables, `SITE_URL`, `API_BASE_URL`, `RECOVERY_MARKER_SECRET` scoped to the environment under test | founder |
-| P3 | PR #4 merged; Vercel production deployment of the merge commit, still protected | founder approval |
+| P3 | PR #4 merged; Vercel production deployment of the merge commit, still protected (merged 2026-10-17 as `4cfa0b9`; production serves it; protection re-probed 2026-10-18) | done |
 | P4 | Render backend running (`render.yaml`), `ENVIRONMENT=production`, healthy | founder approval |
 | P5 | Migrations `0001`–`0002` applied (`docs/SUPABASE_MIGRATION_RUNBOOK.md` §8) | founder approval |
 | P6 | Supabase Site URL / Redirect URLs include `<SITE_URL>/auth/confirm**` | founder approval |
