@@ -1,8 +1,13 @@
-# Runbook: applying migrations 0001 and 0002 to the real Supabase database
+# Runbook: applying migrations 0001–0003 to the real Supabase database
 
-Status: **NOT EXECUTED.** This needs the founder's explicit go-ahead and a server-only
-`DATABASE_URL` (OPEN_DECISIONS D-26). No step below has been run against Supabase. The
-procedure was rehearsed only on local and CI Postgres 17 (§7).
+Status: **NOT EXECUTED.** This needs the founder's explicit go-ahead for the exact
+operation and a server-only `DATABASE_URL` (OPEN_DECISIONS D-26). No step below has been
+run against Supabase. The procedure was rehearsed only on local and CI Postgres 17 (§7).
+
+**Recommended for controlled testing: a staged run.** Apply `0001` and `0002` only
+(`alembic upgrade 0002`): they are all the signed-in app needs while chat is off.
+Apply `0003` (chat tables) later, under its own approval, only if chat testing on the
+real database is approved. See §8.
 
 Revisions to apply:
 - `0001_profile_consent_audit`: creates schema `app`, `users`, `consents` and
@@ -145,3 +150,88 @@ that `app` is **not** listed. Only `public` and `graphql_public` are exposed by 
 | Downgrade to `0001` restores its names; re-upgrade works | pytest | Pass |
 | Model/migration diff is empty; constraint names pinned | pytest | Pass |
 | Migration in CI (Compose `migrate` exit 0) | PR #1 run 36959093412 | Pass |
+
+## 8. M8 additions (2026-10-17): staged run, 0003, backup and smoke tests
+
+### 8.1 Dependencies
+
+| Revision | Depends on | Creates | Needed for |
+|---|---|---|---|
+| `0001` | — | schema `app`; `users`, `consents`, `audit_events`; RLS; Data API role revokes; append-only trigger | sign-in profile, consent |
+| `0002` | `0001` | `mood_checkins`; renames five `0001` CHECK constraints | mood check-in, progress |
+| `0003` | `0002` | `knowledge_sources`, `knowledge_chunks` (tsvector + GIN), `safety_events`, `chat_rate_events`; RLS; revokes | chat prototype only |
+
+All three were applied in order on fresh Postgres 17 in CI (Docker job) and locally
+(2026-10-15, `aiwe-e2e`); downgrade/re-upgrade is covered by the backend tests.
+
+### 8.2 Readiness checks (read-only, before any run)
+
+1. The approved commit is checked out (`main` after PR #4, CI green); `git status` clean.
+2. §2 target verification passes (host is the Supabase project; `alembic current` empty;
+   no unexpected `app` tables). One read-only command covers checks 2 and 4:
+   ```bash
+   cd backend
+   python -m app.ops.check_migration_target
+   ```
+   It opens a `READ ONLY` transaction and prints host, port, database, user (never the
+   password), `alembic_revision`, `app_schema_exists`, `app_tables`,
+   `tables_match_revision`, `supabase_roles_present` and `can_create_schema`. Expected
+   before the first run: `alembic_revision: null`, `app_tables: []`,
+   `supabase_roles_present: ["anon", "authenticated"]`, `can_create_schema: true`, and the
+   host is the project's session pooler. Re-run it after §8.4: `alembic_revision: "0002"`,
+   `tables_match_revision: true`.
+3. Exposed schemas (Settings → API) do not include `app`.
+4. The Supabase roles `anon` and `authenticated` exist (the migrations revoke them):
+   ```sql
+   select rolname from pg_roles where rolname in ('anon', 'authenticated');
+   ```
+5. No other application writes to an `app` schema in this project.
+
+### 8.3 Backup verification
+
+- Dashboard → Database → Backups: note the latest backup time, or the point-in-time
+  recovery window if the plan has it. **Record it before running.**
+- Because `app` does not exist yet, this run only adds objects; `auth.users` and other
+  Supabase schemas are not touched. Recovery from a failed first run is therefore
+  "nothing to restore" (§5), but take note of the backup anyway.
+- Optional schema snapshot without exposing the password (needs Docker; reads the URL from
+  `backend/.env` and prints nothing secret):
+  ```bash
+  cd backend
+  docker run --rm --env-file .env postgres:17-alpine sh -c 'pg_dump "$DATABASE_URL" --schema-only --no-owner' > ../schema-before.sql
+  ```
+  Keep `schema-before.sql` out of git (it contains no data, but stay tidy).
+
+### 8.4 Execution (only after explicit approval of this exact command)
+
+```bash
+cd backend
+alembic upgrade 0002     # staged run for controlled testing (recommended)
+# later, separately approved:
+# alembic upgrade 0003
+alembic current          # expect: 0002 (or 0003 (head) after the second step)
+```
+
+Expected output for the staged run: the two "Running upgrade" lines in §3, nothing else.
+
+### 8.5 Rollback and recovery
+
+- A failed run rolls back in its transaction (§5).
+- **Before real users exist**, a clean undo is `alembic downgrade base` (drops every `app`
+  table; leaves an empty `app` schema). After real users exist, never downgrade `0001`:
+  restore from backup instead.
+- Undoing only `0003`: `alembic downgrade 0002` drops the chat tables (they hold only
+  synthetic knowledge, safety metadata and rate-limit rows; no message text).
+
+### 8.6 Post-migration smoke tests
+
+1. §4 SQL checks (tables, RLS, Data API roles, constraint names, trigger). After `0003`,
+   query 1 also lists the four chat tables and query 2 shows RLS on them.
+2. API (Render, `ENVIRONMENT=production`): `GET /health` → `{"status":"ok"}`;
+   `GET /me` without a token → `401`; `GET /docs` → `404`.
+3. Signed-in journey on the protected Vercel deployment: sign in → onboarding → consent →
+   check-in → dashboard shows the check-in → Settings shows the consent version.
+4. SQL: one row in `app.users` for the tester, consent and mood rows owned by it, audit
+   events with metadata only.
+5. Record operator, time, commit, `alembic current` and results in
+   `docs/IMPLEMENTATION_STATUS.md`.

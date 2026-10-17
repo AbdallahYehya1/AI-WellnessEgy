@@ -452,7 +452,14 @@ with no real-user access.
 
 ## K. Raised during M7 integration (2026-10-15)
 
-### D-40. Production domain publicly reachable with unmerged code — OPEN (founder; blocks any merge to `main` and any release)
+### D-40. Production domain publicly reachable with unmerged code — RESOLVED 2026-10-17 (the founder checked the production branch, protection and variable scopes in the dashboard before merging; engineering cannot see the scopes)
+- 2026-10-17: the founder merged PR #4 (merge commit `4cfa0b9`). CI on `main` passed
+  (run 39030158182, 4/4 jobs). Vercel's GitHub deployment "Production" is `4cfa0b9`, so
+  production tracks `main`. Re-probed 2026-10-18 from an unauthenticated client: `/`,
+  `/sign-in`, `/chat`, `/dashboard` still 302 to Vercel login.
+- 2026-10-17: from an unauthenticated client, `/`, `/sign-in`, `/forgot-password`,
+  `/chat` and `/dashboard` on the production domain all redirect (302) to Vercel's login
+  (`vercel.com/sso-api`). Production still serves `f7975ec` until a `main` deployment.
 - Verified on 2026-10-14 and again on 2026-10-15 from an unauthenticated client:
   `https://ai-wellness-egy.vercel.app` returns 200 with no Vercel login and serves
   PR #3's code (`f7975ec`, GitHub deployment "Production"), with Supabase configured

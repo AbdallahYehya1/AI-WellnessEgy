@@ -20,6 +20,7 @@ from app.common.errors import ApiError
 from app.core.config import Settings
 
 SCHEMA = "app"
+CONNECT_TIMEOUT_SECONDS = 3
 
 NAMING_CONVENTION = {
     "ix": "ix_%(table_name)s_%(column_0_N_name)s",
@@ -56,7 +57,12 @@ def engine_for(database_url: str) -> Engine:
                 url,
                 pool_pre_ping=True,
                 # Supabase's transaction pooler does not support prepared statements.
-                connect_args={"prepare_threshold": None},
+                # Fail fast when the database is unreachable (well inside the
+                # frontend's 5-second API timeout) instead of waiting on TCP.
+                connect_args={
+                    "prepare_threshold": None,
+                    "connect_timeout": CONNECT_TIMEOUT_SECONDS,
+                },
             )
             _ENGINES[url] = engine
         return engine
