@@ -159,15 +159,11 @@ def test_repeated_submission_is_idempotent(db_engine: Engine) -> None:
 
 
 def test_concurrent_duplicate_submissions_store_one_record(db_engine: Engine) -> None:
-    # Apps are built up front: building them in parallel races in pydantic's
-    # schema cache, which is not what this test is about (the database is).
-    clients = [api_client() for _ in range(6)]
-
-    def submit(client: TestClient) -> int:
-        return int(accept(client).status_code)
+    def submit(_: int) -> int:
+        return int(accept(api_client()).status_code)
 
     with ThreadPoolExecutor(max_workers=6) as pool:
-        codes = sorted(pool.map(submit, clients))
+        codes = sorted(pool.map(submit, range(6)))
     assert codes == [200, 200, 200, 200, 200, 201]
     assert len(consent_rows(db_engine)) == 1
 

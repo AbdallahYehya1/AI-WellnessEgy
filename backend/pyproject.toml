@@ -66,4 +66,11 @@ warn_required_dynamic_aliases = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--strict-markers --cov=app --cov-report=term-missing"
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # FastAPI (>= 0.143 with pydantic >= 2.12) silences this warning inside
+    # warnings.catch_warnings(), which is not thread-safe before Python 3.14:
+    # concurrent TestClient threads intermittently let it escape. Ignore only
+    # this category, as FastAPI intends.
+    "ignore::pydantic.warnings.UnsupportedFieldAttributeWarning",
+]
