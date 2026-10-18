@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-10-15
+Last updated: 2026-10-18
 
 Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**, **BLOCKED**,
 **DEFERRED**.
@@ -14,7 +14,7 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 | **M5 slice: chat prototype** | **IMPLEMENTED — VERIFIED locally and in CI** on branch `m5-chat-slice`, draft PR #2 (§M5-P). **Not merged.** Outstanding: Docker Compose with chat enabled, browser end-to-end, search-quality evaluation, clinical crisis content, clinical/legal review. Adult band only, disabled by default, fake provider, synthetic fixtures, test-only safety policy, no message storage. **Not clinically validated** and not available to real users. |
 | **M6.0: Password recovery** | **IMPLEMENTED — VERIFIED locally (mock auth) and in CI** (PR #3). **Real Supabase recovery: NOT VERIFIED.** See §M6.0 at the end of this file. |
 | **M7: Integration + UI/UX (M6.1–M6.5)** | **MERGED to `main`** by the founder on 2026-10-17 (PR #4, merge commit `4cfa0b9`; CI run 39030158182 green). Vercel production serves `4cfa0b9` behind Vercel Authentication (D-40). The frontend has no backend yet, and nothing has been verified against the real Supabase project. |
-| **M8: Controlled deployment preparation** | **PREPARED, NOT DEPLOYED** on `m8-deploy-prep`: `render.yaml` (inert Blueprint, verified locally in production mode), migration runbook §8 (staged `0001`–`0002`, `0003` later), a read-only pre-migration checker (`python -m app.ops.check_migration_target`), a 3-second DB connect timeout with a standard 503 on database outages, and `docs/REAL_AUTH_TEST_PLAN.md`. Render deploy, migrations and real-auth tests all await founder approval. |
+| **M8: Controlled deployment** | **ENGINEERING COMPLETE — VERIFIED locally and in CI; NOT YET OPERATIONAL.** PR #5 merged 2026-10-18 as `3dd5941` (CI run 39076368526 green; Vercel production serves it, still protected). The real database has not been inspected (no `DATABASE_URL` provided), migrations aren't applied, the Render service isn't created and real-auth tests haven't run. See §M8. |
 | Later milestones | Not started. |
 
 **Repository:**
@@ -1021,3 +1021,44 @@ in name); crowded mobile header; 768px overflow (desktop navigation moved to ≥
 - Manual screen-reader testing (automated axe covers only part of WCAG).
 - Search-quality evaluation; clinical crisis content (D-13); clinical/legal review.
 - Browser tests are not in CI (D-42). Arabic copy is provisional (D-43).
+
+---
+
+# M8: Controlled deployment (2026-10-17 → 2026-10-18)
+
+## Three separate states
+
+| State | Status |
+|---|---|
+| **Engineering complete** | **Yes.** Merged to `main` (`3dd5941`, PR #5). Render Blueprint, DB connect timeout, 503 on outages, read-only migration checker, runbooks. |
+| **Operational for controlled testing** | **No.** Needs: the real DB inspection → migration `0002` → Render service → `API_BASE_URL` in Vercel → real-auth checks A1–A12. Each step needs founder approval or action. |
+| **Ready for public release** | **No.** Also needs custom SMTP, abuse protection, Arabic/legal review, clinical/legal/security gates (OPEN_DECISIONS §I), and browser tests in CI. |
+
+## Verified (2026-10-18)
+
+| Item | Evidence |
+|---|---|
+| PR #5 merged through GitHub after checks (6/6 green, clean, no secrets, only expected files) | merge commit `3dd5941` |
+| CI on `main` | run 39076368526: Backend, Frontend, Docker, Repository guards: success |
+| Vercel production | GitHub deployment "Production" `3dd5941`: success |
+| Protection | unauthenticated `/`, `/sign-in`, `/chat`, `/dashboard`, `/reset-password`, `/api/health` and the deployment URL: 302 to Vercel login |
+| Real project's token keys | public JWKS: one EC key, **ES256**; the backend needs only `SUPABASE_URL` |
+| Backend image (production mode) | uid 10001, Python 3.12.15, healthy; docs 404; protected endpoints 401; forged tokens 401 (`unknown_key`, `unsupported_algorithm`); logs carry no tokens or personal data |
+| Migration rehearsal | `supabase/postgres:17.11.0.003` (non-superuser `postgres`, real `anon`/`authenticated` roles): `0002` applied; RLS on; Data API roles denied; downgrade/re-upgrade; a forced failure rolled back fully. **Not the real project.** (SUPABASE_MIGRATION_RUNBOOK §8.8) |
+| Checker safety | it refuses non-session-pooler or other-project targets before connecting; the read-only guard is mutation-tested (removing `SET TRANSACTION READ ONLY` fails 4 tests); passwords are redacted from errors |
+| Backend suite | ruff, format, mypy (79 files), **359 passed**, 99% coverage |
+| Frontend suite | lint, typecheck, **309 passed** (19 files), production build |
+| Browser suite (local, mock auth) | **20 passed** (Edge; production build + Compose API) |
+
+## Not done (needs the founder)
+
+| Step | Blocker |
+|---|---|
+| Real database inspection | `DATABASE_URL` is not in `backend/.env` (SUPABASE_MIGRATION_RUNBOOK §8.7) |
+| Migration `0002` | approval after the inspection; backup time to be recorded |
+| Render service | approval of the dashboard price (about US$7/month on the Hobby workspace) and entry of `SUPABASE_URL` and `DATABASE_URL` |
+| Vercel `API_BASE_URL` + redeploy | needs the Render URL |
+| Real-auth checks A1–A12 | needs all of the above, plus the Supabase redirect URL check |
+
+**Real Supabase verification: NOT RUN.** No claim of real-Supabase behaviour rests on
+the mock tests above.

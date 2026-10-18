@@ -168,18 +168,51 @@ All three were applied in order on fresh Postgres 17 in CI (Docker job) and loca
 
 1. The approved commit is checked out (`main` after PR #4, CI green); `git status` clean.
 2. §2 target verification passes (host is the Supabase project; `alembic current` empty;
-   no unexpected `app` tables). One read-only command covers checks 2 and 4:
+   no unexpected `app` tables). One read-only command covers checks 2 and 4. Enter the
+   connection string first as described in §8.7.
    ```bash
    cd backend
-   python -m app.ops.check_migration_target
+   python -m app.ops.check_migration_target --target-only   # parses only; no connection
+   python -m app.ops.check_migration_target                 # read-only inspection
    ```
-   It opens a `READ ONLY` transaction and prints host, port, database, user (never the
-   password), `alembic_revision`, `app_schema_exists`, `app_tables`,
-   `tables_match_revision`, `supabase_roles_present` and `can_create_schema`. Expected
-   before the first run: `alembic_revision: null`, `app_tables: []`,
-   `supabase_roles_present: ["anon", "authenticated"]`, `can_create_schema: true`, and the
-   host is the project's session pooler. Re-run it after §8.4: `alembic_revision: "0002"`,
-   `tables_match_revision: true`.
+   **Before connecting**, the checker parses `DATABASE_URL` and refuses to connect
+   (exit code 3) unless:
+   - the host is `*.pooler.supabase.com`;
+   - the port is `5432` (the session pooler);
+   - the user `postgres.<ref>` matches the project in `SUPABASE_URL`.
+
+   **When connecting**, it:
+   - sets the transaction `READ ONLY` and stops unless the server confirms it;
+   - runs only `SELECT` statements, then rolls back;
+   - never prints the password, and redacts it from connection errors.
+
+   It reports row counts only, never row contents. Expected values before the first run:
+
+   | Field | Expected |
+   |---|---|
+   | `target.connection_mode` | `session_pooler` |
+   | `target.project_ref` | the project in `SUPABASE_URL` |
+   | `state` | `fresh`, or `fresh_empty_app_schema` after an earlier failed run |
+   | `alembic_revision` | `null` |
+   | `app_tables` | `[]` |
+   | `public_alembic_version_exists` | `false` |
+   | `supabase_roles_present` | `["anon", "authenticated"]` |
+   | `can_create_schema` | `true` |
+
+   `auth_users_count` is the number of existing Supabase Auth accounts. The migration
+   doesn't touch them, and each one gets its app profile the first time it signs in.
+
+   After §8.4, expect:
+
+   | Field | Expected |
+   |---|---|
+   | `state` | `at_revision_0002` |
+   | `tables_match_revision` | `true` |
+   | `rls_enabled` | `true` for all four tables |
+   | `data_api_roles_with_app_usage` | `[]` |
+
+   Anything else (`inconsistent`, a `public.alembic_version` table, an existing `app`
+   schema with tables): **stop** and review before migrating.
 3. Exposed schemas (Settings → API) do not include `app`.
 4. The Supabase roles `anon` and `authenticated` exist (the migrations revoke them):
    ```sql
@@ -191,6 +224,21 @@ All three were applied in order on fresh Postgres 17 in CI (Docker job) and loca
 
 - Dashboard → Database → Backups: note the latest backup time, or the point-in-time
   recovery window if the plan has it. **Record it before running.**
+- **Free plan: there is no downloadable backup.** Supabase's daily backups start on
+  Pro (7 days). Supabase advises Free projects to export their own. Before the first
+  migration, take a full logical dump yourself (needs Docker; reads the URL from
+  `backend/.env`, so it never appears on the command line):
+  ```bash
+  cd backend
+  mkdir -p ~/aiwe-backups
+  docker run --rm --env-file .env postgres:17-alpine \
+    sh -c 'pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --schema=public --schema=auth --schema=storage' \
+    > ~/aiwe-backups/before-0002.dump
+  ```
+  The dump holds Supabase Auth accounts (emails, password hashes). Keep it **outside the
+  repository**, don't upload it, and delete it once it's no longer needed. It counts as
+  *usable* only after a test restore into a throwaway local `supabase/postgres` container
+  succeeds and its row counts match the checker's `auth_users_count`.
 - Because `app` does not exist yet, this run only adds objects; `auth.users` and other
   Supabase schemas are not touched. Recovery from a failed first run is therefore
   "nothing to restore" (§5), but take note of the backup anyway.
@@ -216,7 +264,11 @@ Expected output for the staged run: the two "Running upgrade" lines in §3, noth
 
 ### 8.5 Rollback and recovery
 
-- A failed run rolls back in its transaction (§5).
+- `alembic upgrade 0002` applies `0001` and `0002` in **one** transaction, so a failure
+  anywhere rolls back both. The exception is `migrations/env.py`, which first runs
+  `CREATE SCHEMA IF NOT EXISTS app` and commits it on its own. A failed first run
+  therefore leaves an empty `app` schema, and the checker reports
+  `fresh_empty_app_schema`. Rerunning is safe.
 - **Before real users exist**, a clean undo is `alembic downgrade base` (drops every `app`
   table; leaves an empty `app` schema). After real users exist, never downgrade `0001`:
   restore from backup instead.
@@ -235,3 +287,37 @@ Expected output for the staged run: the two "Running upgrade" lines in §3, noth
    events with metadata only.
 5. Record operator, time, commit, `alembic current` and results in
    `docs/IMPLEMENTATION_STATUS.md`.
+
+### 8.7 Entering `DATABASE_URL` safely (founder)
+
+1. Supabase dashboard → the project (`xchigpviedftrkxldclk`) → **Connect**. Under
+   **Session pooler**, copy the URI. It has the form
+   `postgresql://postgres.<ref>:[YOUR-PASSWORD]@aws-<n>-<region>.pooler.supabase.com:5432/postgres`.
+   Don't use the direct connection (IPv6-only) or the transaction pooler (port 6543).
+2. Open `backend/.env` in an editor (it is git-ignored) and add one line:
+   `DATABASE_URL=<that URI with the real database password>`. Replace `[YOUR-PASSWORD]`
+   **including the square brackets**; a password left wrapped in brackets fails with
+   `password authentication failed` (seen on 2026-10-18). If the password contains
+   `@ : / ? # %`, URL-encode it. Repeated failed logins can get your IP temporarily
+   banned by the pooler, so fix the line before trying again. Make sure `SUPABASE_URL=https://<ref>.supabase.co` is also
+   set; the checker compares the two.
+3. Never paste the URI into chat, a terminal command line, a ticket or a screenshot.
+4. Run `python -m app.ops.check_migration_target --target-only` and confirm the host,
+   `project_ref` and `session_pooler`. Then run it without the flag.
+5. Remove the line from `backend/.env` once the migration work is finished, unless local
+   work against the real database is intended.
+
+### 8.8 Rehearsal on Supabase's Postgres image (2026-10-18, local, throwaway)
+
+This is not the real project. `supabase/postgres:17.11.0.003` (Postgres 17.11) has the
+`anon` and `authenticated` roles, and its `postgres` role is not a superuser, as on real
+Supabase.
+
+| Step | Result |
+|---|---|
+| Checker before | `fresh`; roles present; `can_create_schema: true` |
+| `alembic upgrade 0002` | `at_revision_0002`; 4 tables; RLS on for all 4 |
+| `anon` / `authenticated` selecting `app.users`, `app.mood_checkins` | `InsufficientPrivilege` (denied) |
+| `alembic downgrade base` | `fresh_empty_app_schema` |
+| Re-upgrade | `at_revision_0002` |
+| Forced failure in `0002` (a pre-existing table) | `DuplicateTable`; `0001`'s tables rolled back too |

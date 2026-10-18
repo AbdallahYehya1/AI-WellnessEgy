@@ -1,6 +1,6 @@
 # Real authentication test plan (Supabase, controlled testing)
 
-Status: **NOT RUN.** Every check below needs the real Supabase project, the protected
+Status: **NOT RUN** (as of 2026-10-18: P4 Render, P5 migrations and P6 redirect URLs are still outstanding; see IMPLEMENTATION_STATUS §M8). Every check below needs the real Supabase project, the protected
 Vercel deployment, the Render backend and the founder (inbox owner). Automated tests use
 a mock auth server and do **not** count as these checks.
 
