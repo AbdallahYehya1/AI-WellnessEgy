@@ -1072,7 +1072,8 @@ the mock tests above.
 
 | Environment | What ran | Result |
 |---|---|---|
-| **Local Postgres** (testcontainers, CI) | backend suite incl. 22 `app_backend` tests, TLS enforcement, pool-exhaustion 503 | see "Regression" |
+| **Local Postgres** (testcontainers, CI) | backend suite incl. 22 `app_backend` tests, TLS enforcement, pool-exhaustion 503 | **391 passed**, 99% coverage; ruff, mypy clean |
+| **Local mocks** (Compose API + Postgres 17, mock auth, production frontend build) | frontend lint, typecheck, unit tests; Playwright journeys | **309 passed**; **20/20 passed** |
 | **Local Supabase image** (`supabase/postgres:17.11.0.003`, throwaway, TLS enabled) | `0002` migrate; `apply_role` as non-superuser `postgres` (supautils allowed it); `verify_role` over TLS: `problems: []` | pass |
 | **Local production image + mock auth** (same Supabase image, `ENVIRONMENT=production`, `CHAT_ENABLED=false`, as `app_backend` over TLS) | 15 API checks (see below); outage: DB stopped gives 503 in 0.01 s; DB restarted gives 200 with no backend restart; logs: 0 tokens, emails, passwords, names or connection details | 15/15 pass |
 | **Real Supabase** (read-only) | role and TLS facts: `postgres` CREATEROLE+BYPASSRLS; scram-sha-256; `pgbouncer.get_auth` present; TLS in use with `sslmode=require`; `max_connections` 60; `PUBLIC` reaches no table or SECURITY DEFINER function; `app_backend` absent | facts recorded; **no change made** |
