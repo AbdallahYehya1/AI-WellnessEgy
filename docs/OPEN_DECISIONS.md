@@ -488,7 +488,7 @@ with no real-user access.
 
 ## L. Raised during M8 controlled deployment (2026-10-18)
 
-### D-44. First migration of the real Supabase database — READY, awaiting founder approval (2026-10-18)
+### D-44. First migration of the real Supabase database — DONE 2026-10-18 (`0002` applied with founder approval; `0003` deferred)
 - Target: project `xchigpviedftrkxldclk`, through the session pooler. Command:
   `cd backend && alembic upgrade 0002`. `0003` stays deferred.
 - Preconditions:
