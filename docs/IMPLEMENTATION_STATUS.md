@@ -14,7 +14,7 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 | **M5 slice: chat prototype** | **IMPLEMENTED — VERIFIED locally and in CI** on branch `m5-chat-slice`, draft PR #2 (§M5-P). **Not merged.** Outstanding: Docker Compose with chat enabled, browser end-to-end, search-quality evaluation, clinical crisis content, clinical/legal review. Adult band only, disabled by default, fake provider, synthetic fixtures, test-only safety policy, no message storage. **Not clinically validated** and not available to real users. |
 | **M6.0: Password recovery** | **IMPLEMENTED — VERIFIED locally (mock auth) and in CI** (PR #3). **Real Supabase recovery: NOT VERIFIED.** See §M6.0 at the end of this file. |
 | **M7: Integration + UI/UX (M6.1–M6.5)** | **MERGED to `main`** by the founder on 2026-10-17 (PR #4, merge commit `4cfa0b9`; CI run 39030158182 green). Vercel production serves `4cfa0b9` behind Vercel Authentication (D-40). The frontend has no backend yet, and nothing has been verified against the real Supabase project. |
-| **M8: Controlled deployment** | **ENGINEERING COMPLETE — VERIFIED locally and in CI; NOT YET OPERATIONAL.** PR #5 merged 2026-10-18 as `3dd5941` (CI run 39076368526 green; Vercel production serves it, still protected). The real database has not been inspected (no `DATABASE_URL` provided), migrations aren't applied, the Render service isn't created and real-auth tests haven't run. See §M8. |
+| **M8: Controlled deployment** | **ENGINEERING COMPLETE — VERIFIED locally and in CI; NOT YET OPERATIONAL.** PR #5 merged 2026-10-18 as `3dd5941` (CI run 39076368526 green; Vercel production serves it, still protected). The real database was inspected read-only on 2026-10-18: it is `fresh`, and a manual backup was taken and test-restored. Migration `0002` is READY but not applied (awaiting approval), the Render service isn't created and real-auth tests haven't run. See §M8. |
 | Later milestones | Not started. |
 
 **Repository:**
@@ -1054,11 +1054,42 @@ in name); crowded mobile header; 768px overflow (desktop navigation moved to ≥
 
 | Step | Blocker |
 |---|---|
-| Real database inspection | `DATABASE_URL` is not in `backend/.env` (SUPABASE_MIGRATION_RUNBOOK §8.7) |
-| Migration `0002` | approval after the inspection; backup time to be recorded |
+| Real database inspection | **Done 2026-10-18** (see "Real database inspection" below) |
+| Migration `0002` | **READY**; awaiting the founder's explicit approval (D-44) |
 | Render service | approval of the dashboard price (about US$7/month on the Hobby workspace) and entry of `SUPABASE_URL` and `DATABASE_URL` |
 | Vercel `API_BASE_URL` + redeploy | needs the Render URL |
 | Real-auth checks A1–A12 | needs all of the above, plus the Supabase redirect URL check |
+
+## Real database inspection (2026-10-18, read-only)
+
+The founder entered `DATABASE_URL` in `backend/.env`. Every query ran in a `READ ONLY`
+transaction that was rolled back; nothing was written.
+
+| Check | Result |
+|---|---|
+| Target (`--target-only`, no connection) | project `xchigpviedftrkxldclk`; `aws-1-eu-west-1.pooler.supabase.com:5432`; `session_pooler`; matches `SUPABASE_URL` |
+| First full run | `password authentication failed`: the password was still wrapped in the template's `[ ]`. The founder fixed it. |
+| Server / role | Postgres 17.6; `postgres` (not superuser; `CREATEROLE`, `BYPASSRLS`) |
+| State | **`fresh`**: no Alembic revision, no `app` schema, no `public.alembic_version` |
+| Schemas | auth, extensions, graphql, graphql_public, pgbouncer, public, realtime, storage, vault |
+| `public` tables | none |
+| Roles | `anon`, `authenticated` present; `can_create_schema: true` |
+| Existing accounts | `auth.users`: 2. The migration doesn't touch them; each gets one app profile at first sign-in. |
+| Default privileges | Data API grants only for `public`, `storage`, `graphql*`; none global, none for `app` |
+| Event triggers | `pgrst_ddl_watch`/`pgrst_drop_watch` (schema-cache reload) and extension-only triggers; nothing that alters new tables |
+| Timeouts | `statement_timeout` 120 s, `lock_timeout` 0. The migration only creates new objects. |
+| Name conflicts | no `forbid_audit_change` function anywhere |
+| Database size | 11 MB |
+
+**Backup.** The plan's dashboard backups weren't checked. A manual backup was taken
+instead (SUPABASE_MIGRATION_RUNBOOK §8.3):
+- `pg_dump` 17.11 of `public`, `auth` and `storage` in a read-only snapshot: 197,609
+  bytes, no errors.
+- Kept outside the repository at `~/aiwe-backups/before-0002-20261018T1421Z.dump`.
+- **Test restore** into a throwaway Postgres 17: 35/35 tables with identical row counts.
+  Functions, constraints and indexes match too: 23, 130 and 131 in both.
+- The only restore error was `schema "public" already exists` (expected). The restore
+  container was deleted afterwards.
 
 **Real Supabase verification: NOT RUN.** No claim of real-Supabase behaviour rests on
 the mock tests above.

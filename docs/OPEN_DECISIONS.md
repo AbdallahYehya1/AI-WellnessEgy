@@ -488,15 +488,16 @@ with no real-user access.
 
 ## L. Raised during M8 controlled deployment (2026-10-18)
 
-### D-44. First migration of the real Supabase database — OPEN (founder approval)
+### D-44. First migration of the real Supabase database — READY, awaiting founder approval (2026-10-18)
 - Target: project `xchigpviedftrkxldclk`, through the session pooler. Command:
   `cd backend && alembic upgrade 0002`. `0003` stays deferred.
 - Preconditions:
   - the read-only checker reports `state: fresh` (or `fresh_empty_app_schema`) for the
     right project (SUPABASE_MIGRATION_RUNBOOK §8.2);
   - the backup time is recorded (§8.3).
-- Rehearsed only on a local Supabase Postgres image (§8.8), so the real database's state
-  is still **unknown**.
+- 2026-10-18: both preconditions are met. The read-only check of the real project
+  reports `state: fresh`, and a manual backup was taken and test-restored with identical
+  counts (IMPLEMENTATION_STATUS §M8 "Real database inspection").
 
 ### D-45. Render paid instance — OPEN (founder approval of the displayed price)
 - `0.5c-512mb` is listed at US$7/month, billed per second. The Hobby workspace is US$0,
