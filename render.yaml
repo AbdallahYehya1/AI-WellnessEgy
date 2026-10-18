@@ -17,6 +17,8 @@ services:
     plan: 0.5c-512mb
     # Choose the region closest to the Supabase project's region.
     region: frankfurt
+    # Liveness only: stays 200 during a database outage (API calls then return
+    # 503 and recover on their own), so Render doesn't restart-loop the service.
     healthCheckPath: /health
     autoDeployTrigger: "off"
     envVars:
@@ -28,10 +30,14 @@ services:
         value: production
       - key: LOG_LEVEL
         value: INFO
-      # https://<project-ref>.supabase.co (tokens are verified against its JWKS)
+      # Public project URL; tokens are verified against its JWKS (ES256).
+      # Not a secret. No SUPABASE_JWT_SECRET: HS256 tokens are refused.
       - key: SUPABASE_URL
-        sync: false
-      # Supabase *session pooler* connection string (IPv4). Secret.
+        value: https://xchigpviedftrkxldclk.supabase.co
+      # SECRET. The least-privilege `app_backend` role's session-pooler URL, as
+      # written by `python -m app.ops.backend_role --apply` (includes
+      # sslmode=require). Never the `postgres` owner URL (OPEN_DECISIONS D-46).
+      # Production also forces TLS if sslmode is missing.
       - key: DATABASE_URL
         sync: false
       # Chat stays off for real users.

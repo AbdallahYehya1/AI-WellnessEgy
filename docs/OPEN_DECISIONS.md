@@ -1,6 +1,6 @@
 # Open Decisions
 
-Last updated: 2026-10-18 (M8 controlled deployment; D-44 and D-45).
+Last updated: 2026-10-18 (M8.1 Render preparation; D-44 to D-46).
 
 Engineering does not make the decisions below. Some are clinical, legal or
 crisis-procedure calls, and some belong to the founder. Until each one is
@@ -503,3 +503,38 @@ with no real-user access.
   so expect about US$7/month plus any bandwidth beyond the allowance.
 - Don't create the service before D-44 is done: an unmigrated database makes `/me`
   fail.
+
+### D-46. Least-privilege database role for the internet-facing backend — PROPOSED (founder approval to create it on the real database)
+- **Problem:** the backend would otherwise connect as `postgres`, which owns every `app`
+  object, has `CREATEROLE` and `BYPASSRLS`, and can read `auth.*` (emails, password
+  hashes). A leaked Render `DATABASE_URL` or a backend compromise would expose the
+  whole project.
+- **Proposal:** role `app_backend` (`python -m app.ops.backend_role`):
+  - login with a SCRAM verifier computed locally (the plaintext never reaches the
+    server); `NOINHERIT`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`;
+  - connection limit 15; per-role `statement_timeout` 5 s, `lock_timeout` 3 s,
+    `idle_in_transaction_session_timeout` 15 s;
+  - `USAGE` on schema `app` only;
+  - `users`: SELECT, INSERT, UPDATE. `consents` and `mood_checkins`: SELECT, INSERT.
+    `audit_events`: INSERT, plus SELECT on (`id`, `created_at`) only, which the ORM
+    reads back after inserting;
+  - no DELETE, TRUNCATE or DDL anywhere, and no reachable table outside `app`.
+- **Why BYPASSRLS:** RLS is on with no policies, which denies every role that doesn't
+  bypass it (tested). RLS here guards against Supabase's Data API roles; the backend
+  enforces ownership in code. BYPASSRLS grants nothing by itself, because table
+  privileges still gate every access. The alternative, per-role policies, needs a
+  migration that references a cluster-level role, which CI and dev databases don't
+  have; it isn't safer for this design.
+- **Evidence (local only):**
+  - 22 tests: every non-chat journey runs as the role; 12 out-of-scope operations are
+    denied; idempotent re-apply removes drift; the revision guard works; the
+    plaintext isn't stored.
+  - Rehearsed on `supabase/postgres:17.11.0.003`: role creation is allowed by
+    supautils; the production image ran as the role over TLS (15/15 API checks);
+    database outage and recovery behaved correctly.
+- **Real project facts (read-only, 2026-10-18):** `postgres` has CREATEROLE and
+  BYPASSRLS; `password_encryption = scram-sha-256`; `pgbouncer.get_auth` exists, so
+  the pooler can authenticate custom roles; `PUBLIC` can't reach any table or
+  SECURITY DEFINER function. The pooler login for the role is still unverified until
+  the role exists.
+- **Before migration 0003:** extend `GRANTS` for the chat tables and re-run `--apply`.

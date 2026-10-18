@@ -15,6 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.exc import InterfaceError, OperationalError
+from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 
 from app.core.logging import get_logger
 
@@ -97,9 +98,12 @@ async def _handle_database_unavailable(_: Request, exc: Exception) -> JSONRespon
     Clients get the standard 503 body. Only the exception class is logged: the
     message can contain the host, the SQL or parameter values.
     """
-    if not isinstance(exc, (OperationalError, InterfaceError)):
+    if not isinstance(exc, (OperationalError, InterfaceError, PoolTimeoutError)):
         raise exc
-    logger.error("database_unavailable", extra={"error_type": type(exc.orig or exc).__name__})
+    logger.error(
+        "database_unavailable",
+        extra={"error_type": type(getattr(exc, "orig", None) or exc).__name__},
+    )
     return _error_json(
         503,
         ErrorDetail(
@@ -115,3 +119,4 @@ def register_error_handlers(app: FastAPI) -> None:
     # Connectivity failures only; integrity and programming errors stay 500s.
     app.add_exception_handler(OperationalError, _handle_database_unavailable)
     app.add_exception_handler(InterfaceError, _handle_database_unavailable)
+    app.add_exception_handler(PoolTimeoutError, _handle_database_unavailable)

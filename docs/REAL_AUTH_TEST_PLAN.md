@@ -38,5 +38,24 @@ account's password, and only during the recovery checks.
 | A11 | Logs | Vercel and Render logs contain no passwords, tokens, cookies, emails or message text |
 | A12 | Phone | A1, A4 and A7 repeated on a phone browser |
 
+## Email dependency (until custom SMTP is verified)
+
+Supabase's built-in email reaches only addresses of members of the Supabase organization,
+at about 2 per hour.
+
+| Needs a delivered email | Runs without new email (use an already-confirmed account) |
+|---|---|
+| A1 sign-up confirmation | A3 signed-in visitor on `/sign-up` |
+| A7 password recovery | A4 sign-in, wrong password, sign-out |
+| A8 recovery edge cases (needs a fresh recovery link) | A5 onboarding and consent (first sign-in of an existing account) |
+| A9 session revocation after a reset | A6 frontend to backend: profile, check-in, history, Settings |
+| A12 phone repeat of A1 and A7 | A10 session expiry |
+| | A11 log review |
+| | A2 duplicate sign-up: no email expected; check the response and that no second account exists |
+
+The project already has two confirmed accounts (`auth.users` = 2). If the founder owns
+one of them, it can run the right-hand column before email delivery is solved, without
+creating new accounts.
+
 Record results (pass/fail, date, environment, commit) in `docs/IMPLEMENTATION_STATUS.md`.
 Only after A1–A12 pass may "real Supabase verified" be claimed.

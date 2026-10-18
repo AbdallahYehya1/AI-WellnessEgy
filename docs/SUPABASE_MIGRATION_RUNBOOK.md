@@ -321,3 +321,41 @@ Supabase.
 | `alembic downgrade base` | `fresh_empty_app_schema` |
 | Re-upgrade | `at_revision_0002` |
 | Forced failure in `0002` (a pre-existing table) | `DuplicateTable`; `0001`'s tables rolled back too |
+
+## 9. Backend database role `app_backend` (D-46) [separate approval]
+
+Migrations keep running as `postgres`. The internet-facing backend connects as
+`app_backend`.
+
+```bash
+cd backend
+python -m app.ops.backend_role --print-sql   # review: the exact SQL, verifier redacted
+python -m app.ops.backend_role --apply       # [approval] create/update the role
+python -m app.ops.backend_role --verify      # read-only report, connected as the role
+```
+
+**`--apply`:**
+- Refuses unless the target is this project's session pooler and the database is at
+  `0002`.
+- Generates a 32-byte random password and sends only its SCRAM verifier.
+- Runs everything in one transaction, and errors never echo the SQL.
+- Writes the role's URL, including `sslmode=require`, to
+  `~/aiwe-secrets/render_database_url`. Nothing secret is printed.
+- Copy that URL into Render's `DATABASE_URL`, then delete the file.
+
+**`--verify` expects `problems: []`:**
+- `bypassrls: true`; superuser, createrole and createdb all `false`;
+- `settings` as in D-46;
+- usage of `app`, plus `public` (granted to `PUBLIC` by default, and empty);
+- `reachable_tables_outside_app: []`;
+- table privileges exactly as in D-46.
+
+**Rotate the password:** run `--apply` again (idempotent), update Render, redeploy.
+
+**Remove the role** (stop the Render service first):
+```sql
+DROP OWNED BY app_backend; DROP ROLE app_backend;
+```
+
+**After migration 0003:** extend `GRANTS` in `app/ops/backend_role.py`, change
+`SUPPORTED_REVISION`, and re-run `--apply`.

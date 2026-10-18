@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import Depends, Request
-from sqlalchemy import Engine, MetaData, create_engine
+from sqlalchemy import Engine, MetaData, create_engine, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.common.errors import ApiError
@@ -21,6 +21,9 @@ from app.core.config import Settings
 
 SCHEMA = "app"
 CONNECT_TIMEOUT_SECONDS = 3
+POOL_SIZE = 5
+POOL_MAX_OVERFLOW = 5
+TLS_MODES = frozenset({"require", "verify-ca", "verify-full"})
 
 NAMING_CONVENTION = {
     "ix": "ix_%(table_name)s_%(column_0_N_name)s",
@@ -47,33 +50,48 @@ _ENGINES: dict[str, Engine] = {}
 _ENGINES_LOCK = threading.Lock()
 
 
-def engine_for(database_url: str) -> Engine:
-    """One engine (and connection pool) per database URL per process."""
+def engine_for(database_url: str, *, require_tls: bool = False) -> Engine:
+    """One engine (and connection pool) per database URL per process.
+
+    ``require_tls`` (production) encrypts the connection unless the URL already asks
+    for TLS, so a missing ``sslmode`` can't silently fall back to plaintext.
+    """
     url = sqlalchemy_url(database_url)
+    connect_args: dict[str, object] = {
+        # Supabase's transaction pooler does not support prepared statements.
+        "prepare_threshold": None,
+        # Fail fast when the database is unreachable (well inside the
+        # frontend's 5-second API timeout) instead of waiting on TCP.
+        "connect_timeout": CONNECT_TIMEOUT_SECONDS,
+    }
+    if require_tls and make_url(url).query.get("sslmode") not in TLS_MODES:
+        connect_args["sslmode"] = "require"
     with _ENGINES_LOCK:
-        engine = _ENGINES.get(url)
+        key = f"{url}#tls" if "sslmode" in connect_args else url
+        engine = _ENGINES.get(key)
         if engine is None:
             engine = create_engine(
                 url,
                 pool_pre_ping=True,
-                # Supabase's transaction pooler does not support prepared statements.
-                # Fail fast when the database is unreachable (well inside the
-                # frontend's 5-second API timeout) instead of waiting on TCP.
-                connect_args={
-                    "prepare_threshold": None,
-                    "connect_timeout": CONNECT_TIMEOUT_SECONDS,
-                },
+                # Small and bounded: Supabase allows 60 connections and the backend
+                # role is limited to 15. Waiting for a free connection gives up
+                # quickly (503) instead of SQLAlchemy's default 30 seconds.
+                pool_size=POOL_SIZE,
+                max_overflow=POOL_MAX_OVERFLOW,
+                pool_timeout=CONNECT_TIMEOUT_SECONDS,
+                connect_args=connect_args,
             )
-            _ENGINES[url] = engine
+            _ENGINES[key] = engine
         return engine
 
 
 def session_factory_for(settings: Settings) -> sessionmaker[Session] | None:
     if settings.database_url is None:
         return None
-    return sessionmaker(
-        engine_for(settings.database_url.get_secret_value()), expire_on_commit=False
+    engine = engine_for(
+        settings.database_url.get_secret_value(), require_tls=settings.is_production
     )
+    return sessionmaker(engine, expire_on_commit=False)
 
 
 def get_db_session(request: Request) -> Iterator[Session]:

@@ -78,8 +78,8 @@ Blueprint is created from it in the Render dashboard, and auto-deploy is off.
 | `PORT` | `8000`. |
 | `ENVIRONMENT` | `production`: API docs off, synthetic chat policy refused. |
 | `LOG_LEVEL` | `INFO`. |
-| `SUPABASE_URL` | `https://<project-ref>.supabase.co`; tokens are verified against its JWKS. |
-| `DATABASE_URL` | Supabase **session pooler** string (IPv4; the direct host is IPv6-only). |
+| `SUPABASE_URL` | `https://xchigpviedftrkxldclk.supabase.co` (set in `render.yaml`; public). Tokens are verified against its JWKS. |
+| `DATABASE_URL` | **Secret.** The `app_backend` role's session-pooler URL from `python -m app.ops.backend_role --apply` (SUPABASE_MIGRATION_RUNBOOK §9; includes `sslmode=require`). **Never the `postgres` owner URL** (D-46). |
 | `CHAT_ENABLED` | `false` for real users. |
 
 - **Network:** the service is internet-reachable (Render web services always are); every
@@ -103,8 +103,43 @@ Blueprint is created from it in the Render dashboard, and auto-deploy is off.
 - **Rollback:** Render → the service → Events → *Rollback* to the previous deploy, or
   *Suspend* the service. The kill switch is suspending it: the frontend then shows
   "We can't load your account", and no data is touched.
+- **Database connection (production):**
+  - TLS is forced when `sslmode` is missing or weaker. `verify-full` is kept if given.
+  - The pool is 5 connections plus 5 overflow, capped by the role's limit of 15.
+    Supabase allows 60.
+  - A request waits at most 3 s for a free connection, then gets a 503.
+  - Each connection is checked before use, so the backend recovers by itself after a
+    database outage. Verified locally on 2026-10-18.
+- **`/health` is liveness only:** it stays 200 during a database outage, so Render
+  doesn't restart-loop. API calls return 503 until the database is back.
 - Migrations are **not** run by the service (§4).
-- After it is healthy, set Vercel's `API_BASE_URL` to the Render URL and redeploy.
+
+### 2.1 Creating the service (step by step, each gate needs the founder)
+
+1. **[approval D-46]** Create the backend role: SUPABASE_MIGRATION_RUNBOOK §9
+   (`--print-sql`, `--apply`, `--verify`).
+2. **[approval D-45]** Render dashboard → **New → Blueprint** → this repository, branch
+   `main`. Render shows the service from `render.yaml`: `ai-wellness-egypt-api`,
+   Docker, Frankfurt, `0.5c-512mb`. **Read the price Render displays** (listed at
+   US$7/month) and stop if it differs.
+3. When prompted for `DATABASE_URL`, paste the URL from
+   `~/aiwe-secrets/render_database_url`, then delete that file. Enter nothing else.
+4. Deploy. Auto-deploy stays **off** until the first verification passes.
+5. Verify against the `https://<name>.onrender.com` URL:
+   - `/health` returns `{"status":"ok"}`;
+   - `/docs`, `/openapi.json` and `/redoc` return 404;
+   - `/me`, `/mood/history` and `/chat/config` return 401 without a token, and 401 with
+     a forged one;
+   - the logs show `application_startup` with `auth_configured` and
+     `database_configured` true, and no secrets.
+6. **[approval]** Vercel → Settings → Environment Variables: set `API_BASE_URL` to the
+   Render URL (**Production** only, unless Preview testing is intended), then redeploy
+   production. `NEXT_PUBLIC_*` variables don't change.
+7. Run the real-auth checks (`docs/REAL_AUTH_TEST_PLAN.md`).
+
+**Rollback:** Render → *Suspend* (instant kill switch), or roll back to the previous
+deploy. To revoke database access entirely, re-run `--apply` (new password) or drop the
+role (SUPABASE_MIGRATION_RUNBOOK §9).
 
 ## 3. Supabase Auth **[approval for every settings change]**
 
