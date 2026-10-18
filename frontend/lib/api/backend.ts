@@ -80,6 +80,11 @@ async function request<T>(
 ): Promise<ApiResult<T>> {
   const headers: Record<string, string> = {};
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // Server-only: lets this server reach a backend behind Vercel Deployment
+  // Protection ("Protection Bypass for Automation"). Never a NEXT_PUBLIC_ value.
+  // The API still verifies the user's Supabase token on every data endpoint.
+  const bypass = process.env.API_PROTECTION_BYPASS?.trim();
+  if (bypass) headers["x-vercel-protection-bypass"] = bypass;
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   try {
     const response = await fetch(`${apiBaseUrl()}${path}`, {

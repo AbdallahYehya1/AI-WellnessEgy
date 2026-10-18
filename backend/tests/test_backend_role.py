@@ -216,11 +216,12 @@ def test_scram_verifier_matches_postgres(db_engine: Engine, test_database_url: s
             conn.execute(text("DROP ROLE scram_probe"))
 
 
-def test_pooler_url_uses_role_dot_ref_and_requires_tls() -> None:
+def test_pooler_url_uses_role_dot_ref_and_the_transaction_pooler() -> None:
     owner = "postgresql://postgres.abcdefghijklmnopqrst:owner-pw@aws-1-eu-west-1.pooler.supabase.com:5432/postgres"
     url = make_url(role_url(owner, "role-pw", "abcdefghijklmnopqrst"))
     assert url.username == f"{ROLE}.abcdefghijklmnopqrst"
     assert url.password == "role-pw"  # noqa: S105
     assert url.host == "aws-1-eu-west-1.pooler.supabase.com"
-    assert url.query["sslmode"] == "require"
+    assert url.port == 6543  # transaction pooler, for serverless
+    assert "sslmode" not in url.query  # the backend enforces verify-full itself
     assert "owner-pw" not in url.render_as_string(hide_password=False)

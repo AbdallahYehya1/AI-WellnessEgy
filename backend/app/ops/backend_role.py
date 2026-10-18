@@ -36,8 +36,8 @@ from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.engine import make_url
 
 from app.core.config import Settings
-from app.core.db import CONNECT_TIMEOUT_SECONDS, SCHEMA, sqlalchemy_url
-from app.ops.check_migration_target import describe_target
+from app.core.db import CONNECT_TIMEOUT_SECONDS, SCHEMA, sqlalchemy_url, tls_connect_args
+from app.ops.check_migration_target import TRANSACTION_POOLER_PORT, describe_target
 
 ROLE = "app_backend"
 SUPPORTED_REVISION = "0002"
@@ -142,11 +142,16 @@ def apply_role(
 
 
 def role_url(owner_database_url: str, password: str, project_ref: str | None) -> str:
-    """The role's connection string on the same host; pooler users are `<role>.<ref>`."""
+    """The role's connection string on the same host; pooler users are `<role>.<ref>`.
+
+    For Supabase it targets the **transaction pooler** (port 6543), Supabase's
+    recommendation for serverless functions. TLS is not in the URL: the backend
+    always verifies Supabase's certificate and hostname (core.db.tls_connect_args).
+    """
     url = make_url(sqlalchemy_url(owner_database_url))
     user = f"{ROLE}.{project_ref}" if project_ref else ROLE
-    query = {**dict(url.query), "sslmode": "require"} if project_ref else dict(url.query)
-    rendered = url.set(drivername="postgresql", username=user, password=password, query=query)
+    port = TRANSACTION_POOLER_PORT if project_ref else url.port
+    rendered = url.set(drivername="postgresql", username=user, password=password, port=port)
     return rendered.render_as_string(hide_password=False)
 
 
@@ -268,7 +273,11 @@ def verify_role(conn: Connection) -> dict[str, Any]:
 def _engine(url: str) -> Any:
     return create_engine(
         sqlalchemy_url(url),
-        connect_args={"prepare_threshold": None, "connect_timeout": CONNECT_TIMEOUT_SECONDS},
+        connect_args={
+            "prepare_threshold": None,
+            "connect_timeout": CONNECT_TIMEOUT_SECONDS,
+            **tls_connect_args(url),
+        },
     )
 
 

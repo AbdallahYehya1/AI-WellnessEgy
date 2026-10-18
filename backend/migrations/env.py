@@ -15,7 +15,7 @@ import app.mood.models
 import app.safety.models
 import app.users.models  # noqa: F401  (register models on the metadata)
 from app.core.config import Settings
-from app.core.db import SCHEMA, Base, sqlalchemy_url
+from app.core.db import SCHEMA, Base, sqlalchemy_url, tls_connect_args
 
 config = context.config
 if config.config_file_name is not None and config.attributes.get("configure_logger", True):
@@ -38,7 +38,8 @@ def run_migrations_online() -> None:
     engine = create_engine(
         sqlalchemy_url(_database_url()),
         poolclass=pool.NullPool,
-        connect_args={"prepare_threshold": None},
+        # Supabase hosts: certificate- and hostname-verified TLS.
+        connect_args={"prepare_threshold": None, **tls_connect_args(_database_url())},
     )
     with engine.connect() as connection:
         # The version table lives in the app schema, so it must exist first.

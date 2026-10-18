@@ -40,6 +40,20 @@ describe("backend client", () => {
     expect(init?.cache).toBe("no-store");
   });
 
+  it("sends the deployment-protection bypass only when configured", async () => {
+    respond(200, { version: "v1" });
+    await fetchCurrentConsent();
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).not.toHaveProperty("x-vercel-protection-bypass");
+    vi.stubEnv("API_PROTECTION_BYPASS", " bypass-secret ");
+    respond(200, { version: "v1" });
+    await fetchCurrentConsent();
+    expect((fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>)["x-vercel-protection-bypass"]).toBe(
+      "bypass-secret",
+    );
+    vi.unstubAllEnvs();
+    vi.stubEnv("API_BASE_URL", "http://api.test/");
+  });
+
   it("does not send a token for the public current-consent endpoint", async () => {
     respond(200, { version: "v1" });
     await fetchCurrentConsent();
