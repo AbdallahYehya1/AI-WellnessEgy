@@ -224,6 +224,21 @@ All three were applied in order on fresh Postgres 17 in CI (Docker job) and loca
 
 - Dashboard → Database → Backups: note the latest backup time, or the point-in-time
   recovery window if the plan has it. **Record it before running.**
+- **Free plan: there is no downloadable backup.** Supabase's daily backups start on
+  Pro (7 days). Supabase advises Free projects to export their own. Before the first
+  migration, take a full logical dump yourself (needs Docker; reads the URL from
+  `backend/.env`, so it never appears on the command line):
+  ```bash
+  cd backend
+  mkdir -p ~/aiwe-backups
+  docker run --rm --env-file .env postgres:17-alpine \
+    sh -c 'pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --schema=public --schema=auth --schema=storage' \
+    > ~/aiwe-backups/before-0002.dump
+  ```
+  The dump holds Supabase Auth accounts (emails, password hashes). Keep it **outside the
+  repository**, don't upload it, and delete it once it's no longer needed. It counts as
+  *usable* only after a test restore into a throwaway local `supabase/postgres` container
+  succeeds and its row counts match the checker's `auth_users_count`.
 - Because `app` does not exist yet, this run only adds objects; `auth.users` and other
   Supabase schemas are not touched. Recovery from a failed first run is therefore
   "nothing to restore" (§5), but take note of the backup anyway.
@@ -280,8 +295,11 @@ Expected output for the staged run: the two "Running upgrade" lines in §3, noth
    `postgresql://postgres.<ref>:[YOUR-PASSWORD]@aws-<n>-<region>.pooler.supabase.com:5432/postgres`.
    Don't use the direct connection (IPv6-only) or the transaction pooler (port 6543).
 2. Open `backend/.env` in an editor (it is git-ignored) and add one line:
-   `DATABASE_URL=<that URI with the real database password>`. If the password contains
-   `@ : / ? # %`, URL-encode it. Make sure `SUPABASE_URL=https://<ref>.supabase.co` is also
+   `DATABASE_URL=<that URI with the real database password>`. Replace `[YOUR-PASSWORD]`
+   **including the square brackets**; a password left wrapped in brackets fails with
+   `password authentication failed` (seen on 2026-10-18). If the password contains
+   `@ : / ? # %`, URL-encode it. Repeated failed logins can get your IP temporarily
+   banned by the pooler, so fix the line before trying again. Make sure `SUPABASE_URL=https://<ref>.supabase.co` is also
    set; the checker compares the two.
 3. Never paste the URI into chat, a terminal command line, a ticket or a screenshot.
 4. Run `python -m app.ops.check_migration_target --target-only` and confirm the host,
