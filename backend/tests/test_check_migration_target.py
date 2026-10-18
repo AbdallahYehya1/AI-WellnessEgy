@@ -113,6 +113,15 @@ def test_reports_head_revision_rls_and_counts(db_engine: Engine) -> None:
     assert report["rls_enabled"] == dict.fromkeys(report["app_tables"], True)
     assert report["data_api_roles_with_app_usage"] == []
     assert "app" in report["schemas"]
+    assert "users" in report["app_tables"]
+    assert set(report) >= {
+        "host",
+        "port",
+        "database",
+        "user",
+        "supabase_roles_present",
+        "can_create_schema",
+    }
 
 
 def test_reports_a_fresh_database(db_engine: Engine) -> None:
