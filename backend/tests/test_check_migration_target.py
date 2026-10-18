@@ -26,6 +26,14 @@ def test_session_pooler_for_the_same_project_is_accepted() -> None:
     assert PASSWORD not in json.dumps(target)
 
 
+def test_slash_and_colon_in_the_password_parse_cleanly() -> None:
+    url = SESSION_POOLER.replace(f":{PASSWORD}@", f":x/{PASSWORD}:y@")
+    target = describe_target(url, SUPABASE_URL)
+    assert target["connection_mode"] == "session_pooler"
+    assert target["database"] == "postgres"
+    assert PASSWORD not in json.dumps(target)
+
+
 @pytest.mark.parametrize(
     ("database_url", "supabase_url", "problem"),
     [
@@ -46,6 +54,24 @@ def test_wrong_targets_are_refused(
     target = describe_target(database_url, supabase_url)
     assert any(problem in p for p in target["problems"])
     assert PASSWORD not in json.dumps(target)
+
+
+@pytest.mark.parametrize(
+    "database_url",
+    [
+        # unencoded "@": the tail of the password would otherwise land in the host
+        f"postgresql://postgres.{REF}:pa@ss{PASSWORD}@aws-0-eu-central-1.pooler.supabase.com:5432/postgres",
+        SESSION_POOLER.replace(":5432/", ":54x2/"),
+        "not a url",
+    ],
+)
+def test_malformed_urls_print_nothing_and_are_refused(database_url: str) -> None:
+    target = describe_target(database_url, SUPABASE_URL)
+    assert target["connection_mode"] == "unparsable"
+    assert target["host"] is target["user"] is target["database"] is None
+    assert target["problems"]
+    assert PASSWORD not in json.dumps(target)
+    assert "ss" + PASSWORD not in json.dumps(target)
 
 
 def test_refused_target_never_connects(

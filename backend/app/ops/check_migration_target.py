@@ -23,7 +23,7 @@ from urllib.parse import quote
 
 from sqlalchemy import MetaData, Table, create_engine, func, select, text
 from sqlalchemy.engine import Connection, Engine, make_url
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
 from app.core.config import Settings
 from app.core.db import CONNECT_TIMEOUT_SECONDS, SCHEMA, sqlalchemy_url
@@ -48,6 +48,25 @@ POOLER_HOST_SUFFIX = ".pooler.supabase.com"
 SESSION_POOLER_PORT = 5432
 TRANSACTION_POOLER_PORT = 6543
 _PROJECT_URL = re.compile(r"^https://([a-z0-9]{20})\.supabase\.co/?$")
+_HOSTNAME = re.compile(r"^[A-Za-z0-9.-]+$")
+_IDENTIFIER = re.compile(r"^[A-Za-z0-9._-]+$")
+UNPARSABLE = (
+    "DATABASE_URL could not be parsed safely; URL-encode special characters "
+    "(@ : / ? # %) in the password"
+)
+
+
+def _unparsable(supabase_url: str | None) -> dict[str, Any]:
+    return {
+        "host": None,
+        "port": None,
+        "database": None,
+        "user": None,
+        "connection_mode": "unparsable",
+        "project_ref": None,
+        "expected_project_ref": project_ref(supabase_url),
+        "problems": [UNPARSABLE],
+    }
 
 
 def project_ref(supabase_url: str | None) -> str | None:
@@ -57,10 +76,19 @@ def project_ref(supabase_url: str | None) -> str | None:
 
 def describe_target(database_url: str, supabase_url: str | None) -> dict[str, Any]:
     """Parse the target without connecting. ``problems`` empty means safe to connect."""
-    url = make_url(sqlalchemy_url(database_url))
-    host = url.host or ""
-    user = url.username or ""
-    port = url.port or SESSION_POOLER_PORT
+    try:
+        url = make_url(sqlalchemy_url(database_url))
+        host = url.host or ""
+        user = url.username or ""
+        port = url.port or SESSION_POOLER_PORT
+    except (ArgumentError, ValueError):
+        return _unparsable(supabase_url)
+    # An unencoded "@" or "/" in the password shifts part of it into the host,
+    # user or database. Print none of them unless all three look clean.
+    if not (
+        _HOSTNAME.match(host) and _IDENTIFIER.match(user) and _IDENTIFIER.match(url.database or "")
+    ):
+        return _unparsable(supabase_url)
     ref: str | None = None
     if host.endswith(POOLER_HOST_SUFFIX):
         mode = {
