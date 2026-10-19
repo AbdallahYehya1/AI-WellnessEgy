@@ -123,11 +123,15 @@ class Settings(BaseSettings):
         if self.chat_enabled:
             if self.chat_safety_policy is None:
                 raise ValueError("CHAT_ENABLED requires CHAT_SAFETY_POLICY")
-            if not policy_allowed_in(self.chat_safety_policy, self.environment):
+            if not policy_allowed_in(
+                self.chat_safety_policy, self.environment, curated=self.chat_demo_curated
+            ):
                 raise ValueError(
                     "CHAT_SAFETY_POLICY is not approved for this environment; "
                     "chat cannot start (OPEN_DECISIONS D-7)"
                 )
+            if self.chat_demo_curated and not self.chat_demo_allowed_users.strip():
+                raise ValueError("CHAT_DEMO_CURATED requires CHAT_DEMO_ALLOWED_USERS")
             if self.is_deployed and (
                 self.chat_signing_key is None or len(self.chat_signing_key.get_secret_value()) < 32
             ):

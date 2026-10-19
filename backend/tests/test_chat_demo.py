@@ -146,3 +146,94 @@ def test_deployed_chat_runs_only_in_curated_demo_mode() -> None:
     assert runtime.demo_allowed == frozenset({"a@x.org", "b"})
     local = build_chat_runtime(_settings(environment="development"))
     assert local is not None and not local.demo_curated  # free-form only for local development
+
+
+# --- Production-compatible curated policy (no synthetic policy in production) -------
+
+from app.safety.assessor import CuratedPromptAssessor  # noqa: E402
+from app.safety.contracts import RiskLevel  # noqa: E402
+from app.safety.policy import CURATED_DEMO_POLICY, CURATED_DEMO_POLICY_ID  # noqa: E402
+
+FIXTURES = Path(__file__).resolve().parents[1] / "app" / "knowledge" / "fixtures"
+
+
+def _production(**values: Any) -> Settings:
+    base: dict[str, Any] = {
+        "environment": "production",
+        "chat_enabled": True,
+        "chat_safety_policy": CURATED_DEMO_POLICY_ID,
+        "chat_signing_key": SecretStr("k" * 32),
+        "chat_demo_curated": True,
+        "chat_demo_allowed_users": USER_ID,
+    }
+    base.update(values)
+    return Settings(**base)
+
+
+def test_production_runs_the_curated_demo_policy_with_its_own_assessor() -> None:
+    runtime = build_chat_runtime(_production())
+    assert runtime is not None
+    assert runtime.policy.curated_only and not runtime.policy.synthetic
+    assert isinstance(runtime.assessor, CuratedPromptAssessor)
+    assert runtime.demo_curated and runtime.demo_allowed == frozenset({USER_ID.casefold()})
+    assert runtime.retrievable_statuses == ("approved", "draft")  # never synthetic
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"chat_demo_curated": False}, "not approved for this environment"),
+        ({"chat_demo_allowed_users": ""}, "requires CHAT_DEMO_ALLOWED_USERS"),
+        ({"chat_safety_policy": "synthetic-test-v0"}, "not approved for this environment"),
+        ({"chat_signing_key": None}, "CHAT_SIGNING_KEY"),
+    ],
+)
+def test_production_refuses_every_unsafe_combination(
+    overrides: dict[str, Any], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        _production(**overrides)
+
+
+def test_curated_assessor_never_rates_free_text_low() -> None:
+    assessor = CuratedPromptAssessor()
+    approved = DEMO_PROMPTS[1].en
+    assert assessor.assess([approved], "adult").risk_level is RiskLevel.LOW
+    assert (
+        assessor.assess([approved, "Can you give me a short summary?"], "adult").risk_level
+        is RiskLevel.LOW
+    )
+    for window in (
+        ["I feel hopeless"],
+        [approved, "something personal"],
+        ["personal", approved],
+        [],
+    ):
+        assert assessor.assess(window, "adult").risk_level is RiskLevel.UNKNOWN
+
+
+def test_even_without_the_early_check_free_text_never_reaches_the_provider(curated: None) -> None:
+    """Defence in depth: curated policy + its assessor alone also fail closed."""
+    runtime = make_runtime(policy=CURATED_DEMO_POLICY, assessor=CuratedPromptAssessor())
+    client = chat_client(runtime)
+    consent(client)
+    body = send(client, "I want to talk about my problems").json()
+    assert body["status"] == "support" and body["reply"] is None
+    assert runtime.provider.calls == []  # type: ignore[attr-defined]
+
+
+def test_production_demo_end_to_end_cites_real_sources_only(
+    db_engine: Engine, curated: None
+) -> None:
+    with Session(db_engine) as session, session.begin():
+        ingest_directory(session, FIXTURES)  # synthetic fixtures present but excluded
+    runtime = build_chat_runtime(_production())
+    assert runtime is not None
+    client = chat_client(runtime)
+    consent(client)
+    body = send(client, DEMO_PROMPTS[1].en).json()
+    assert body["status"] == "reply"
+    assert all(
+        not c["synthetic"] and c["review_status"] == "draft" for c in body["reply"]["citations"]
+    )
+    assert send(client, "free text").json()["status"] == "out_of_scope"
