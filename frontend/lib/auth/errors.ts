@@ -13,6 +13,11 @@ export const MESSAGES = {
   signUpUnavailable: "Creating new accounts is unavailable right now. Please try again later.",
   signInFailed: "We couldn't sign you in right now. Please try again.",
   signUpFailed: "We couldn't create your account right now. Please try again.",
+  // Supabase's built-in email only reaches the project team's addresses until a
+  // custom SMTP sender exists (OPEN_DECISIONS D-49). Says nothing about whether an
+  // account exists, so it is safe to show.
+  emailNotAuthorized:
+    "During testing, this app can only send email to approved test addresses. Please use your test account's email address.",
   notConfigured: "Sign-in isn't available yet. Please try again later.",
   resetEmailFailed: "We couldn't send the reset email right now. Please try again in a few minutes.",
   samePassword: "Choose a different password from the one you use now.",
@@ -60,6 +65,8 @@ export function signUpErrorOutcome(error: AuthErrorLike): SignUpOutcome {
     case "signup_disabled":
     case "email_provider_disabled":
       return { kind: "error", message: MESSAGES.signUpUnavailable };
+    case "email_address_not_authorized":
+      return { kind: "error", message: MESSAGES.emailNotAuthorized };
     default:
       return { kind: "error", message: MESSAGES.signUpFailed };
   }

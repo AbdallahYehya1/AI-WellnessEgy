@@ -30,6 +30,7 @@ describe("signUpErrorOutcome", () => {
     ["email_address_invalid", MESSAGES.invalidEmail],
     ["signup_disabled", MESSAGES.signUpUnavailable],
     ["over_email_send_rate_limit", MESSAGES.rateLimited],
+    ["email_address_not_authorized", MESSAGES.emailNotAuthorized],
     ["something_new", MESSAGES.signUpFailed],
   ])("maps %s to a safe message", (code, message) => {
     expect(signUpErrorOutcome({ code, status: 400 })).toEqual({ kind: "error", message });
