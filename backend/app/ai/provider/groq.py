@@ -25,6 +25,10 @@ from app.ai.provider.base import GenerationRequest, GenerationResult, ProviderEr
 from app.safety.gate import GenerationPermit
 
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
+# Groq's edge (Cloudflare) answers urllib's default "Python-urllib/3.x" agent with
+# 403 "error code: 1010" before the API sees the request; every production chat
+# failed this way until an explicit agent was sent (2026-10-20).
+USER_AGENT = "ai-wellness-egypt-backend/0.1"
 REQUEST_TIMEOUT_SECONDS = 8.0  # inside PROVIDER_TIMEOUT_SECONDS
 # Room for a short reply plus the low-effort reasoning gpt-oss models spend first.
 MAX_OUTPUT_TOKENS = 1024
@@ -100,6 +104,8 @@ class GroqProvider:
             headers={
                 "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": USER_AGENT,
             },
         )
         try:

@@ -22,11 +22,12 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from app.ai.provider.base import GenerationRequest, Passage, ProviderError
-from app.ai.provider.groq import GroqProvider
+from app.ai.provider.groq import USER_AGENT, GroqProvider
 from app.core.config import Settings
 from app.knowledge.ingest import IngestError, ingest_directory, parse
 from app.main import build_chat_runtime
 from app.safety.gate import GenerationGate
+from tests.conftest import parse_log_lines
 from tests.test_chat import chat_client, consent, make_runtime, send
 
 SOURCES = Path(__file__).resolve().parents[1] / "app" / "knowledge" / "sources"
@@ -158,6 +159,13 @@ class FakeGroq(BaseHTTPRequestHandler):
         length = int(self.headers["Content-Length"])
         FakeGroq.requests.append(json.loads(self.rfile.read(length)))
         FakeGroq.headers_seen.append(dict(self.headers))
+        if self.headers.get("User-Agent", "").startswith("Python-urllib"):
+            # Like Groq's real edge: Cloudflare error 1010 before the API (2026-10-20).
+            self.send_response(403)
+            self.send_header("Content-Length", "17")
+            self.end_headers()
+            self.wfile.write(b"error code: 1010\n")
+            return
         body = json.dumps(
             {"choices": [{"message": {"content": json.dumps(FakeGroq.reply)}}]}
             if FakeGroq.status == 200
@@ -219,6 +227,8 @@ def test_groq_reply_maps_passage_ids_to_chunk_ids(groq_url: str) -> None:
     assert sent["reasoning_effort"] == "low" and sent["include_reasoning"] is False
     assert "[P1] Grounding text." in sent["messages"][1]["content"]
     assert FakeGroq.headers_seen[0]["Authorization"] == "Bearer test-key"
+    assert FakeGroq.headers_seen[0]["User-Agent"] == USER_AGENT  # not Python-urllib (edge 1010)
+    assert FakeGroq.headers_seen[0]["Accept"] == "application/json"
 
 
 def test_groq_request_carries_no_identity_and_bounded_history(groq_url: str) -> None:
@@ -284,13 +294,39 @@ def test_a_model_citing_an_unretrieved_passage_is_refused(groq_url: str, curated
     )
 
 
-def test_groq_quota_exhaustion_is_reported_as_unavailable(groq_url: str, curated: None) -> None:
+def test_groq_quota_exhaustion_is_reported_as_unavailable(
+    groq_url: str, curated: None, capsys: pytest.CaptureFixture[str]
+) -> None:
     FakeGroq.status = 429
     client = chat_client(make_runtime(provider=GroqProvider("k", "m", url=groq_url)))
     consent(client)
+    capsys.readouterr()
     body = send(client, "Can you explain a simple grounding exercise?").json()
     assert body["status"] == "unavailable"
     assert body["reply"] is None
+    out = capsys.readouterr().out
+    failures = [r for r in parse_log_lines(out) if r.get("message") == "chat_generation_failed"]
+    assert failures and failures[0]["category"] == "provider_quota"  # sanitized category
+    assert "grounding" not in out.lower() and "echo" not in out  # no message, no body
+
+
+def test_an_edge_rejection_is_logged_by_category(
+    groq_url: str,
+    curated: None,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.ai.provider.groq.USER_AGENT", "Python-urllib/3.12")
+    client = chat_client(make_runtime(provider=GroqProvider("k", "m", url=groq_url)))
+    consent(client)
+    capsys.readouterr()
+    assert send(client, "What is mindfulness?").json()["status"] == "unavailable"
+    failures = [
+        r
+        for r in parse_log_lines(capsys.readouterr().out)
+        if r.get("message") == "chat_generation_failed"
+    ]
+    assert failures[0]["category"] == "provider_http_403"
 
 
 def test_groq_is_never_built_without_the_recorded_approval() -> None:
