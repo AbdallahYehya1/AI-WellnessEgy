@@ -33,6 +33,12 @@ export async function registerAndConfirm(browser: Browser, user: TestUser): Prom
   const mail = (await outbox()).find((m) => m.to === user.email && m.type !== "recovery");
   expect(mail, "confirmation email in the mock outbox").toBeTruthy();
   await page.goto(mail!.link);
+  // A confirmed link ends its own session and asks for an explicit sign-in.
+  await page.waitForURL("**/sign-in?status=confirmed");
+  await expect(page.getByText("Your email address is confirmed. Sign in to continue.")).toBeVisible();
+  await page.getByLabel("Email").fill(user.email);
+  await page.getByLabel("Password", { exact: true }).fill(user.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("**/onboarding");
   await context.close();
 }
