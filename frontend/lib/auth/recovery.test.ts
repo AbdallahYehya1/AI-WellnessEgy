@@ -129,13 +129,26 @@ describe("recovery marker", () => {
     ["missing", undefined],
     ["blank", "   "],
     ["too short (16 bytes)", randomBytes(16).toString("base64url")],
-    ["not base64url", "this is not a key!"],
+    ["too short in standard base64", randomBytes(16).toString("base64")],
+    ["not base64", "this is not a key!"],
     ["low entropy", Buffer.alloc(32, 7).toString("base64url")],
+    ["low entropy in standard base64", Buffer.alloc(32, 7).toString("base64")],
   ])("fails closed when the secret is %s", (_, value) => {
     vi.stubEnv("RECOVERY_MARKER_SECRET", value as string);
     expect(recoveryConfigured()).toBe(false);
     expect(issueRecoveryMarker(TEST_USER.sub, TEST_SESSION_ID)).toBeNull();
     expect(verifyRecoveryMarker("v1.a.b", SESSION)).toEqual({ ok: false, reason: "unconfigured" });
+  });
+
+  it("accepts a standard-base64 secret (openssl rand -base64 32) with the same key", () => {
+    const bytes = randomBytes(32);
+    vi.stubEnv("RECOVERY_MARKER_SECRET", bytes.toString("base64"));
+    expect(recoveryConfigured()).toBe(true);
+    const marker = issueRecoveryMarker(TEST_USER.sub, TEST_SESSION_ID);
+    expect(marker).not.toBeNull();
+    // The same 32 bytes in base64url verify the same marker: one key, two spellings.
+    vi.stubEnv("RECOVERY_MARKER_SECRET", bytes.toString("base64url"));
+    expect(verifyRecoveryMarker(marker as string, SESSION)).toMatchObject({ ok: true });
   });
 
   it("stops accepting old markers when the secret is rotated", () => {

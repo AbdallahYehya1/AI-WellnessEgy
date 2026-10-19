@@ -371,9 +371,8 @@ def run(argv: list[str] | None = None) -> int:  # pragma: no cover - exercised m
     finally:
         engine.dispose()
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
-        role_url(owner_url, password, target["project_ref"]) + "\n", encoding="utf-8"
-    )
+    # No trailing newline: the whole file is pasted into a dashboard as the value.
+    args.output.write_text(role_url(owner_url, password, target["project_ref"]), encoding="utf-8")
     args.output.chmod(0o600)
     print(f"Role {ROLE} applied. Its connection string is in {args.output} (not printed).")
     return 0

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { PublicShell } from "@/components/shell/public-shell";
-import { Notice, TextLink } from "@/components/ui/primitives";
+import { ButtonLink, Notice } from "@/components/ui/primitives";
 import { getMessages } from "@/lib/i18n/server";
 
 export const metadata: Metadata = { title: "Check your email · AI Wellness Egypt" };
@@ -11,17 +11,19 @@ const COPY = {
     lead: "Confirm your email address to finish creating your account.",
     body: "If this email address can be used for a new account, we've sent it a confirmation link. Open the link on this device and in this browser, then sign in.",
     spam: "Can't find it? Check your spam folder, and allow a few minutes for it to arrive.",
+    existingTitle: "Registered before?",
   },
   ar: {
     lead: "أكّد بريدك الإلكتروني علشان تكمّل إنشاء حسابك.",
     body: "لو البريد ده ينفع لحساب جديد، بعتناله لينك تأكيد. افتح اللينك على نفس الجهاز ونفس المتصفح، وبعدين سجّل الدخول.",
     spam: "مش لاقيه؟ شوف فولدر الـ spam، واستنى كام دقيقة.",
+    existingTitle: "سجّلت قبل كده؟",
   },
 } as const;
 
-// The same page is shown whether or not the email was already registered, so
-// it never reveals account existence; it points existing users to sign-in and
-// password reset instead.
+// The same page is shown whether or not the email was already registered, so it
+// never reveals account existence. Existing users get prominent, direct routes to
+// sign-in and password reset instead of a dead end.
 export default async function CheckEmailPage() {
   const { locale, t } = await getMessages();
   const copy = COPY[locale];
@@ -32,11 +34,18 @@ export default async function CheckEmailPage() {
         <p className="mt-2">{copy.body}</p>
         <p className="mt-2">{copy.spam}</p>
       </Notice>
-      <p className="text-sm">{t.auth.existingAccountHint}</p>
-      <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-        <TextLink href="/sign-in">{t.forms.backToSignIn}</TextLink>
-        <TextLink href="/forgot-password">{t.auth.forgotPasswordLink}</TextLink>
-      </div>
+      <section aria-labelledby="registered-before" className="space-y-3 rounded-xl border border-line p-4">
+        <h2 id="registered-before" className="font-semibold">
+          {copy.existingTitle}
+        </h2>
+        <p className="text-sm">{t.auth.existingAccountHint}</p>
+        <div className="flex flex-wrap gap-3">
+          <ButtonLink href="/sign-in">{t.forms.backToSignIn}</ButtonLink>
+          <ButtonLink href="/forgot-password" variant="secondary">
+            {t.auth.forgotPasswordLink}
+          </ButtonLink>
+        </div>
+      </section>
     </PublicShell>
   );
 }
