@@ -29,6 +29,8 @@ x-api-environment: &api-environment
   # Restricted demo (D-48): approved questions only, listed accounts only.
   CHAT_DEMO_CURATED: ${CHAT_DEMO_CURATED:-false}
   CHAT_DEMO_ALLOWED_USERS: ${CHAT_DEMO_ALLOWED_USERS:-}
+  CHAT_DEMO_ACCESS: ${CHAT_DEMO_ACCESS:-allowlist}
+  CHAT_PROVIDER_DAILY_LIMIT: ${CHAT_PROVIDER_DAILY_LIMIT:-300}
 
 services:
   db:

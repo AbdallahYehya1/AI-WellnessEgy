@@ -624,3 +624,35 @@ with no real-user access.
   - Production accepts it only with `CHAT_DEMO_CURATED` and an allow-list.
   - `synthetic-test-v0` remains refused in production.
   - Free-form chat anywhere deployed still needs a clinical assessor and policy (D-7).
+
+### D-52. What free-text wellness chat would require — OPEN (clinical, legal, privacy)
+
+Chat is currently open to every consenting adult, but **only for the reviewed,
+predefined questions**. Free text is refused before assessment, retrieval or any
+provider call, so only those questions and public WHO/NIMH/NCCIH/CDC passages reach
+Groq. Free-text conversations would need at least:
+
+1. **Clinical safety:**
+   - A clinically validated risk assessor (not the keyword screen) for Arabic, Egyptian
+     Arabic and English, with measured sensitivity on crisis language.
+   - A clinician-approved policy (D-7).
+   - Reviewed crisis responses with **verified Egyptian** emergency and support
+     resources (D-13).
+   - Escalation behaviour and adverse-event handling.
+2. **Knowledge:** clinically reviewed sources (`approved`, D-50), and official Arabic
+   material for the topics that only have English sources.
+3. **Privacy and legal:**
+   - A lawful basis and explicit consent wording for sending personal wellness text to
+     a third-party model processor in the US.
+   - A data processing agreement and confirmed zero retention.
+   - A data-protection review under Egypt's Personal Data Protection Law (Law 151/2020)
+   for health data.
+   - The retention and encryption policy for any stored conversation (none is stored
+     today).
+4. **Abuse and reliability:**
+   - Per-user and global quotas sized to a paid or contracted provider.
+   - Prompt-injection testing against the retrieval and system prompt.
+   - Output moderation, and monitoring that never logs message text.
+5. **Evaluation:**
+   - A held-out conversational test set, including adversarial and crisis cases, with
+     clinical review of the answers. Engineering tests don't establish clinical safety.

@@ -237,3 +237,77 @@ def test_production_demo_end_to_end_cites_real_sources_only(
         not c["synthetic"] and c["review_status"] == "draft" for c in body["reply"]["citations"]
     )
     assert send(client, "free text").json()["status"] == "out_of_scope"
+
+
+# --- All consenting adults (explicit mode) and the shared daily cap -----------------
+
+
+def test_all_consented_adults_mode_needs_no_allowlist_and_admits_any_consented_user(
+    curated: None,
+) -> None:
+    runtime = build_chat_runtime(
+        _production(chat_demo_allowed_users="", chat_demo_access="all_consented_adults")
+    )
+    assert runtime is not None and runtime.demo_all_consented_adults
+    client = chat_client(runtime)
+    users: list[dict[str, Any]] = [{}, {"sub": USER_B_ID, "email": "someone-else@example.com"}]
+    for who in users:
+        consent(client, **who)
+        assert client.get("/chat/config", headers=bearer(**who)).json()["enabled"] is True
+        assert send(client, DEMO_PROMPTS[1].en, **who).json()["status"] == "reply"
+
+
+def test_an_empty_allowlist_is_never_treated_as_everyone() -> None:
+    with pytest.raises(ValueError, match="CHAT_DEMO_ALLOWED_USERS"):
+        _production(chat_demo_allowed_users="")  # default access mode: allowlist
+
+
+def test_all_adults_still_requires_consent(curated: None) -> None:
+    runtime = build_chat_runtime(
+        _production(chat_demo_allowed_users="", chat_demo_access="all_consented_adults")
+    )
+    assert runtime is not None
+    client = chat_client(runtime)  # no consent recorded
+    assert client.get("/chat/config", headers=bearer()).status_code == 403
+    assert send(client, DEMO_PROMPTS[1].en).status_code == 403
+
+
+def test_all_adults_mode_keeps_free_text_blocked(curated: None) -> None:
+    runtime = build_chat_runtime(
+        _production(chat_demo_allowed_users="", chat_demo_access="all_consented_adults")
+    )
+    assert runtime is not None
+    client = chat_client(runtime)
+    consent(client)
+    assert send(client, "I feel terrible, talk to me").json()["status"] == "out_of_scope"
+
+
+def test_the_shared_daily_cap_stops_model_calls(curated: None, db_engine: Engine) -> None:
+    class CountingModel:
+        kind = "model"
+        model_name = "test-model"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, permit: Any, request: Any) -> Any:
+            from app.ai.provider.base import GenerationResult
+
+            self.calls += 1
+            return GenerationResult(
+                text="Grounding means noticing.", cited_chunk_ids=[request.passages[0].chunk_id]
+            )
+
+    provider = CountingModel()
+    runtime = make_runtime(
+        demo_curated=True,
+        demo_all_consented_adults=True,
+        provider=provider,
+        provider_daily_limit=2,
+    )
+    client = chat_client(runtime)
+    consent(client)
+    statuses = [send(client, DEMO_PROMPTS[1].en).json()["status"] for _ in range(4)]
+    assert statuses[:2] == ["reply", "reply"]
+    assert set(statuses[2:]) == {"unavailable"}  # cap reached: no further model calls
+    assert provider.calls == 2

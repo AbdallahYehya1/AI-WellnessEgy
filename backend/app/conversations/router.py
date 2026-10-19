@@ -30,7 +30,8 @@ def read_config(request: Request, user: ConsentedUser, principal: CurrentPrincip
     runtime = _runtime(request)
     band = resolve_age_band()
     allowed = runtime is not None and (
-        not runtime.demo_curated or is_allowed(principal, runtime.demo_allowed)
+        not runtime.demo_curated
+        or is_allowed(principal, runtime.demo_allowed, everyone=runtime.demo_all_consented_adults)
     )
     curated = runtime is not None and runtime.demo_curated
     return ChatConfig(
@@ -61,6 +62,8 @@ def post_message(
     runtime = _runtime(request)
     if runtime is None:
         raise ApiError(503, "chat_unavailable", "The assistant isn't available.")
-    if runtime.demo_curated and not is_allowed(principal, runtime.demo_allowed):
+    if runtime.demo_curated and not is_allowed(
+        principal, runtime.demo_allowed, everyone=runtime.demo_all_consented_adults
+    ):
         raise ApiError(403, "chat_not_enabled", "The assistant isn't available for this account.")
     return handle_message(session, user, runtime, payload)

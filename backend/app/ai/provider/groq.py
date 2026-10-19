@@ -26,7 +26,8 @@ from app.safety.gate import GenerationPermit
 
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 REQUEST_TIMEOUT_SECONDS = 8.0  # inside PROVIDER_TIMEOUT_SECONDS
-MAX_OUTPUT_TOKENS = 600
+# Room for a short reply plus the low-effort reasoning gpt-oss models spend first.
+MAX_OUTPUT_TOKENS = 1024
 MAX_HISTORY_TURNS = 4
 _PASSAGE_ID = re.compile(r"^P[1-9]$")
 
@@ -40,6 +41,12 @@ Rules you must follow:
   reply in Egyptian Arabic.
 - Respond with a JSON object only: {"reply": "<text>", "citations": ["P1", ...]} listing the
   passage ids you used. Keep the reply under {max_chars} characters."""
+
+
+def _json_object(content: str) -> str:
+    """The JSON object in the reply, tolerating stray text or code fences around it."""
+    start, end = content.find("{"), content.rfind("}")
+    return content[start : end + 1] if 0 <= start < end else content
 
 
 class GroqProvider:
@@ -71,13 +78,17 @@ class GroqProvider:
                 {"role": "assistant" if role == "assistant" else "user", "content": text}
             )
         messages.append({"role": "user", "content": request.message})
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model_name,
             "messages": messages,
             "temperature": 0.2,
-            "max_tokens": MAX_OUTPUT_TOKENS,
+            "max_completion_tokens": MAX_OUTPUT_TOKENS,
             "response_format": {"type": "json_object"},
         }
+        if self.model_name.startswith("openai/gpt-oss"):
+            # Reasoning model: spend few tokens thinking and never return the reasoning.
+            payload["reasoning_effort"] = "low"
+            payload["include_reasoning"] = False
         return payload, ids
 
     def generate(self, permit: GenerationPermit, request: GenerationRequest) -> GenerationResult:
@@ -106,7 +117,7 @@ class GroqProvider:
     def _parse(body: Any, ids: dict[str, str]) -> GenerationResult:
         try:
             content = body["choices"][0]["message"]["content"]
-            data = json.loads(content)
+            data = json.loads(_json_object(content))
             reply = data["reply"]
             cited = data["citations"]
         except (KeyError, IndexError, TypeError, ValueError):

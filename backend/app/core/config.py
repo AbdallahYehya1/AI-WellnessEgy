@@ -75,6 +75,13 @@ class Settings(BaseSettings):
     # environments run chat ONLY in this mode.
     chat_demo_curated: bool = False
     chat_demo_allowed_users: str = ""
+    # Who may use the curated demo. "allowlist" (default): only CHAT_DEMO_ALLOWED_USERS.
+    # "all_consented_adults": every signed-in adult who accepted the current required
+    # consent (explicit choice; an empty allow-list never means "everyone").
+    chat_demo_access: Literal["allowlist", "all_consented_adults"] = "allowlist"
+    # Ceiling on chat requests across ALL users per 24 hours while a real model is
+    # the provider, protecting a shared free quota. Over it, chat answers "unavailable".
+    chat_provider_daily_limit: int = Field(default=300, gt=0, le=100_000)
 
     @field_validator("supabase_url")
     @classmethod
@@ -130,8 +137,15 @@ class Settings(BaseSettings):
                     "CHAT_SAFETY_POLICY is not approved for this environment; "
                     "chat cannot start (OPEN_DECISIONS D-7)"
                 )
-            if self.chat_demo_curated and not self.chat_demo_allowed_users.strip():
-                raise ValueError("CHAT_DEMO_CURATED requires CHAT_DEMO_ALLOWED_USERS")
+            if (
+                self.chat_demo_curated
+                and self.chat_demo_access == "allowlist"
+                and not self.chat_demo_allowed_users.strip()
+            ):
+                raise ValueError(
+                    "CHAT_DEMO_CURATED requires CHAT_DEMO_ALLOWED_USERS "
+                    "(or CHAT_DEMO_ACCESS=all_consented_adults)"
+                )
             if self.is_deployed and (
                 self.chat_signing_key is None or len(self.chat_signing_key.get_secret_value()) < 32
             ):
