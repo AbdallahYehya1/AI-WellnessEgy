@@ -266,3 +266,38 @@ def test_the_chat_prototype_works_as_the_role(role_url_for_tests: str, db_engine
         assert conn.execute(text("select count(*) from app.chat_rate_events")).scalar() == 2
         outcomes = {r[0] for r in conn.execute(text("select final_status from app.safety_events"))}
     assert outcomes == {"reply", "support"}
+
+
+def test_grants_only_keeps_the_password(role_url_for_tests: str, db_engine: Engine) -> None:
+    with db_engine.connect() as conn:
+        before = conn.execute(
+            text("select rolpassword from pg_authid where rolname = :r"), {"r": ROLE}
+        ).scalar()
+    with db_engine.begin() as conn:
+        conn.execute(text(f"REVOKE ALL ON app.knowledge_chunks FROM {ROLE}"))
+        apply_role(conn, None)  # grants only
+    with db_engine.connect() as conn:
+        after = conn.execute(
+            text("select rolpassword from pg_authid where rolname = :r"), {"r": ROLE}
+        ).scalar()
+    assert before == after
+    engine = _as_role(role_url_for_tests)  # the old password still logs in
+    try:
+        with engine.connect() as conn:
+            assert verify_role(conn)["table_privileges"]["knowledge_chunks"] == ["SELECT"]
+    finally:
+        engine.dispose()
+
+
+def test_a_new_role_cannot_be_created_without_a_password() -> None:
+    with pytest.raises(ValueError, match="needs a password"):
+        role_sql(None, exists=False)
+
+
+def test_altering_an_existing_role_never_mentions_superuser() -> None:
+    """Supabase refuses ALTER ROLE ... NOSUPERUSER from a non-superuser (seen live)."""
+    alter = role_sql(None, exists=True)[0]
+    assert alter.startswith(f"ALTER ROLE {ROLE} WITH LOGIN NOINHERIT BYPASSRLS")
+    assert "SUPERUSER" not in alter and "REPLICATION" not in alter
+    create = role_sql("v", exists=False)[0]
+    assert "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION" in create

@@ -1160,3 +1160,45 @@ The 15 checks with the local production image:
   production.
 - **Groq connection leak:** the provider didn't close the connection after HTTP errors.
   Fixed, and caught by tests.
+
+---
+
+# M10: Real knowledge base, migrations 0003/0004, restricted demo (2026-10-19)
+
+## Live evidence (real Supabase, deployed backend `c88091f`)
+- **Frontend path proven by real use:** two real accounts used the deployed frontend
+  (14:15–14:16 UTC). First dashboard load created the profile, then consent and two
+  check-ins, all through `API_BASE_URL` → backend → `app_backend`.
+- **Migration (founder-approved):** `0002 → 0003 → 0004` at 20:55:46–51 UTC, exit 0.
+  `at_revision_0004`; 8 tables, RLS on all of them, no Data API role usage. Existing
+  data intact: 3 profiles, 2 consents, 3 check-ins, 10 audit events.
+- **Backup first:** `before-0003-20261019T2030Z.dump` (233,536 bytes), test-restored
+  with counts identical to live.
+- **Sources ingested:** 4 sources, 17 section-aligned chunks. A second import is a no-op
+  (4 `unchanged`).
+- **`app_backend`:** grants re-applied with `--grants-only` (password unchanged, so the
+  live backend kept working). `--verify` reports `problems: []`.
+- **Live retrieval as `app_backend`** through the transaction pooler:
+  - grounding (English) → WHO English edition;
+  - grounding (Arabic) → WHO Arabic edition;
+  - habits → NIMH;
+  - "explain that in Egyptian Arabic" (follow-up) → WHO Arabic edition;
+  - an off-topic question → no evidence.
+  - Benchmark: tuned 19/19, held-out v3 13/20.
+- **Chat on production:** off (`/chat/config` `enabled: false`; `POST /chat/messages` →
+  503 `chat_unavailable`), as designed.
+
+## Defect found live and fixed
+- **Supabase refuses `ALTER ROLE … NOSUPERUSER` from `postgres`**
+  (InsufficientPrivilege), although `CREATE ROLE … NOSUPERUSER` works. Re-applying the
+  role, including password rotation, would have failed. ALTER now re-asserts only
+  attributes that can change; `--verify` checks the NO* defaults.
+- **New `--grants-only` mode:** grants can now be updated without rotating the password.
+  Rotating it immediately cuts off the deployed backend until Vercel is updated.
+
+## Still blocked
+- **Email confirmation is OFF** in Supabase (`mailer_autoconfirm: true` on
+  2026-10-19), and no confirmation or recovery email has been attempted since
+  2026-10-02. SMTP delivery is unverified.
+- **Groq:** no key provided; Zero Data Retention unconfirmed.
+- **Demo:** needs the backend project's environment variables (DEPLOYMENT_RUNBOOK §8).

@@ -101,12 +101,21 @@ def _literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def role_sql(verifier: str, *, exists: bool, revision: str = SUPPORTED_REVISION) -> list[str]:
-    """Idempotent statements that leave the role with exactly the revision's grants."""
+def role_sql(
+    verifier: str | None, *, exists: bool, revision: str = SUPPORTED_REVISION
+) -> list[str]:
+    """Idempotent statements that leave the role with exactly the revision's grants.
+    ``verifier=None`` keeps the existing password (the role must exist)."""
+    if verifier is None and not exists:
+        raise ValueError("a new role needs a password")
     grants = GRANTS_BY_REVISION[revision]
+    password = f" PASSWORD {_literal(verifier)}" if verifier is not None else ""
+    # CREATE states every attribute explicitly. ALTER on Supabase may not mention
+    # SUPERUSER at all, even NOSUPERUSER (InsufficientPrivilege), so it only re-asserts
+    # what can change; the NO* defaults set at creation are checked by --verify.
+    restrictive = "" if exists else "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION "
     attributes = (
-        "LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS "
-        f"CONNECTION LIMIT {CONNECTION_LIMIT} PASSWORD {_literal(verifier)}"
+        f"LOGIN NOINHERIT {restrictive}BYPASSRLS CONNECTION LIMIT {CONNECTION_LIMIT}{password}"
     )
     statements = [f"{'ALTER' if exists else 'CREATE'} ROLE {ROLE} WITH {attributes}"]
     statements += [
@@ -141,7 +150,7 @@ def redacted_sql(revision: str = SUPPORTED_REVISION) -> list[str]:
 
 
 def apply_role(
-    owner_conn: Connection, password: str, *, expected_revision: str | None = None
+    owner_conn: Connection, password: str | None, *, expected_revision: str | None = None
 ) -> str:
     """Create or update the role for the database's revision, in one transaction (the
     caller commits). Refuses a revision without a reviewed grant set, or one other than
@@ -169,7 +178,8 @@ def apply_role(
         raise RuntimeError("no database connection")
     cursor = dbapi.cursor()
     try:
-        statements = role_sql(scram_verifier(password), exists=exists, revision=revision)
+        verifier = scram_verifier(password) if password is not None else None
+        statements = role_sql(verifier, exists=exists, revision=revision)
         for index, statement in enumerate(statements):
             try:
                 cursor.execute(statement)
@@ -330,6 +340,11 @@ def run(argv: list[str] | None = None) -> int:  # pragma: no cover - exercised m
     mode.add_argument("--print-sql", action="store_true")
     mode.add_argument("--apply", action="store_true")
     mode.add_argument("--verify", action="store_true")
+    mode.add_argument(
+        "--grants-only",
+        action="store_true",
+        help="re-apply grants for the current revision, keeping the existing password",
+    )
     parser.add_argument(
         "--output", type=Path, default=DEFAULT_OUTPUT, help="where --apply writes the role URL"
     )
@@ -365,13 +380,16 @@ def run(argv: list[str] | None = None) -> int:  # pragma: no cover - exercised m
     if target["problems"]:
         print("Refusing to apply: " + "; ".join(target["problems"]), file=sys.stderr)
         return 3
-    password = secrets.token_urlsafe(32)
+    password = None if args.grants_only else secrets.token_urlsafe(32)
     engine = _engine(owner_url)
     try:
         with engine.begin() as conn:
-            apply_role(conn, password)
+            revision = apply_role(conn, password)
     finally:
         engine.dispose()
+    if password is None:  # no new credential: the deployed backend keeps working
+        print(f"Grants for revision {revision} applied to {ROLE}; password unchanged.")
+        return 0
     args.output.parent.mkdir(parents=True, exist_ok=True)
     # No trailing newline: the whole file is pasted into a dashboard as the value.
     args.output.write_text(role_url(owner_url, password, target["project_ref"]), encoding="utf-8")
