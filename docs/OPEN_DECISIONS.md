@@ -656,3 +656,46 @@ Groq. Free-text conversations would need at least:
 5. **Evaluation:**
    - A held-out conversational test set, including adversarial and crisis cases, with
      clinical review of the answers. Engineering tests don't establish clinical safety.
+
+### D-53. Topic-restricted free-text questions — OPEN (composer shown, disabled in production)
+
+**Status (2026-10-20):** the chat page shows a "your own question" box, **disabled**, under
+the listed questions. The backend still refuses anything that isn't a listed question
+before assessment, retrieval or any Groq call. The working composer exists, with length
+limits, trimming, Enter/Shift+Enter, IME safety and no browser storage. It runs only
+under the test-only policy outside production.
+
+**Why it is not enabled for "educational topics only":** the current checks cannot
+reliably sort free text into "low-risk educational question" versus "personal disclosure or
+crisis":
+
+- The crisis screen is a keyword list. Its sensitivity has never been measured, in
+  particular for Egyptian Arabic, Arabizi, indirect phrasing and crisis language inside an
+  on-topic question (for example "how can I sleep when I don't want to wake up").
+- The topic lexicon used for retrieval matches *subjects*. It was built for ranking, not
+  safety, so a personal disclosure that mentions sleep or stress would pass as "on topic".
+- No reviewed crisis response with verified Egyptian resources exists (D-13).
+- Every free-text message would send personal text to Groq (US), which D-52 does not yet
+  cover.
+
+**Work required before enabling it in production:**
+
+1. **Topic classifier:**
+   - An allow-list classifier for the supported topics, with an explicit
+     "personal / other" class.
+   - Evaluated on a held-out English, Arabic and Egyptian Arabic set with a published
+     false-accept rate.
+2. **Validated risk screen:**
+   - Clinically designed test cases, including crisis language embedded in on-topic
+     questions.
+   - A measured false-negative rate signed off by a clinician (D-7).
+3. **Order of checks:** risk screen and topic check both run before retrieval and before any
+   provider call, and a refusal never reaches Groq. This already holds for the listed
+   questions.
+4. **Privacy and consent:** consent wording and a lawful basis for sending typed text to Groq,
+   ZDR confirmed and a DPA in place (D-52).
+5. **Abuse controls:**
+   - Prompt-injection and jailbreak tests.
+   - Per-user and global quotas (the global daily cap already exists).
+   - Monitoring that logs only categories, never text.
+6. **Release:** staged release behind a server flag, starting with the allowlist mode.

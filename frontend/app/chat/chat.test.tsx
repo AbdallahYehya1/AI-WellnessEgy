@@ -174,6 +174,27 @@ describe("chat client", () => {
     expect(screen.queryByText(/Synthetic test content/)).toBeNull();
   });
 
+  it("links NCCIH and CDC sources and lists each source edition once", async () => {
+    const base = { ...CITATION, synthetic: false, review_status: "draft" };
+    const who = { ...base, source_ref: "https://www.who.int/publications/i/item/9789240003927", version_label: "2020-en" };
+    const citations = [
+      { ...who, chunk_id: "c1" },
+      { ...who, chunk_id: "c2" }, // a second passage of the same document
+      { ...base, chunk_id: "c3", source_ref: "https://www.nccih.nih.gov/health/meditation-and-mindfulness-what-you-need-to-know" },
+      { ...base, chunk_id: "c4", source_ref: "https://www.cdc.gov/physical-activity-basics/benefits/index.html" },
+    ];
+    const send = vi.fn().mockResolvedValue({
+      kind: "response",
+      response: { ...reply("Answer."), reply: { text: "Answer.", signature: "s", citations } },
+    });
+    render(<ChatClient send={send} />);
+    await type("mindfulness");
+    expect(await screen.findByText("Sources (3)")).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: /who\.int/ })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: /nccih\.nih\.gov/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /cdc\.gov/ })).toBeTruthy();
+  });
+
   it("never links to a source outside the curated publishers' HTTPS domains", async () => {
     const odd = { ...CITATION, source_ref: "https://example.org/page", synthetic: false, review_status: "draft" };
     const send = vi.fn().mockResolvedValue({
@@ -194,7 +215,10 @@ describe("chat client", () => {
       { id: "summary", text: "Can you give me a short summary?", followUp: true },
     ];
     render(<ChatClient send={send} demoPrompts={prompts} />);
-    expect(screen.queryByLabelText("Your message")).toBeNull(); // no free-text box
+    expect(screen.queryByLabelText("Your message")).toBeNull(); // no working free-text box
+    const own = screen.getByLabelText("Your own question (not available yet)");
+    expect((own as HTMLTextAreaElement).disabled).toBe(true); // visible, honestly switched off
+    expect(own.getAttribute("aria-describedby")).toBe("chat-own-question-hint");
     expect(screen.queryByRole("button", { name: prompts[1]!.text })).toBeNull(); // no follow-up yet
     await userEvent.setup().click(screen.getByRole("button", { name: prompts[0]!.text }));
     expect(await screen.findByText("Grounding answer.")).toBeTruthy();

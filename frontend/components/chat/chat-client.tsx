@@ -25,7 +25,27 @@ type Props = {
 };
 
 // Source links are shown only for HTTPS pages on the curated publishers' domains.
-const LINKABLE_HOSTS = new Set(["www.who.int", "who.int", "www.nimh.nih.gov", "nimh.nih.gov"]);
+const LINKABLE_HOSTS = new Set([
+  "www.who.int",
+  "who.int",
+  "www.nimh.nih.gov",
+  "nimh.nih.gov",
+  "www.nccih.nih.gov",
+  "nccih.nih.gov",
+  "www.cdc.gov",
+  "cdc.gov",
+]);
+
+/** Several passages often come from one document: list each source edition once. */
+function uniqueSources(citations: ChatCitation[]): ChatCitation[] {
+  const seen = new Set<string>();
+  return citations.filter((c) => {
+    const key = `${c.source_ref}\u0000${c.version_label}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 function linkableSource(ref: string): string | null {
   try {
@@ -254,6 +274,8 @@ export function ChatClient({ send, locale = "en", demoPrompts }: Props) {
             notice={t.demoNotice}
             disabled={pending}
             onAsk={sendMessage}
+            ownQuestionLabel={t.ownQuestionLabel}
+            ownQuestionOff={t.ownQuestionOff}
           />
         ) : (
         <form onSubmit={submit} className="space-y-2" noValidate>
@@ -317,12 +339,16 @@ function DemoQuestions({
   notice,
   disabled,
   onAsk,
+  ownQuestionLabel,
+  ownQuestionOff,
 }: {
   prompts: DemoPrompt[];
   label: string;
   notice: string;
   disabled: boolean;
   onAsk: (text: string) => void;
+  ownQuestionLabel: string;
+  ownQuestionOff: string;
 }) {
   return (
     <div className="space-y-2">
@@ -342,6 +368,27 @@ function DemoQuestions({
           </li>
         ))}
       </ul>
+      {/*
+        Free text stays off in this mode: the backend refuses anything that isn't a
+        listed question before any assessment, retrieval or model call, because the
+        keyword crisis screen is not clinically validated (OPEN_DECISIONS D-52/D-53).
+        The box is shown disabled so the limitation is visible, not hidden.
+      */}
+      <div className="space-y-1">
+        <label htmlFor="chat-own-question" className="text-sm font-semibold">
+          {ownQuestionLabel}
+        </label>
+        <textarea
+          id="chat-own-question"
+          disabled
+          rows={1}
+          aria-describedby="chat-own-question-hint"
+          className="block min-h-11 w-full cursor-not-allowed resize-none rounded-xl border border-line bg-surface-muted px-3 py-2 text-base text-ink-muted"
+        />
+        <p id="chat-own-question-hint" className="text-xs text-ink-muted">
+          {ownQuestionOff}
+        </p>
+      </div>
     </div>
   );
 }
@@ -359,14 +406,15 @@ function Citations({
   draftLabel: string;
   openLabel: string;
 }) {
-  if (citations.length === 0) return null;
+  const sources = uniqueSources(citations);
+  if (sources.length === 0) return null;
   return (
     <details className="border-t border-line pt-2 text-xs text-ink-muted" open>
       <summary className="min-h-6 cursor-pointer font-semibold">
-        {sourcesLabel} ({citations.length})
+        {sourcesLabel} ({sources.length})
       </summary>
       <ul className="mt-1 space-y-1">
-        {citations.map((c) => (
+        {sources.map((c) => (
           <li key={c.chunk_id} dir="auto">
             {/* Source fields are rendered as text, never as HTML or links. */}
             {c.source_title} · {c.publisher} · v{c.version_label}
