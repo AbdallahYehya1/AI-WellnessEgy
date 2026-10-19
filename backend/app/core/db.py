@@ -122,7 +122,7 @@ def session_factory_for(settings: Settings) -> sessionmaker[Session] | None:
         return None
     engine = engine_for(
         settings.database_url.get_secret_value(),
-        require_tls=settings.is_production,
+        require_tls=settings.is_deployed,
         serverless=running_on_vercel(),
     )
     return sessionmaker(engine, expire_on_commit=False)

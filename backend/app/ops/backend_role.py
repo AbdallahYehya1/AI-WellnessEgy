@@ -40,24 +40,44 @@ from app.core.db import CONNECT_TIMEOUT_SECONDS, SCHEMA, sqlalchemy_url, tls_con
 from app.ops.check_migration_target import TRANSACTION_POOLER_PORT, describe_target
 
 ROLE = "app_backend"
-SUPPORTED_REVISION = "0002"
 CONNECTION_LIMIT = 15
 # Least privilege per table, derived from the backend's queries (users: insert-or-get,
 # SELECT ... FOR UPDATE, profile update; consents/mood: append and read; audit: append).
-GRANTS: dict[str, tuple[str, ...]] = {
+GRANTS_0002: dict[str, tuple[str, ...]] = {
     "users": ("SELECT", "INSERT", "UPDATE"),
     "consents": ("SELECT", "INSERT"),
     "mood_checkins": ("SELECT", "INSERT"),
     "audit_events": ("INSERT",),
 }
-# Columns the ORM reads back (RETURNING) after appending an audit event.
-AUDIT_RETURNING_COLUMNS = ("id", "created_at")
+# 0003 (chat prototype): read knowledge (ingestion runs as the owner, never as this
+# role), append safety events, and the per-user limiter (count, insert, prune >1 day).
+GRANTS_0003: dict[str, tuple[str, ...]] = {
+    **GRANTS_0002,
+    "knowledge_sources": ("SELECT",),
+    "knowledge_chunks": ("SELECT",),
+    "safety_events": ("INSERT",),
+    "chat_rate_events": ("SELECT", "INSERT", "DELETE"),
+}
+GRANTS_BY_REVISION = {"0002": GRANTS_0002, "0003": GRANTS_0003}
+GRANTS = GRANTS_0002
+SUPPORTED_REVISION = "0002"
+# Columns the ORM reads back (RETURNING) after an append, where it needs no full SELECT.
+RETURNING_COLUMNS: dict[str, tuple[str, ...]] = {
+    "audit_events": ("id", "created_at"),
+    "safety_events": ("id", "created_at"),
+}
+AUDIT_RETURNING_COLUMNS = RETURNING_COLUMNS["audit_events"]
+# Sequences behind integer keys the role inserts (0003: chat_rate_events.id).
+SEQUENCES_BY_REVISION: dict[str, tuple[str, ...]] = {
+    "0002": (),
+    "0003": ("chat_rate_events_id_seq",),
+}
 ROLE_SETTINGS = {
     "statement_timeout": "5s",
     "lock_timeout": "3s",
     "idle_in_transaction_session_timeout": "15s",
 }
-DEFAULT_OUTPUT = Path.home() / "aiwe-secrets" / "render_database_url"
+DEFAULT_OUTPUT = Path.home() / "aiwe-secrets" / "backend_database_url"
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE")
 
 
@@ -79,8 +99,9 @@ def _literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def role_sql(verifier: str, *, exists: bool) -> list[str]:
-    """Idempotent statements that leave the role with exactly GRANTS on schema app."""
+def role_sql(verifier: str, *, exists: bool, revision: str = SUPPORTED_REVISION) -> list[str]:
+    """Idempotent statements that leave the role with exactly the revision's grants."""
+    grants = GRANTS_BY_REVISION[revision]
     attributes = (
         "LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS "
         f"CONNECTION LIMIT {CONNECTION_LIMIT} PASSWORD {_literal(verifier)}"
@@ -91,37 +112,48 @@ def role_sql(verifier: str, *, exists: bool) -> list[str]:
     ]
     statements += [
         f"REVOKE ALL ON ALL TABLES IN SCHEMA {SCHEMA} FROM {ROLE}",
+        f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA {SCHEMA} FROM {ROLE}",
         f"REVOKE ALL ON SCHEMA {SCHEMA} FROM {ROLE}",
         f"GRANT USAGE ON SCHEMA {SCHEMA} TO {ROLE}",
     ]
     statements += [
-        f"GRANT {', '.join(privs)} ON {SCHEMA}.{table} TO {ROLE}" for table, privs in GRANTS.items()
+        f"GRANT {', '.join(privs)} ON {SCHEMA}.{table} TO {ROLE}" for table, privs in grants.items()
     ]
-    statements.append(
-        f"GRANT SELECT ({', '.join(AUDIT_RETURNING_COLUMNS)}) ON {SCHEMA}.audit_events TO {ROLE}"
-    )
+    statements += [
+        f"GRANT SELECT ({', '.join(cols)}) ON {SCHEMA}.{table} TO {ROLE}"
+        for table, cols in RETURNING_COLUMNS.items()
+        if table in grants
+    ]
+    statements += [
+        f"GRANT USAGE ON SEQUENCE {SCHEMA}.{seq} TO {ROLE}"
+        for seq in SEQUENCES_BY_REVISION[revision]
+    ]
     return statements
 
 
-def redacted_sql() -> list[str]:
+def redacted_sql(revision: str = SUPPORTED_REVISION) -> list[str]:
     return [
         s.replace(_literal("<verifier>"), "'<SCRAM-SHA-256 verifier, computed locally>'")
-        for s in role_sql("<verifier>", exists=False)
+        for s in role_sql("<verifier>", exists=False, revision=revision)
     ]
 
 
 def apply_role(
-    owner_conn: Connection, password: str, *, expected_revision: str | None = SUPPORTED_REVISION
-) -> None:
-    """Create or update the role in one transaction (the caller commits)."""
-    if expected_revision is not None:
-        revision = owner_conn.execute(
-            text("select version_num from app.alembic_version")
-        ).scalar_one_or_none()
-        if revision != expected_revision:
-            raise RuntimeError(
-                f"database is at revision {revision!r}; these grants are for {expected_revision}"
-            )
+    owner_conn: Connection, password: str, *, expected_revision: str | None = None
+) -> str:
+    """Create or update the role for the database's revision, in one transaction (the
+    caller commits). Refuses a revision without a reviewed grant set, or one other than
+    ``expected_revision`` when given. Returns the revision applied."""
+    found: object = owner_conn.execute(
+        text("select version_num from app.alembic_version")
+    ).scalar_one_or_none()
+    revision = str(found)
+    if found is None or revision not in GRANTS_BY_REVISION:
+        raise RuntimeError(
+            f"database is at revision {revision!r}; grants exist for {sorted(GRANTS_BY_REVISION)}"
+        )
+    if expected_revision is not None and revision != expected_revision:
+        raise RuntimeError(f"database is at revision {revision!r}; expected {expected_revision}")
     exists = bool(
         owner_conn.execute(
             text("select count(*) from pg_roles where rolname = :r"), {"r": ROLE}
@@ -130,15 +162,20 @@ def apply_role(
     # Raw driver cursor, no parameters: nothing in the statements is parsed as a
     # placeholder. Errors name the statement and type only, never the SQL (which
     # carries the verifier).
-    cursor = owner_conn.connection.dbapi_connection.cursor()  # type: ignore[union-attr]
+    dbapi = owner_conn.connection.dbapi_connection
+    if dbapi is None:
+        raise RuntimeError("no database connection")
+    cursor = dbapi.cursor()
     try:
-        for index, statement in enumerate(role_sql(scram_verifier(password), exists=exists)):
+        statements = role_sql(scram_verifier(password), exists=exists, revision=revision)
+        for index, statement in enumerate(statements):
             try:
                 cursor.execute(statement)
             except Exception as exc:
                 raise RuntimeError(f"role statement {index} failed: {type(exc).__name__}") from None
     finally:
         cursor.close()
+    return revision
 
 
 def role_url(owner_database_url: str, password: str, project_ref: str | None) -> str:
@@ -242,7 +279,11 @@ def verify_role(conn: Connection) -> dict[str, Any]:
         }
     finally:
         tx.rollback()
-    expected = {t: [p for p in PRIVILEGES if p in GRANTS.get(t, ())] for t in tables}
+    # The catalog (readable by any role) tells which revision's tables exist.
+    revision = "0003" if "chat_rate_events" in tables else "0002"
+    grants = GRANTS_BY_REVISION[revision]
+    report["grant_set"] = revision
+    expected = {t: [p for p in PRIVILEGES if p in grants.get(t, ())] for t in tables}
     problems = [
         f"{key} should be {want!r}"
         for key, want, got in (
@@ -290,9 +331,15 @@ def run(argv: list[str] | None = None) -> int:  # pragma: no cover - exercised m
     parser.add_argument(
         "--output", type=Path, default=DEFAULT_OUTPUT, help="where --apply writes the role URL"
     )
+    parser.add_argument(
+        "--revision",
+        choices=sorted(GRANTS_BY_REVISION),
+        default=SUPPORTED_REVISION,
+        help="grant set to print (--apply always uses the database's revision)",
+    )
     args = parser.parse_args(argv)
     if args.print_sql:
-        print(";\n".join(redacted_sql()) + ";")
+        print(";\n".join(redacted_sql(args.revision)) + ";")
         return 0
     if args.verify:
         if not args.output.exists():

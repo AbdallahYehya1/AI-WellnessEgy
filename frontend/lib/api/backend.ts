@@ -182,6 +182,8 @@ export type ChatCitation = {
   source_ref: string;
   version_label: string;
   synthetic: boolean;
+  /** "approved" | "draft" (publisher guidance, not clinically reviewed) | "synthetic" */
+  review_status?: string;
 };
 
 export type ChatResponse = {
@@ -197,6 +199,9 @@ export type ChatConfig = {
   age_band_label: string;
   test_only_policy: boolean;
   prototype: boolean;
+  /** "scripted": a test generator quotes passages; "model": an AI model writes replies. */
+  generator?: "scripted" | "model" | null;
+  model?: string | null;
 };
 
 /** A turn sent back to the server. Assistant turns carry the server signature. */

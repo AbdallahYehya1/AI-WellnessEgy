@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     chat_signing_key: SecretStr | None = None
     # Per-user messages per minute (placeholder until D-21 sets real values).
     chat_rate_limit_per_minute: int = Field(default=10, gt=0, le=600)
+    # Generation provider: "fake" (scripted, no network) or "groq". Groq also needs
+    # the API key and CHAT_EXTERNAL_PROVIDER_APPROVED=true, the founder's recorded
+    # decision that messages may be processed by Groq (OPEN_DECISIONS D-47).
+    # Missing either keeps chat off; it never falls back to another provider.
+    chat_provider: Literal["fake", "groq"] = "fake"
+    chat_external_provider_approved: bool = False
+    groq_api_key: SecretStr | None = None
+    groq_model: str = "openai/gpt-oss-20b"
 
     @field_validator("supabase_url")
     @classmethod
@@ -78,7 +86,11 @@ class Settings(BaseSettings):
         return value
 
     @field_validator(
-        "supabase_jwt_secret", "database_url", "supabase_service_role_key", "chat_signing_key"
+        "supabase_jwt_secret",
+        "database_url",
+        "supabase_service_role_key",
+        "chat_signing_key",
+        "groq_api_key",
     )
     @classmethod
     def _blank_secret_is_unset(cls, value: SecretStr | None) -> SecretStr | None:
@@ -108,10 +120,13 @@ class Settings(BaseSettings):
                     "CHAT_SAFETY_POLICY is not approved for this environment; "
                     "chat cannot start (OPEN_DECISIONS D-7)"
                 )
-            if self.is_production and (
+            if self.is_deployed and (
                 self.chat_signing_key is None or len(self.chat_signing_key.get_secret_value()) < 32
             ):
-                raise ValueError("CHAT_SIGNING_KEY (32+ characters) is required in production")
+                # Also needed for correctness on serverless: every instance must share it.
+                raise ValueError(
+                    "CHAT_SIGNING_KEY (32+ characters) is required in production and staging"
+                )
         return self
 
     @property
@@ -119,9 +134,16 @@ class Settings(BaseSettings):
         return self.environment == "production"
 
     @property
+    def is_deployed(self) -> bool:
+        """Production or staging: an internet-reachable deployment. Both get the same
+        hardening (docs off, verified TLS, a shared chat signing key); only production
+        additionally refuses the test-only chat policy."""
+        return self.environment in ("production", "staging")
+
+    @property
     def docs_enabled(self) -> bool:
-        """Interactive API docs are disabled in production."""
-        return not self.is_production
+        """Interactive API docs are disabled in every deployed environment."""
+        return not self.is_deployed
 
     @property
     def supabase_issuer(self) -> str | None:

@@ -127,3 +127,30 @@ def test_serverless_profile_keeps_one_connection_per_instance(test_database_url:
     engine = engine_for(test_database_url, serverless=True)
     assert engine.pool.size() == SERVERLESS_POOL_SIZE  # type: ignore[attr-defined]
     assert engine is not engine_for(test_database_url)
+
+
+def test_staging_is_hardened_like_production() -> None:
+    from pydantic import SecretStr
+
+    from app.core.config import Settings
+
+    for environment in ("production", "staging"):
+        settings = Settings(environment=environment)
+        assert settings.is_deployed and not settings.docs_enabled
+    assert Settings(environment="development").docs_enabled
+    with pytest.raises(ValueError, match="CHAT_SIGNING_KEY"):
+        Settings(environment="staging", chat_enabled=True, chat_safety_policy="synthetic-test-v0")
+    with pytest.raises(ValueError, match="not approved for this environment"):
+        Settings(
+            environment="production",
+            chat_enabled=True,
+            chat_safety_policy="synthetic-test-v0",
+            chat_signing_key=SecretStr("k" * 32),
+        )
+    staging_chat = Settings(
+        environment="staging",
+        chat_enabled=True,
+        chat_safety_policy="synthetic-test-v0",
+        chat_signing_key=SecretStr("k" * 32),
+    )
+    assert staging_chat.chat_enabled  # test-only policy: staging only, never production

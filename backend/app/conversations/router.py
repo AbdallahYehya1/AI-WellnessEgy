@@ -32,6 +32,8 @@ def read_config(request: Request, user: ConsentedUser) -> ChatConfig:
         age_band=band.value,
         age_band_label=AGE_BANDS[band].label,
         test_only_policy=runtime is not None and runtime.policy.synthetic,
+        generator=getattr(runtime.provider, "kind", None) if runtime is not None else None,
+        model=getattr(runtime.provider, "model_name", None) if runtime is not None else None,
     )
 
 

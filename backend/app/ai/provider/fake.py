@@ -7,11 +7,35 @@ the pipeline handles them: `[[fake-timeout]]`, `[[fake-error]]`,
 
 from __future__ import annotations
 
+import re
+
 from app.ai.provider.base import GenerationRequest, GenerationResult, ProviderError
 from app.safety.gate import GenerationPermit
 
+_HEADING = re.compile(r"^[^.]{0,160}\)\.\s+")  # "Grounding (WHO, ...). " source headings
+_ARABIC = re.compile("[؀-ۿ]")
+LEAD_IN = {
+    "en": "Thanks for sharing that. Here is some general wellness information that may help:",
+    "ar": "شكرًا إنك شاركت ده. دي معلومات عامة عن العافية ممكن تفيدك:",
+}
+
+
+def _excerpt(text: str, limit: int = 260) -> str:
+    """The passage's own opening sentences (its heading removed), cut at a sentence end."""
+    body = _HEADING.sub("", text, count=1).strip()
+    if len(body) <= limit:
+        return body
+    cut = body[:limit]
+    end = max(cut.rfind(". "), cut.rfind("؟ "), cut.rfind("? "), cut.rfind("، "))
+    return (cut[: end + 1] if end > 80 else cut).rstrip() + " …"
+
 
 class FakeProvider:
+    """Scripted: quotes retrieved passages. It does not understand or translate anything."""
+
+    kind = "scripted"
+    model_name: str | None = None
+
     def __init__(self) -> None:
         self.calls: list[GenerationRequest] = []
 
@@ -32,11 +56,8 @@ class FakeProvider:
                 cited_chunk_ids=[request.passages[0].chunk_id],
             )
         cited = request.passages[:2]
-        summary = " ".join(p.text.split(". ")[0].rstrip(".") + "." for p in cited)
-        reply = (
-            "Thanks for sharing that. Here is some general wellness information that may "
-            f"help: {summary}"
-        )
+        language = "ar" if _ARABIC.search(cited[0].text) else "en"
+        reply = LEAD_IN[language] + " " + " ".join(_excerpt(p.text) for p in cited)
         return GenerationResult(
             text=reply[: request.max_chars], cited_chunk_ids=[p.chunk_id for p in cited]
         )

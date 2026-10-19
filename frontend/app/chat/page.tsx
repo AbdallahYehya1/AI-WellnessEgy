@@ -48,9 +48,11 @@ export default async function ChatPage() {
           <Badge tone="warning">{t.common.prototype}</Badge>
         </div>
         <p className="text-sm text-ink-muted">{c.scope}</p>
-        {config.data.test_only_policy ? (
+        {config.data.enabled && (config.data.test_only_policy || config.data.generator) ? (
           <Notice tone="warning" role="note" className="py-2">
-            {c.testMode}
+            {config.data.generator === "model"
+              ? c.modelMode.replace("{model}", config.data.model ?? "AI")
+              : c.testMode}
           </Notice>
         ) : null}
         {config.data.enabled ? <p className="text-xs text-ink-muted">{c.notSaved}</p> : null}

@@ -78,8 +78,9 @@ class ChatRuntime:
 
     @property
     def retrievable_statuses(self) -> tuple[str, ...]:
-        # Synthetic fixtures are only retrievable under the test-only policy.
-        return ("approved", "synthetic") if self.policy.synthetic else ("approved",)
+        # Under the test-only policy: also `draft` (authentic publisher guidance not yet
+        # clinically reviewed) and `synthetic` fixtures. Any non-test policy: approved only.
+        return ("approved", "draft", "synthetic") if self.policy.synthetic else ("approved",)
 
 
 def sign_turn(key: bytes, user_id: uuid.UUID, text: str) -> str:
@@ -156,7 +157,15 @@ def handle_message(
 
     try:
         with session.begin_nested():
-            chunks = retrieve(session, payload.message, band.value, runtime.retrievable_statuses)
+            chunks = retrieve(
+                session,
+                payload.message,
+                band.value,
+                runtime.retrievable_statuses,
+                # Follow-ups ("explain that in Arabic") borrow the topic of earlier
+                # user turns; assistant turns are never used as search input.
+                context=[t.text for t in payload.history if t.role == "user"],
+            )
     except Exception:
         logger.error("chat_retrieval_unavailable")
         _record(session, user, request_id, band.value, decision, "unavailable")
@@ -204,6 +213,7 @@ def handle_message(
             source_ref=retrieved[cid].source_ref,
             version_label=retrieved[cid].version_label,
             synthetic=retrieved[cid].synthetic,
+            review_status=retrieved[cid].review_status,
         )
         for cid in dict.fromkeys(result.cited_chunk_ids)
     ]

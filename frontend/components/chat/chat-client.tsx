@@ -173,7 +173,12 @@ export function ChatClient({ send, locale = "en" }: Props) {
                   <p className="whitespace-pre-wrap" dir="auto">
                     {entry.text}
                   </p>
-                  <Citations citations={entry.citations} sourcesLabel={t.sources} syntheticLabel={t.synthetic} />
+                  <Citations
+                    citations={entry.citations}
+                    sourcesLabel={t.sources}
+                    syntheticLabel={t.synthetic}
+                    draftLabel={t.draft}
+                  />
                 </div>
               ) : (
                 <div role="note" data-status={entry.status} className={`me-10 rounded-2xl px-4 py-3 text-sm ${NOTICE_TONE[entry.status]}`}>
@@ -277,10 +282,12 @@ function Citations({
   citations,
   sourcesLabel,
   syntheticLabel,
+  draftLabel,
 }: {
   citations: ChatCitation[];
   sourcesLabel: string;
   syntheticLabel: string;
+  draftLabel: string;
 }) {
   if (citations.length === 0) return null;
   return (
@@ -295,6 +302,13 @@ function Citations({
             {c.source_title} · {c.publisher} · v{c.version_label}
             {c.synthetic ? (
               <span className="ms-1 rounded bg-warning-bg px-1.5 font-semibold text-warning-ink">{syntheticLabel}</span>
+            ) : c.review_status === "draft" ? (
+              <span className="ms-1 rounded bg-info-bg px-1.5 font-semibold text-info-ink">{draftLabel}</span>
+            ) : null}
+            {c.source_ref.startsWith("https://") ? (
+              <span className="block break-all text-ink-muted" dir="ltr">
+                {c.source_ref}
+              </span>
             ) : null}
           </li>
         ))}

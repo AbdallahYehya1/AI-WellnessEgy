@@ -1,0 +1,50 @@
+CURATED KNOWLEDGE SOURCES (prototype) - provenance, licence and review state
+==========================================================================
+
+These are authentic public-health publications. They are NOT clinically reviewed for
+this app (review_status: draft, clinical_review: none), they are retrievable only under
+the TEST-ONLY safety policy, and they must never be presented as clinician-approved.
+Publisher authenticity, suitability for a prototype and clinical approval are three
+different things; only the first two have been checked, by engineering.
+
+Ingest (as the database owner, never as app_backend):
+    python -m app.knowledge.ingest app/knowledge/sources
+
+1. who-doing-what-matters-en.md
+   Publisher: World Health Organization
+   Title: Doing What Matters in Times of Stress: An Illustrated Guide (2020)
+   ISBN 9789240003927 - https://www.who.int/publications/i/item/9789240003927
+   Licence: CC BY-NC-SA 3.0 IGO (https://creativecommons.org/licenses/by-nc-sa/3.0/igo/)
+   Use: verbatim excerpts of the five skill summaries (Tools 1-5), non-commercial, attributed.
+   Changes: capitalised emphasis removed; each excerpt prefixed with its skill name.
+   Text source: WHO IRIS text of the 2022 South Sudan adaptation (HealthRight Uganda),
+   in which only the illustrations were modified. WHO does not endorse this app.
+
+2. who-doing-what-matters-ar.md
+   Publisher: World Health Organization (official Arabic edition)
+   Title: القيام بما يهم في أوقات الضغط النفسي: دليل مصور (2020)
+   ISBN 978-92-4-001167-0 (electronic)
+   Licence: CC BY-NC-SA 3.0 IGO
+   Use: excerpts of the five skill summaries, non-commercial, attributed.
+   Changes: PDF text-extraction artefacts corrected by hand (broken ligatures such as
+   "في", dropped alif in lam-alif); not certified verbatim. WHO does not endorse this app.
+
+3. nimh-caring-for-your-mental-health-en.md
+   Publisher: National Institute of Mental Health (NIMH)
+   Title: Caring for Your Mental Health (last reviewed April 2026)
+   https://www.nimh.nih.gov/health/topics/caring-for-your-mental-health
+   Licence: public domain (NIMH website text; cite NIMH as the source; images excluded)
+   Use: attributed summary with short quotations.
+
+4. nimh-so-stressed-out-en.md
+   Publisher: National Institute of Mental Health (NIMH)
+   Title: I'm So Stressed Out! Fact Sheet (NIH Publication No. 20-MH-8125)
+   https://www.nimh.nih.gov/health/publications/so-stressed-out-fact-sheet
+   Licence: public domain (cite NIMH as the source)
+   Use: the coping list as short quotations. Deliberately excluded: the US-only crisis
+   line and treatment/medication details (crisis handling belongs to the safety gate;
+   the assistant must not discuss medication).
+
+Retrieved: 2026-10-19. Re-check the publisher pages before any clinical review, and
+record the reviewer, date and decision in each file (reviewed_by, reviewed_at,
+clinical_review) before changing review_status to approved.

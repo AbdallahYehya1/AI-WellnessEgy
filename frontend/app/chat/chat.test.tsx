@@ -81,8 +81,20 @@ describe("chat page", () => {
     expect(screen.getByText("Adult")).toBeTruthy();
     expect(screen.getByText("Prototype")).toBeTruthy();
     expect(screen.getByText(/not a therapist or doctor/)).toBeTruthy();
-    expect(screen.getByRole("note").textContent).toMatch(/not clinically reviewed/);
+    expect(screen.getByRole("note").textContent).toMatch(/no AI model is used/);
+    expect(screen.getByRole("note").textContent).toMatch(/not clinically validated/);
+    expect(screen.getByText(/haven't been clinically reviewed/)).toBeTruthy();
     expect(screen.getByLabelText("Your message")).toBeTruthy();
+  });
+
+  it("says plainly when an AI model writes replies and messages go to Groq", async () => {
+    backend.fetchChatConfig.mockResolvedValue(
+      ok({ ...CONFIG, generator: "model", model: "openai/gpt-oss-20b" }),
+    );
+    render(await ChatPage());
+    const note = screen.getByRole("note").textContent ?? "";
+    expect(note).toMatch(/AI model \(openai\/gpt-oss-20b\)/);
+    expect(note).toMatch(/sent to Groq/);
   });
 
   it("hides the composer when the server reports chat as disabled", async () => {
@@ -136,6 +148,29 @@ describe("chat client", () => {
     await user.type(screen.getByLabelText("Your message"), text);
     await user.click(screen.getByRole("button", { name: "Send" }));
   }
+
+  it("labels publisher guidance as not clinically reviewed and shows its URL as text", async () => {
+    const draft = {
+      ...CITATION,
+      source_title: "Doing What Matters in Times of Stress",
+      publisher: "World Health Organization",
+      source_ref: "https://www.who.int/publications/i/item/9789240003927",
+      version_label: "2020-en",
+      synthetic: false,
+      review_status: "draft",
+    };
+    const send = vi.fn().mockResolvedValue({
+      kind: "response",
+      response: { ...reply("Grounding answer."), reply: { text: "Grounding answer.", signature: "s", citations: [draft] } },
+    });
+    render(<ChatClient send={send} />);
+    await type("grounding");
+    expect(await screen.findByText("Grounding answer.")).toBeTruthy();
+    expect(screen.getByText("Publisher guidance, not clinically reviewed")).toBeTruthy();
+    const url = screen.getByText("https://www.who.int/publications/i/item/9789240003927");
+    expect(url.tagName).toBe("SPAN"); // text, never a link
+    expect(screen.queryByText(/Synthetic test content/)).toBeNull();
+  });
 
   it("shows the reply with labelled synthetic citations and sends signed turns back", async () => {
     const send = vi
@@ -213,8 +248,9 @@ describe("chat client", () => {
     const send = vi.fn();
     render(<ChatClient send={send} />);
     const starters = screen.getByRole("list", { name: "Conversation starters" });
-    await userEvent.setup().click(within(starters).getByRole("button", { name: "Can we talk about my day?" }));
-    expect((screen.getByLabelText("Your message") as HTMLTextAreaElement).value).toBe("Can we talk about my day?");
+    const starter = "Can you explain a simple grounding exercise?";
+    await userEvent.setup().click(within(starters).getByRole("button", { name: starter }));
+    expect((screen.getByLabelText("Your message") as HTMLTextAreaElement).value).toBe(starter);
     expect(send).not.toHaveBeenCalled();
   });
 

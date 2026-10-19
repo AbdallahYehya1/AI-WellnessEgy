@@ -257,7 +257,9 @@ def test_synthetic_content_is_excluded_under_a_non_synthetic_policy(
         "---\nslug: test-approved\ntitle: Approved test doc\npublisher: fixtures\n"
         "source_ref: fixture:approved\nversion_label: 1\ncontent_type: x\nlanguage: en\n"
         "age_bands: adult\nreview_status: approved\nreviewed_by: test reviewer\n"
-        "reviewed_at: 2026-01-01T00:00:00+00:00\n---\nSlow breathing can feel calming.\n",
+        "reviewed_at: 2026-01-01T00:00:00+00:00\nlicence: test\npermitted_use: test\n"
+        "retrieved_on: 2026-01-01\nclinical_review: test reviewer sign-off\n"
+        "---\nSlow breathing can feel calming.\n",
     )
     body = send(c, BREATHING).json()
     assert body["status"] == "reply"
@@ -410,6 +412,8 @@ def test_config_reports_the_adult_prototype(client: TestClient) -> None:
         "age_band_label": body["age_band_label"],
         "test_only_policy": True,
         "prototype": True,
+        "generator": "scripted",  # the fake provider: no AI model
+        "model": None,
     }
 
 

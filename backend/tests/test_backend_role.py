@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import Engine, NullPool, create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, ProgrammingError
+from sqlalchemy.orm import Session
 
 from app.consent.catalog import PLACEHOLDER_V1
 from app.core.db import engine_for
+from app.knowledge.ingest import ingest_directory
+from app.main import create_app
 from app.ops.backend_role import (
     ROLE,
     apply_role,
@@ -20,7 +25,8 @@ from app.ops.backend_role import (
     scram_verifier,
     verify_role,
 )
-from tests.auth_helpers import USER_B_ID, api_client, auth_settings, bearer
+from tests.auth_helpers import USER_B_ID, api_client, auth_settings, bearer, fake_verifier
+from tests.test_chat import make_runtime
 
 PASSWORD = "role-test-password-7c1d"  # noqa: S105 - fake, test database only
 
@@ -92,7 +98,11 @@ def test_ownership_still_holds_as_the_role(role_url_for_tests: str) -> None:
         "UPDATE app.audit_events SET action = 'x'",
         "DELETE FROM app.audit_events",
         "SELECT action FROM app.audit_events",
-        "SELECT count(*) FROM app.chat_rate_events",  # a 0003 table: not granted
+        # 0003 grants: knowledge is read-only, the limiter cannot rewrite history.
+        "DELETE FROM app.knowledge_chunks",
+        "INSERT INTO app.knowledge_sources (slug) VALUES ('x')",
+        "UPDATE app.chat_rate_events SET user_id = user_id",
+        "SELECT reason_code FROM app.safety_events",
         "CREATE TABLE app.extra (id int)",
         "CREATE TABLE public.extra (id int)",
         "ALTER TABLE app.users DISABLE ROW LEVEL SECURITY",
@@ -141,8 +151,11 @@ def test_verify_report_matches_the_design(role_url_for_tests: str) -> None:
     assert report["superuser"] is report["createrole"] is report["createdb"] is False
     assert report["settings"]["statement_timeout"] == "5s"
     assert report["table_privileges"]["audit_events"] == ["INSERT"]
-    assert report["table_privileges"]["chat_rate_events"] == []
-    # The test database has 0003 tables, which these 0002 grants deliberately skip.
+    # The test database is at 0003, so the chat grant set applies.
+    assert report["grant_set"] == "0003"
+    assert report["table_privileges"]["chat_rate_events"] == ["SELECT", "INSERT", "DELETE"]
+    assert report["table_privileges"]["knowledge_chunks"] == ["SELECT"]
+    assert report["table_privileges"]["safety_events"] == ["INSERT"]
     assert report["problems"] == []
 
 
@@ -160,7 +173,7 @@ def test_apply_is_idempotent_and_removes_drift(role_url_for_tests: str, db_engin
 
 def test_apply_refuses_an_unexpected_revision(db_engine: Engine) -> None:
     with db_engine.begin() as conn, pytest.raises(RuntimeError, match="revision '0003'"):
-        apply_role(conn, PASSWORD)  # default expects 0002; the test database is at 0003
+        apply_role(conn, PASSWORD, expected_revision="0002")  # the test database is at 0003
     with db_engine.connect() as conn:
         assert (
             conn.execute(
@@ -225,3 +238,28 @@ def test_pooler_url_uses_role_dot_ref_and_the_transaction_pooler() -> None:
     assert url.port == 6543  # transaction pooler, for serverless
     assert "sslmode" not in url.query  # the backend enforces verify-full itself
     assert "owner-pw" not in url.render_as_string(hide_password=False)
+
+
+def test_the_chat_prototype_works_as_the_role(role_url_for_tests: str, db_engine: Engine) -> None:
+    """At 0003 the role can retrieve, rate-limit and record safety events, nothing more."""
+    sources = Path(__file__).resolve().parents[1] / "app" / "knowledge" / "sources"
+    with Session(db_engine) as session, session.begin():  # ingestion runs as the owner
+        ingest_directory(session, sources)
+    settings = auth_settings(database_url=role_url_for_tests)
+    client = TestClient(create_app(settings, fake_verifier(settings), chat_runtime=make_runtime()))
+    consent = {"version": PLACEHOLDER_V1.version, "granted": True, "consent_type": "required"}
+    assert client.post("/consents", headers=bearer(), json=consent).status_code == 201
+    body = client.post(
+        "/chat/messages",
+        headers=bearer(),
+        json={"message": "Can you explain a simple grounding exercise?", "history": []},
+    ).json()
+    assert body["status"] == "reply"
+    support = client.post(
+        "/chat/messages", headers=bearer(), json={"message": "I want to end my life", "history": []}
+    ).json()
+    assert support["status"] == "support"
+    with db_engine.connect() as conn:
+        assert conn.execute(text("select count(*) from app.chat_rate_events")).scalar() == 2
+        outcomes = {r[0] for r in conn.execute(text("select final_status from app.safety_events"))}
+    assert outcomes == {"reply", "support"}

@@ -80,8 +80,45 @@ class SyntheticTestAssessor:
         "دوا ايه",
     )
 
+    # Engineering safety net, NOT a clinical rule set and NOT a substitute for the
+    # qualified assessor D-7 requires. It can only make the prototype more cautious:
+    # any match routes the whole conversation to the support response, never to
+    # generation. Misses are expected; that is why real-user chat stays gated.
+    CRISIS_SCREEN = (
+        "suicide",
+        "suicidal",
+        "kill myself",
+        "end my life",
+        "want to die",
+        "wanna die",
+        "self-harm",
+        "self harm",
+        "hurt myself",
+        "harm myself",
+        "cut myself",
+        "انتحار",
+        "انتحر",
+        "أنتحر",
+        "اقتل نفسي",
+        "أقتل نفسي",
+        "اموت نفسي",
+        "أموت نفسي",
+        "عايز اموت",
+        "عاوز اموت",
+        "نفسي اموت",
+        "أؤذي نفسي",
+        "اذي نفسي",
+        "أذي نفسي",
+        "إيذاء النفس",
+        "ايذاء النفس",
+        "a2tel nafsy",
+        "antehar",
+    )
+
     def assess(self, window: list[str], age_band: str) -> Assessment:
         text = "\n".join(window).lower()
+        if any(term in text for term in self.CRISIS_SCREEN):
+            return Assessment(RiskLevel.HIGH, reason_code="prototype_crisis_screen")
         if "[[synthetic-error]]" in text:
             raise RuntimeError("synthetic assessor failure")
         if "[[synthetic-timeout]]" in text:
