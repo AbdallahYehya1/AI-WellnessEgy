@@ -234,14 +234,16 @@ EXPANSIONS: dict[str, tuple[str, str]] = {
     "values": ("values", "القيم"),
     "making_room": ("making room feelings", "إفساح المجال"),
     "connection": ("connected friends family support", "الآخرين"),
-    "habits": ("habits exercise sleep gratitude relaxing", "الأنشطة"),
-    "sleep": ("sleep", "النوم"),
+    # No Arabic source covers these topics, so no Arabic expansion: an incidental word
+    # in an unrelated Arabic passage must not count as a topic match.
+    "habits": ("habits exercise sleep gratitude relaxing", ""),
+    "sleep": ("sleep", ""),
     "coping": ("coping professional", "الضغط النفسي"),
     "anxiety": ("anxiety worry nervous generalized anxiety disorder", "القلق"),
     "low_mood": ("low mood depression sad interest energy", "حزناً"),
-    "mindfulness": ("mindfulness meditation present moment", "الانتباه"),
-    "physical_activity": ("physical activity moderate-intensity walking", "النشاط"),
-    "media": ("news social media breaks unwind", "الأخبار"),
+    "mindfulness": ("mindfulness meditation present moment", ""),
+    "physical_activity": ("physical activity moderate-intensity walking", ""),
+    "media": ("news social media breaks unwind", ""),
 }
 
 _DIACRITICS = re.compile(
@@ -272,25 +274,31 @@ def _arabic_forms(word: str) -> set[str]:
 
 _SQL = text(
     """
-    SELECT c.id, c.content, s.title, s.publisher, s.source_ref, s.version_label,
-           s.review_status
-    FROM app.knowledge_chunks c
-    JOIN app.knowledge_sources s ON s.id = c.source_id,
-         LATERAL (
-           SELECT replace(plainto_tsquery('english', :en_q)::text, '&', '|')::tsquery
-               || replace(plainto_tsquery('arabic', :ar_q)::text, '&', '|')::tsquery
-               || CASE WHEN :simple_q = '' THEN ''::tsquery
-                       ELSE to_tsquery('simple', :simple_q) END AS query,
-                  replace(plainto_tsquery('english', :en_topic)::text, '&', '|')::tsquery
-               || replace(plainto_tsquery('arabic', :ar_topic)::text, '&', '|')::tsquery AS topic
-         ) q
-    WHERE c.search_vector @@ q.query
-      AND CAST(:band AS text) = ANY (s.age_bands)
-      AND s.review_status IN :statuses
-      AND (s.expires_at IS NULL OR s.expires_at > now())
-    ORDER BY (s.language = :lang) DESC,
-             ts_rank_cd(c.search_vector, q.topic) DESC,
-             ts_rank_cd(c.search_vector, q.query) DESC, c.id
+    WITH matches AS (
+      SELECT c.id, c.content, s.title, s.publisher, s.source_ref, s.version_label,
+             s.review_status, s.language,
+             ts_rank_cd(c.search_vector, q.topic) AS topic_rank,
+             ts_rank_cd(c.search_vector, q.query) AS query_rank
+      FROM app.knowledge_chunks c
+      JOIN app.knowledge_sources s ON s.id = c.source_id,
+           LATERAL (
+             SELECT replace(plainto_tsquery('english', :en_q)::text, '&', '|')::tsquery
+                 || replace(plainto_tsquery('arabic', :ar_q)::text, '&', '|')::tsquery
+                 || CASE WHEN :simple_q = '' THEN ''::tsquery
+                         ELSE to_tsquery('simple', :simple_q) END AS query,
+                    replace(plainto_tsquery('english', :en_topic)::text, '&', '|')::tsquery
+                 || replace(plainto_tsquery('arabic', :ar_topic)::text, '&', '|')::tsquery AS topic
+           ) q
+      WHERE c.search_vector @@ q.query
+        AND CAST(:band AS text) = ANY (s.age_bands)
+        AND s.review_status IN :statuses
+        AND (s.expires_at IS NULL OR s.expires_at > now())
+    )
+    SELECT id, content, title, publisher, source_ref, version_label, review_status
+    FROM matches
+    -- The user's language wins only for passages that actually match the topic, so an
+    -- unrelated passage in the user's language never outranks a relevant one.
+    ORDER BY (language = :lang AND topic_rank > 0) DESC, topic_rank DESC, query_rank DESC, id
     LIMIT :limit
     """
 ).bindparams(bindparam("statuses", expanding=True))
