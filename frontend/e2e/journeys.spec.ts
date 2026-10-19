@@ -113,12 +113,13 @@ test.describe("signed-in product journeys", () => {
     await page.getByRole("link", { name: "Open the assistant" }).click();
     await page.waitForURL("**/chat");
     await expect(page.getByText("Prototype", { exact: true })).toBeVisible();
-    await expect(page.getByRole("note").filter({ hasText: "not clinically reviewed" })).toBeVisible();
+    await expect(page.getByRole("note").filter({ hasText: "no AI model is used" })).toBeVisible();
     await expect(page.getByText(/This conversation isn't saved/)).toBeVisible();
 
-    await page.getByRole("button", { name: "I've been feeling stressed lately." }).click();
+    const starter = "I've been stressed about work. What general coping techniques might help?";
+    await page.getByRole("button", { name: starter }).click();
     const box = page.getByLabel("Your message");
-    await expect(box).toHaveValue("I've been feeling stressed lately.");
+    await expect(box).toHaveValue(starter);
     await box.press("Enter");
     const log = page.getByRole("list", { name: "Conversation" });
     await expect(log.getByText(/general wellness information/)).toBeVisible({ timeout: 20_000 });
