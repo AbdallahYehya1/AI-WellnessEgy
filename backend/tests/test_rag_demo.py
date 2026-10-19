@@ -226,6 +226,7 @@ def test_groq_reply_maps_passage_ids_to_chunk_ids(groq_url: str) -> None:
     # gpt-oss is a reasoning model: little reasoning, and never returned to us.
     assert sent["reasoning_effort"] == "low" and sent["include_reasoning"] is False
     assert "[P1] Grounding text." in sent["messages"][1]["content"]
+    assert "Arabic script" in sent["messages"][0]["content"]  # no mixed-script Arabic replies
     assert FakeGroq.headers_seen[0]["Authorization"] == "Bearer test-key"
     assert FakeGroq.headers_seen[0]["User-Agent"] == USER_AGENT  # not Python-urllib (edge 1010)
     assert FakeGroq.headers_seen[0]["Accept"] == "application/json"

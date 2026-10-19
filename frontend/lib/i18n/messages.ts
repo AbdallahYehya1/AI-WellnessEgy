@@ -211,6 +211,9 @@ const en = {
       "Demonstration mode: choose one of the listed questions. You can't type your own message here, so nothing personal is sent.",
     demoStartersLabel: "Example questions",
     followUpsLabel: "Follow-up questions",
+    ownQuestionLabel: "Your own question (not available yet)",
+    ownQuestionOff:
+      "Typing your own questions stays switched off until the safety checks for free text are clinically validated. Only the listed questions are answered, from public WHO, NIMH, NCCIH and CDC guidance.",
     noticeTitles: {
       support: "Support",
       out_of_scope: "Outside what I can help with",
@@ -449,6 +452,8 @@ const ar: Messages = {
     demoNotice: "وضع العرض التجريبي: اختار سؤال من الأسئلة دي. مش متاح تكتب رسالتك هنا، فمفيش أي حاجة شخصية بتتبعت.",
     demoStartersLabel: "أسئلة مثال",
     followUpsLabel: "أسئلة متابعة",
+    ownQuestionLabel: "سؤالك الخاص (مش متاح لسه)",
+    ownQuestionOff: "كتابة أسئلتك الخاصة هتفضل مقفولة لحد ما فحوصات الأمان للنص الحر تتأكد إكلينيكيًا. بنرد بس على الأسئلة اللي فوق، من إرشادات عامة لمنظمة الصحة العالمية وNIMH وNCCIH وCDC.",
     noticeTitles: {
       support: "دعم",
       out_of_scope: "خارج اللي أقدر أساعد فيه",
