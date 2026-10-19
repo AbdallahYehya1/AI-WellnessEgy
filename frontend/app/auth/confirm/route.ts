@@ -9,7 +9,7 @@ import {
   issueRecoveryMarker,
   recoveryCookieOptions,
 } from "@/lib/auth/recovery";
-import { DEFAULT_AFTER_SIGN_IN, safeNextPath } from "@/lib/auth/validation";
+import { safeNextPath } from "@/lib/auth/validation";
 import { createClient } from "@/lib/supabase/server";
 
 // Email types this route accepts: sign-up confirmation and password recovery.
@@ -98,11 +98,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(destination);
   }
 
-  // A sign-up link carrying `next=/reset-password` still signs the user in,
-  // but never opens the reset page.
+  // A confirmed sign-up (never a recovery, even with `next=/reset-password`):
+  // end the session the link created and send the user to sign in explicitly,
+  // with a confirmation notice. Signing in is the user's own, deliberate step.
   const signedInWithoutRecovery = outcome === "signed-in" && !recoveryExchanged && type !== "recovery";
-  if (signedInWithoutRecovery && wantsReset) {
-    destination.pathname = DEFAULT_AFTER_SIGN_IN;
+  if (supabase && signedInWithoutRecovery) {
+    await supabase.auth.signOut({ scope: "local" });
+    destination.pathname = "/sign-in";
+    destination.searchParams.set("status", "confirmed");
     return NextResponse.redirect(destination);
   }
 
@@ -115,14 +118,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(destination);
   }
 
-  if (outcome === "signed-in") {
-    const target = new URL(next, request.nextUrl.origin);
-    destination.pathname = target.pathname;
-    destination.search = target.search;
-  } else {
-    destination.pathname = "/sign-in";
-    destination.searchParams.set("status", outcome);
-  }
+  destination.pathname = "/sign-in";
+  destination.searchParams.set("status", outcome === "signed-in" ? "confirmed" : outcome);
   return NextResponse.redirect(destination);
 }
 

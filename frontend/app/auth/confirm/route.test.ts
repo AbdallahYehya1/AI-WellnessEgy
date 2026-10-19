@@ -34,16 +34,20 @@ beforeEach(() => {
 });
 
 describe("GET /auth/confirm", () => {
-  it("exchanges a PKCE code and continues to the dashboard", async () => {
+  it("confirms a PKCE sign-up code, ends that session and asks the user to sign in", async () => {
     const target = await visit("?code=abc123&next=/dashboard");
     expect(auth.exchangeCodeForSession).toHaveBeenCalledWith("abc123");
-    expect(target.pathname).toBe("/dashboard");
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(target.pathname).toBe("/sign-in");
+    expect(target.searchParams.get("status")).toBe("confirmed");
   });
 
   it("verifies a token_hash sign-up link", async () => {
     const target = await visit("?token_hash=hash123&type=signup");
     expect(auth.verifyOtp).toHaveBeenCalledWith({ type: "signup", token_hash: "hash123" });
-    expect(target.pathname).toBe("/dashboard");
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(target.pathname).toBe("/sign-in");
+    expect(target.searchParams.get("status")).toBe("confirmed");
   });
 
   it("asks the user to sign in when the code can't be exchanged", async () => {
@@ -80,7 +84,7 @@ describe("GET /auth/confirm", () => {
   it("never redirects off-site", async () => {
     const target = await visit("?code=abc123&next=https://evil.example");
     expect(target.origin).toBe("http://localhost:3000");
-    expect(target.pathname).toBe("/dashboard");
+    expect(target.pathname).toBe("/sign-in");
   });
 
   it("treats a request with no parameters as a failed confirmation", async () => {
@@ -141,7 +145,7 @@ describe("GET /auth/confirm: password recovery", () => {
   it("never opens the reset page just because next=/reset-password (sign-up code)", async () => {
     auth.exchangeCodeForSession.mockResolvedValueOnce({ data: RECOVERED, error: null } as never);
     const response = await respond("?code=abc123&next=/reset-password");
-    expect(new URL(response.headers.get("location") ?? "").pathname).toBe("/dashboard");
+    expect(new URL(response.headers.get("location") ?? "").pathname).toBe("/sign-in");
     expect(markerOf(response)).toBeUndefined();
   });
 
