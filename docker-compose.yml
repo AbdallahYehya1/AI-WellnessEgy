@@ -21,6 +21,11 @@ x-api-environment: &api-environment
   CHAT_SAFETY_POLICY: ${CHAT_SAFETY_POLICY:-}
   CHAT_SIGNING_KEY: ${CHAT_SIGNING_KEY:-}
   CHAT_RATE_LIMIT_PER_MINUTE: ${CHAT_RATE_LIMIT_PER_MINUTE:-10}
+  # Generation provider: scripted fake unless Groq is configured AND approved (D-47).
+  CHAT_PROVIDER: ${CHAT_PROVIDER:-fake}
+  CHAT_EXTERNAL_PROVIDER_APPROVED: ${CHAT_EXTERNAL_PROVIDER_APPROVED:-false}
+  GROQ_API_KEY: ${GROQ_API_KEY:-}
+  GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-20b}
 
 services:
   db:

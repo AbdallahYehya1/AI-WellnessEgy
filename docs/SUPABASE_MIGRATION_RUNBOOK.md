@@ -321,3 +321,76 @@ Supabase.
 | `alembic downgrade base` | `fresh_empty_app_schema` |
 | Re-upgrade | `at_revision_0002` |
 | Forced failure in `0002` (a pre-existing table) | `DuplicateTable`; `0001`'s tables rolled back too |
+
+## 9. Backend database role `app_backend` (D-46) [separate approval]
+
+Migrations and ingestion run as `postgres`, the owner, through the session pooler. The
+internet-facing backend on Vercel connects as `app_backend` through the **transaction
+pooler** (port 6543). The grants follow the database's revision:
+
+| Revision | Grants (schema `app` only) |
+|---|---|
+| `0002` | `users`: SELECT, INSERT, UPDATE. `consents`, `mood_checkins`: SELECT, INSERT. `audit_events`: INSERT, plus SELECT (`id`, `created_at`) for RETURNING. |
+| `0003` | Everything in `0002`, plus `knowledge_sources` and `knowledge_chunks`: SELECT. `safety_events`: INSERT, plus SELECT (`id`, `created_at`). `chat_rate_events`: SELECT, INSERT, DELETE (prunes its own rows older than a day). USAGE on `chat_rate_events_id_seq`. |
+
+Neither grant set includes TRUNCATE, DDL or anything outside `app`. Writing to the
+knowledge tables is denied (tested).
+
+```bash
+cd backend
+python -m app.ops.backend_role --print-sql --revision 0002   # review (verifier redacted)
+python -m app.ops.backend_role --apply                       # [approval] uses the DB's revision
+python -m app.ops.backend_role --verify                      # read-only report as the role
+```
+
+**`--apply`:**
+- Refuses unless the target is this project's session pooler and the database is at a
+  revision with a reviewed grant set.
+- Generates a 32-byte random password and sends only its SCRAM verifier.
+- Runs everything in one transaction, and errors never echo the SQL.
+- Writes the role's **transaction-pooler** URL to `~/aiwe-secrets/backend_database_url`.
+  Nothing secret is printed.
+- Paste that URL into the Vercel backend project's `DATABASE_URL`, then delete the file.
+
+**After migrating `0002` → `0003`:** run `--apply` again so the role gets the chat grants.
+The CLI rotates the password each time, so update Vercel afterwards.
+
+**`--verify` expects `problems: []`, `reachable_tables_outside_app: []`, and
+`grant_set` matching the database's revision.**
+
+**Remove the role** (stop the backend first):
+```sql
+DROP OWNED BY app_backend; DROP ROLE app_backend;
+```
+
+## 10. Migration 0003 (chat prototype) [separate approval; required for chat]
+
+`0003` adds `knowledge_sources`, `knowledge_chunks` (full-text search over English,
+Arabic and simple configurations), `safety_events` (metadata only, no message text) and
+`chat_rate_events`.
+
+**Rehearsal on `supabase/postgres:17.11.0.003` (2026-10-19, throwaway):**
+- `0002` → `0003`: 8 tables, RLS on all of them.
+- `anon` and `authenticated` are denied on the new tables (`InsufficientPrivilege`).
+- The 4 curated sources ingest cleanly. Retrieval scores the same as in local tests:
+  19/19 on the tuned set, 6/10 held-out.
+- `app_backend` at `0003`: `--verify` reports `problems: []`.
+- Downgrade to `0002`, then re-upgrade to `0003`: both work.
+
+**Real database:** at `0002` (verified 2026-10-19). The existing backup was taken before
+`0002` (§8.3). Take a fresh dump with the same procedure before `0003`.
+
+**Commands (after explicit approval):**
+```bash
+cd backend
+python -m app.ops.check_migration_target        # must say at_revision_0002
+alembic upgrade 0003
+alembic current                                  # expect 0003 (head)
+python -m app.ops.check_migration_target        # expect at_revision_0003; RLS on all 8 tables
+python -m app.knowledge.ingest app/knowledge/sources   # 4 curated sources (as owner)
+python -m app.ops.backend_role --apply           # 0003 grant set (if the role exists)
+```
+
+**Effect on existing data:** none. `0003` only creates new tables. **Rollback:**
+`alembic downgrade 0002` drops the four chat tables, which hold only knowledge excerpts,
+safety metadata and rate-limit rows.

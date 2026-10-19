@@ -1,0 +1,16 @@
+# Never upload local secrets or development artefacts to Vercel.
+.env
+.env.*
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+tests/
+migrations/
+alembic.ini
+Dockerfile

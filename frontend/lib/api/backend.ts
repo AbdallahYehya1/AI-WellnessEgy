@@ -80,6 +80,11 @@ async function request<T>(
 ): Promise<ApiResult<T>> {
   const headers: Record<string, string> = {};
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // Server-only: lets this server reach a backend behind Vercel Deployment
+  // Protection ("Protection Bypass for Automation"). Never a NEXT_PUBLIC_ value.
+  // The API still verifies the user's Supabase token on every data endpoint.
+  const bypass = process.env.API_PROTECTION_BYPASS?.trim();
+  if (bypass) headers["x-vercel-protection-bypass"] = bypass;
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   try {
     const response = await fetch(`${apiBaseUrl()}${path}`, {
@@ -177,6 +182,8 @@ export type ChatCitation = {
   source_ref: string;
   version_label: string;
   synthetic: boolean;
+  /** "approved" | "draft" (publisher guidance, not clinically reviewed) | "synthetic" */
+  review_status?: string;
 };
 
 export type ChatResponse = {
@@ -192,6 +199,9 @@ export type ChatConfig = {
   age_band_label: string;
   test_only_policy: boolean;
   prototype: boolean;
+  /** "scripted": a test generator quotes passages; "model": an AI model writes replies. */
+  generator?: "scripted" | "model" | null;
+  model?: string | null;
 };
 
 /** A turn sent back to the server. Assistant turns carry the server signature. */

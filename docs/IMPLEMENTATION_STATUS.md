@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-10-18
+Last updated: 2026-10-19
 
 Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**, **BLOCKED**,
 **DEFERRED**.
@@ -15,6 +15,8 @@ Status values used: **COMPLETE — VERIFIED**, **IMPLEMENTED — NOT VERIFIED**,
 | **M6.0: Password recovery** | **IMPLEMENTED — VERIFIED locally (mock auth) and in CI** (PR #3). **Real Supabase recovery: NOT VERIFIED.** See §M6.0 at the end of this file. |
 | **M7: Integration + UI/UX (M6.1–M6.5)** | **MERGED to `main`** by the founder on 2026-10-17 (PR #4, merge commit `4cfa0b9`; CI run 39030158182 green). Vercel production serves `4cfa0b9` behind Vercel Authentication (D-40). The frontend has no backend yet, and nothing has been verified against the real Supabase project. |
 | **M8: Controlled deployment** | **ENGINEERING COMPLETE — VERIFIED locally and in CI; NOT YET OPERATIONAL.** PR #5 merged 2026-10-18 as `3dd5941` (CI run 39076368526 green; Vercel production serves it, still protected). The real database has not been inspected (no `DATABASE_URL` provided), migrations aren't applied, the Render service isn't created and real-auth tests haven't run. See §M8. |
+| **M8.1: Render backend + least-privilege database role** | **SUPERSEDED by M9** (Render cancelled for cost; the role work carries over). |
+| **M9: Zero-cost Vercel deployment + RAG prototype** | **ENGINEERING COMPLETE — VERIFIED locally; NOT DEPLOYED.** Branch `m9-vercel-zero-cost`: FastAPI on Vercel Python Functions, verified-TLS serverless DB access, revision-aware `app_backend` grants, curated WHO/NIMH sources, bilingual retrieval with an evaluation, a Groq provider (off and gated), crisis screen, honest chat labels. Deployment waits on founder actions (§M9). |
 | Later milestones | Not started. |
 
 **Repository:**
@@ -1062,3 +1064,99 @@ in name); crowded mobile header; 768px overflow (desktop navigation moved to ≥
 
 **Real Supabase verification: NOT RUN.** No claim of real-Supabase behaviour rests on
 the mock tests above.
+
+---
+
+# M8.1: Render backend and least-privilege database role (2026-10-18)
+
+## Results by environment (kept separate on purpose)
+
+| Environment | What ran | Result |
+|---|---|---|
+| **Local Postgres** (testcontainers, CI) | backend suite incl. 22 `app_backend` tests, TLS enforcement, pool-exhaustion 503 | **391 passed**, 99% coverage; ruff, mypy clean |
+| **Local mocks** (Compose API + Postgres 17, mock auth, production frontend build) | frontend lint, typecheck, unit tests; Playwright journeys | **309 passed**; **20/20 passed** |
+| **Local Supabase image** (`supabase/postgres:17.11.0.003`, throwaway, TLS enabled) | `0002` migrate; `apply_role` as non-superuser `postgres` (supautils allowed it); `verify_role` over TLS: `problems: []` | pass |
+| **Local production image + mock auth** (same Supabase image, `ENVIRONMENT=production`, `CHAT_ENABLED=false`, as `app_backend` over TLS) | 15 API checks (see below); outage: DB stopped gives 503 in 0.01 s; DB restarted gives 200 with no backend restart; logs: 0 tokens, emails, passwords, names or connection details | 15/15 pass |
+| **Real Supabase** (read-only) | role and TLS facts: `postgres` CREATEROLE+BYPASSRLS; scram-sha-256; `pgbouncer.get_auth` present; TLS in use with `sslmode=require`; `max_connections` 60; `PUBLIC` reaches no table or SECURITY DEFINER function; `app_backend` absent | facts recorded; **no change made** |
+| **Deployed Render** | — | **not created** (D-45) |
+| **Protected Vercel** | unauthenticated probes still 302 to Vercel login | pass; `API_BASE_URL` not set |
+| **Real Supabase Auth (A1–A12)** | — | **NOT RUN** (needs Render) |
+
+The 15 checks with the local production image:
+- **Auth:** `/me` with no token, and with a forged token: 401.
+- **Profile:** created on first `/me`, and the same id on repeat.
+- **Consent gate:** a check-in before consent: 403.
+- **Writes:** consent 201; profile update 200; check-in 201.
+- **History:** shows 1 check-in for its owner; another user sees none.
+- **Chat:** reported disabled, and posting a message is refused.
+- **Docs pages:** `/docs`, `/openapi.json` and `/redoc`: 404.
+
+## Code changes
+- `app/ops/backend_role.py`:
+  - `--print-sql`, `--apply`, `--verify` for `app_backend`;
+  - the SCRAM verifier is computed locally;
+  - SQL and errors never carry the secret;
+  - the role URL is written outside the repository.
+- `app/core/db.py`:
+  - production forces `sslmode=require` unless the URL asks for `verify-ca` or
+    `verify-full`;
+  - `pool_size` 5, `max_overflow` 5, `pool_timeout` 3 s.
+- `app/common/errors.py`: a pool timeout returns the standard 503, like other
+  connection failures.
+- `render.yaml`: the public `SUPABASE_URL` is a value; the `DATABASE_URL` comment
+  requires the `app_backend` URL; the health check is documented as liveness only.
+
+## Findings fixed during this work
+- The first role-SQL draft went through SQLAlchemy `text()`, which parsed `:` inside the
+  verifier as bind parameters. Its error message printed the SQL, with a **test-only**
+  verifier for a fake password. Now raw driver execution is used, and errors show only
+  the statement index and type (tested).
+- `information_schema` hides tables a role can't access, so `verify_role` lists tables
+  from `pg_class`.
+- The audit append needs column SELECT on (`id`, `created_at`) for RETURNING. This was
+  confirmed by removing the grant and watching the journeys fail.
+
+---
+
+# M9: Zero-cost Vercel deployment and RAG prototype (2026-10-19)
+
+## Status by feature (as of this commit)
+
+| Feature | Status | Why |
+|---|---|---|
+| Registration, sign-in, password reset | **WORKING ONLY LOCALLY** (mock auth) | The deployed frontend has no backend yet; real-Supabase checks A1–A12 not run |
+| Email confirmation / recovery email | **BLOCKED** for arbitrary addresses (D-49); team address only | No domain at $0 |
+| Onboarding, consent, dashboard, mood check-in, history, profile | **WORKING ONLY LOCALLY** | Needs the Vercel backend project and `app_backend` (founder) |
+| RAG retrieval (curated WHO/NIMH) | **TEST-ONLY PROTOTYPE, local** | Needs migration `0003` on the real database (approval) |
+| Real-model chat (Groq) | **BLOCKED** (D-47, D-48) | Privacy decision, key and clinical gate |
+| Chat safety controls | **WORKING ONLY LOCALLY** (engineering, not clinical) | Test-only policy; crisis screen is not clinical |
+
+## Evidence by environment
+
+| Environment | What ran | Result |
+|---|---|---|
+| **Real Supabase** (read-only) | Checker over verify-full TLS on both poolers | `at_revision_0002`; system CAs fail, Supabase root CA passes (session and transaction poolers) |
+| **Local Postgres** (testcontainers) | Backend suite | **431 passed**, 99% coverage; ruff, mypy clean |
+| **Local Supabase image** (`supabase/postgres:17.11.0.003`) | `0002`→`0003` rehearsal, Data API denial, ingest, `app_backend` at `0003`, downgrade/re-upgrade | all pass |
+| **Local RAG evaluation** | 19 tuned cases (EN/AR/Egyptian/mixed/off-topic/follow-up) + 10 held-out | tuned **19/19** top-1; held-out **6/10** (4 misses return "no information", none wrong) |
+| **Local frontend** | lint, typecheck, Vitest | **312 passed** |
+| **Fake AI provider** | 5 demo prompts, follow-ups, off-topic, crisis | cited replies from WHO/NIMH; Arabic follow-up cites the WHO Arabic edition; off-topic gets no evidence; crisis goes to support |
+| **Real AI provider** | — | **not run** (no key, no approval) |
+| **Deployed Vercel FastAPI / frontend** | — | **not deployed** (no Vercel CLI access; founder creates the project) |
+
+## Defects found and fixed
+- **Retrieval stopword bug:** the Arabic configuration doesn't drop English stopwords
+  (and vice versa), so "is", "the" and "of" matched every chunk. Off-topic questions got
+  "evidence". Fixed with script-specific queries plus a topic gate.
+- **Scripted generator echoed headings:** it quoted only chunk headings, always with an
+  English lead-in. Fixed: it now quotes passage content, with an Arabic lead-in for Arabic
+  sources.
+- **Starters with no evidence:** chat starters like "Can we talk about my day?" could
+  never find evidence. They now match covered topics.
+- **Inaccurate copy:** the chat scope said "reviewed sources", which isn't true for draft
+  publisher guidance. Fixed.
+- **Unsafe staging defaults:** `staging` exposed API docs and allowed a per-instance
+  signing key, which breaks signed history on serverless. Staging is now hardened like
+  production.
+- **Groq connection leak:** the provider didn't close the connection after HTTP errors.
+  Fixed, and caught by tests.

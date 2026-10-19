@@ -26,7 +26,7 @@ from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
 from app.core.config import Settings
-from app.core.db import CONNECT_TIMEOUT_SECONDS, SCHEMA, sqlalchemy_url
+from app.core.db import CONNECT_TIMEOUT_SECONDS, SCHEMA, sqlalchemy_url, tls_connect_args
 
 EXPECTED_BY_REVISION: dict[str | None, list[str]] = {
     None: [],
@@ -281,7 +281,12 @@ def run(argv: list[str] | None = None) -> int:
         return 0
     url = sqlalchemy_url(database_url)
     engine = create_engine(
-        url, connect_args={"prepare_threshold": None, "connect_timeout": CONNECT_TIMEOUT_SECONDS}
+        url,
+        connect_args={
+            "prepare_threshold": None,
+            "connect_timeout": CONNECT_TIMEOUT_SECONDS,
+            **tls_connect_args(url),
+        },
     )
     try:
         report = inspect_target(engine)

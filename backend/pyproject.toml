@@ -24,6 +24,10 @@ dev = [
     "mypy>=1.11,<3",
 ]
 
+# Vercel Python Functions (backend project, Root Directory `backend`).
+[tool.vercel]
+entrypoint = "app.main:app"
+
 [build-system]
 requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"

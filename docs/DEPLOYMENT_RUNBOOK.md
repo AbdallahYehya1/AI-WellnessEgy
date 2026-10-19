@@ -1,13 +1,14 @@
-# Deployment runbook (Vercel · Render · Supabase · Resend)
+# Deployment runbook (Vercel · Supabase · email)
 
 Status: **preparation only.** Nothing in this document has been applied to a live
 environment by engineering. Every step marked **[approval]** needs the founder's
 explicit approval before it is performed. Never put a real secret in this
 repository, in a `NEXT_PUBLIC_` variable, or in chat.
 
-Architecture: Vercel hosts the Next.js frontend, Render hosts the FastAPI backend,
-Supabase provides authentication and PostgreSQL, and Resend sends authentication
-email through Supabase SMTP. Each is configured independently.
+Architecture: Vercel (Hobby, $0) hosts the Next.js frontend and, as a second project, the
+FastAPI backend (Python Function);
+Supabase provides authentication and PostgreSQL. Auth email is Supabase's built-in sender
+(project-team addresses only) until a domain-based provider exists (§5).
 
 ---
 
@@ -38,7 +39,8 @@ email through Supabase SMTP. Each is configured independently.
 | `NEXT_PUBLIC_SUPABASE_URL` | browser-safe | Supabase project URL. |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | browser-safe | `sb_publishable_…` only, never a secret key. |
 | `SITE_URL` | server | Exact HTTPS origin users use, no trailing slash. Links in auth emails point here; with `https://` the recovery cookie is `Secure`. |
-| `API_BASE_URL` | server | The Render backend URL (§2). |
+| `API_BASE_URL` | server | The Vercel backend project's HTTPS URL (§2). |
+| `API_PROTECTION_BYPASS` | **server secret** | Only if the backend project is protected: its "Protection Bypass for Automation" secret. Never `NEXT_PUBLIC_`. |
 | `RECOVERY_MARKER_SECRET` | **server secret** | ≥ 32 random bytes, base64url, mark *Sensitive*, a different value per environment. Generate locally: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`. Without it, password reset is disabled (fails closed). Rotating it invalidates resets in progress. |
 
 - `NEXT_PUBLIC_*` values are inlined at build time: redeploy after changing them.
@@ -46,65 +48,80 @@ email through Supabase SMTP. Each is configured independently.
   deployment. **Kill switch for password reset:** remove `RECOVERY_MARKER_SECRET` and
   redeploy (no reset emails are sent; reset pages refuse).
 
-## 2. Render (FastAPI backend) **[approval before creating or deploying]**
+## 2. Vercel (FastAPI backend, separate project) **[approval before creating or deploying]**
 
-`render.yaml` (repository root) is a Blueprint for this service. It is inert until a
-Blueprint is created from it in the Render dashboard, and auto-deploy is off.
+Hosting decision (2026-10-19, D-45): **Vercel Hobby only, $0.** The paid Render plan is
+cancelled, and `render.yaml` has been removed (it remains in Git history). The backend
+runs as a Vercel Python Function, from the same repository as the frontend but as a
+second project.
 
-- **Runtime:** Docker, using `backend/Dockerfile` (Python 3.12-slim, non-root user,
-  `uvicorn app.main:app` on port 8000) — the same image CI's Docker job builds.
-- **Port:** set `PORT=8000` (Render routes to `$PORT`, default 10000).
-- **Health check path:** `/health` (the image also has a Docker `HEALTHCHECK`).
-- **Plan / region:** a paid instance (`0.5c-512mb`, formerly "Starter": 0.5 CPU,
-  512 MB). As of 2026-10-18 it's listed at **US$7/month**, billed by the second
-  (render.com/pricing, render.com/docs/compute-plans). The workspace plan is billed
-  separately: **Hobby** is US$0 for one member, and **Pro** is US$25/month flat. Expected
-  cost for controlled testing on Hobby is **about US$7/month**, plus bandwidth beyond
-  the included allowance. **Confirm the price the dashboard shows before creating the
-  service [approval].** Free instances sleep when idle, and their cold start exceeds the
-  frontend's 5-second API timeout. Pick the region closest to the Supabase project
-  (Frankfurt is offered).
-- **Token verification:** the real project signs tokens with **ES256** and publishes the
-  key at `<SUPABASE_URL>/auth/v1/.well-known/jwks.json` (checked 2026-10-18). Render
-  therefore needs only `SUPABASE_URL`. Don't set `SUPABASE_JWT_SECRET` there; HS256
-  tokens are then refused (`unsupported_algorithm`).
-- **Database outages:** connections time out after 3 seconds (`CONNECT_TIMEOUT_SECONDS`)
-  and the API answers `503 service_unavailable` with the standard error body. Only the
-  error type is logged, never the connection string.
-- **Environment** (secrets are `sync: false`, entered in the dashboard, never committed):
+**Already in the repository** (`backend/`):
 
-| Variable | Notes |
+| File | What it does |
 |---|---|
-| `PORT` | `8000`. |
-| `ENVIRONMENT` | `production`: API docs off, synthetic chat policy refused. |
-| `LOG_LEVEL` | `INFO`. |
-| `SUPABASE_URL` | `https://<project-ref>.supabase.co`; tokens are verified against its JWKS. |
-| `DATABASE_URL` | Supabase **session pooler** string (IPv4; the direct host is IPv6-only). |
-| `CHAT_ENABLED` | `false` for real users. |
+| `pyproject.toml` | Dependencies, and `[tool.vercel] entrypoint = "app.main:app"`. |
+| `.python-version` | Python 3.12, matching the Docker image and CI. |
+| `vercel.json` | Region `dub1` (Dublin, next to the Ireland database); `maxDuration` 30 s; tests and migrations excluded from the bundle. |
+| `.vercelignore` | Never uploads `.env*`, `.venv`, tests, migrations or caches. |
 
-- **Network:** the service is internet-reachable (Render web services always are); every
-  data endpoint requires a verified Supabase token, and `/docs` and `/openapi.json` are
-  off in production. No CORS is configured because only the Next.js server calls it.
-  Outbound access needed: Supabase (JWKS over HTTPS, Postgres pooler).
-- **Verified locally (2026-10-17):** the image run with `ENVIRONMENT=production`,
-  `PORT=8000` → `/health` ok and Docker `healthy`; `/docs` and `/openapi.json` 404;
-  `/me`, `/mood/history`, `/chat/config` 401 without a token; startup log reports auth and
-  database configured.
-- **Re-verified on 2026-10-18** with the `main` image (`3dd5941` plus checker changes),
-  against the real project's JWKS and a local Supabase-image database at `0002`:
-  - uid 10001, Python 3.12.15, Docker `healthy`;
-  - `/docs`, `/openapi.json` and `/redoc` 404;
-  - `/me`, `/mood/history` and `/chat/config` 401 without a token;
-  - a forged ES256 token gets 401 `unknown_key` (the real JWKS was fetched); a forged
-    HS256 token gets 401 `unsupported_algorithm`;
-  - logs contain only method, path, status, request id and rejection reasons.
-- **Do not start it against an unmigrated database:** create the service only after
-  §4 is done. Otherwise `/me` returns 500 because the tables are missing.
-- **Rollback:** Render → the service → Events → *Rollback* to the previous deploy, or
-  *Suspend* the service. The kill switch is suspending it: the frontend then shows
-  "We can't load your account", and no data is touched.
-- Migrations are **not** run by the service (§4).
-- After it is healthy, set Vercel's `API_BASE_URL` to the Render URL and redeploy.
+The Linux dependency bundle measures 99 MB, against a 500 MB limit.
+
+**Database connection on Vercel:**
+- Connect as `app_backend`, the least-privilege role (D-46), through Supabase's
+  **transaction pooler** (port 6543), which Supabase recommends for serverless.
+  Prepared statements are already disabled.
+- Each instance keeps a pool of 1 connection plus 2 overflow, detected automatically on
+  Vercel.
+- TLS is **verify-full** against Supabase's root CA, bundled in
+  `app/core/certs/supabase-root-2021.crt` with its SHA-256 pinned in a test. This was
+  checked read-only against both real poolers on 2026-10-19; the system CA store fails
+  against them, so `sslmode=require` alone would not verify the server.
+
+### 2.1 Create the backend project (founder, Vercel dashboard)
+
+1. Vercel → **Add New → Project** → import `AbdallahYehya1/AI-WellnessEgy`.
+2. **Root Directory:** `backend`. Framework preset: **FastAPI**, or "Other" if FastAPI
+   isn't listed. Keep the default build settings.
+3. **Environment variables** (Production scope only):
+
+   | Variable | Value |
+   |---|---|
+   | `ENVIRONMENT` | `production`. Chat stays off. |
+   | `SUPABASE_URL` | `https://xchigpviedftrkxldclk.supabase.co` |
+   | `DATABASE_URL` | **Secret.** The contents of `~/aiwe-secrets/backend_database_url`, written by `python -m app.ops.backend_role --apply` (D-46). Never the `postgres` owner URL. |
+   | `LOG_LEVEL` | `INFO` |
+
+4. Deploy. Vercel Hobby is free and needs no card. Check that the project shows the
+   **Hobby** plan.
+5. **Deployment Protection** for this project, choose one:
+   - **Protected:** All Deployments + Vercel Authentication, plus **Protection Bypass for
+     Automation**. Put that secret in the *frontend* project as `API_PROTECTION_BYPASS`;
+     it's server-only and never `NEXT_PUBLIC_`.
+   - **API-only exposure:** leave the backend unprotected. Every data endpoint already
+     requires a verified Supabase token; `/health` and `/consents/current` are the only
+     public endpoints.
+6. Verify against the backend's HTTPS URL:
+   - `/health` returns `{"status":"ok"}`;
+   - `/docs`, `/openapi.json` and `/redoc` return 404;
+   - `/me` returns 401 with no token and 401 with a forged one;
+   - the logs show `application_startup` with `database_configured: true` and no secrets.
+
+### 2.2 Connect the frontend (founder, Vercel dashboard)
+
+1. Frontend project → Settings → Environment Variables (**Production**):
+   - `API_BASE_URL`: the backend's HTTPS URL;
+   - `API_PROTECTION_BYPASS`: only if the backend is protected.
+2. Redeploy the frontend. Variable changes need a new deployment.
+3. `frontend/vercel.json` pins the frontend's server functions to `dub1` too, so auth and
+   API calls stay in Europe.
+
+**Rollback / kill switch:** delete or pause the backend project's production deployment
+(the frontend then shows "We can't load your account"), or roll back to a previous
+deployment in Vercel. To revoke database access entirely, re-run `--apply` (new password)
+or drop the role (SUPABASE_MIGRATION_RUNBOOK §9).
+
+**Database outages:** connections time out after 3 seconds, and an exhausted pool waits
+at most 3 seconds. Both return the standard 503, and only the error type is logged.
 
 ## 3. Supabase Auth **[approval for every settings change]**
 
@@ -130,7 +147,14 @@ Read-only check first (dashboard → Authentication):
   only when chat testing on that database is approved).
 - Confirm a restorable backup exists first (point-in-time recovery depends on the plan).
 
-## 5. Resend (SMTP for Supabase Auth email) **[approval before going live]**
+## 5. Email for Supabase Auth **[approval before any SMTP change]**
+
+**Status at $0: BLOCKED for arbitrary addresses (D-49).** Resend's test domain only reaches the
+account owner's address, and a verified sending domain needs a domain you own. Until then,
+Supabase's built-in email reaches only project-team addresses (about 2 per hour). The Resend
+steps below apply once a domain exists.
+
+### 5.1 Resend (with a domain)
 
 1. Resend → Domains: add a sending **subdomain** you control (e.g. `mail.<domain>`) and
    add exactly the DNS records Resend shows (DKIM, SPF/return-path MX). Wait for
@@ -151,7 +175,7 @@ Read-only check first (dashboard → Authentication):
 3. Password recovery on the HTTPS domain (desktop and phone): request, email, reset,
    old password rejected, new password works, reused link refused.
 4. `/chat` returns 404 or "isn't available yet" for real users.
-5. Vercel and Render logs contain no passwords, tokens, cookies or message text.
+5. Vercel logs (frontend and backend) contain no passwords, tokens, cookies or message text.
 
 ## 7. Incident response
 
@@ -159,7 +183,7 @@ Read-only check first (dashboard → Authentication):
   sessions; ask the user to reset their password.
 - **Recovery abuse:** remove `RECOVERY_MARKER_SECRET` (kill switch) and redeploy; review
   Supabase auth logs and rate limits.
-- **Bad deployment:** Vercel Instant Rollback; Render → Manual Deploy of the previous
+- **Bad deployment:** Vercel Instant Rollback (either project) to the previous
   commit.
-- **Secret exposure:** rotate the secret at its source (Supabase, Resend, Render, Vercel),
+- **Secret exposure:** rotate the secret at its source (Supabase, Vercel, Groq, email provider),
   redeploy, and record the incident.

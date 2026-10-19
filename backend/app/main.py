@@ -99,9 +99,12 @@ def create_app(
 
 def build_chat_runtime(settings: Settings) -> ChatRuntime | None:
     """Chat runs only when enabled with a policy allowed in this environment
-    (validated in Settings) and only ever with the fake provider here."""
+    (validated in Settings). The provider is the scripted fake unless Groq is
+    configured *and* approved; a misconfigured Groq turns chat off, it never
+    falls back to another provider."""
     if not settings.chat_enabled or settings.chat_safety_policy is None:
         return None
+    from app.ai.provider.base import ChatProvider
     from app.ai.provider.fake import FakeProvider
     from app.safety.assessor import SyntheticTestAssessor
     from app.safety.policy import get_policy
@@ -109,6 +112,14 @@ def build_chat_runtime(settings: Settings) -> ChatRuntime | None:
     policy = get_policy(settings.chat_safety_policy)
     if not policy.synthetic:  # no approved policy or real assessor exists yet (D-7)
         return None
+    provider: ChatProvider = FakeProvider()
+    if settings.chat_provider == "groq":
+        if settings.groq_api_key is None or not settings.chat_external_provider_approved:
+            logger.warning("chat_disabled", extra={"reason": "external_provider_not_approved"})
+            return None
+        from app.ai.provider.groq import GroqProvider
+
+        provider = GroqProvider(settings.groq_api_key.get_secret_value(), settings.groq_model)
     key = (
         settings.chat_signing_key.get_secret_value().encode()
         if settings.chat_signing_key is not None
@@ -117,7 +128,7 @@ def build_chat_runtime(settings: Settings) -> ChatRuntime | None:
     return ChatRuntime(
         policy=policy,
         assessor=SyntheticTestAssessor(),
-        provider=FakeProvider(),
+        provider=provider,
         signing_key=key,
         rate_limit_per_minute=settings.chat_rate_limit_per_minute,
     )

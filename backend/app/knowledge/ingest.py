@@ -2,10 +2,14 @@
 
     python -m app.knowledge.ingest app/knowledge/fixtures
 
+    python -m app.knowledge.ingest app/knowledge/sources    # curated public-health sources
+
 Rules: provenance fields are required; `approved` requires reviewer details;
-documents containing instruction-like text (a prompt-injection screen) are
-rejected. Re-ingesting the same slug + version replaces its chunks.
-Do not ingest internet content, patient records or case histories.
+non-synthetic sources must also record their licence, permitted use, retrieval
+date and clinical-review state; documents containing instruction-like text (a
+prompt-injection screen) are rejected. Re-ingesting the same slug + version
+replaces its chunks. Only curated, hand-checked excerpts with recorded provenance
+and licence: never scraped or live web content, patient records or case histories.
 """
 
 from __future__ import annotations
@@ -34,6 +38,8 @@ REQUIRED = (
     "review_status",
 )
 _AGE_BANDS = {"child", "teen", "adult"}
+# Licence and review provenance every real (non-synthetic) source must declare.
+REQUIRED_FOR_REAL_SOURCES = ("licence", "permitted_use", "retrieved_on", "clinical_review")
 _INJECTION = re.compile(
     r"ignore (all |any )?(previous|prior|above) instructions|system prompt|you are now|"
     r"disregard (the|your) (rules|instructions)|تجاهل (كل )?التعليمات",
@@ -72,6 +78,12 @@ def parse(text: str) -> ParsedDocument:
         meta.get("reviewed_by") and meta.get("reviewed_at")
     ):
         raise IngestError("approved sources need reviewed_by and reviewed_at")
+    if meta["review_status"] in ("draft", "approved"):  # real content
+        missing_provenance = [k for k in REQUIRED_FOR_REAL_SOURCES if not meta.get(k)]
+        if missing_provenance:
+            raise IngestError(f"missing provenance: {', '.join(missing_provenance)}")
+        if meta["review_status"] == "approved" and meta["clinical_review"] == "none":
+            raise IngestError("approved sources cannot have clinical_review: none")
     body = match.group(2).strip()
     if _INJECTION.search(body):
         raise IngestError("document contains instruction-like text")

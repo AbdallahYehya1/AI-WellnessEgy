@@ -51,6 +51,9 @@ class Citation(BaseModel):
     source_ref: str
     version_label: str
     synthetic: bool
+    # "approved" (clinically reviewed), "draft" (authentic publisher guidance, not
+    # clinically reviewed for this app) or "synthetic" (test content).
+    review_status: str = "approved"
 
 
 class ChatReply(BaseModel):
@@ -72,3 +75,7 @@ class ChatConfig(BaseModel):
     age_band_label: str
     test_only_policy: bool
     prototype: bool = True
+    # "scripted": a test generator quotes retrieved passages (no AI model).
+    # "model": an AI model writes the reply from retrieved passages.
+    generator: Literal["scripted", "model"] | None = None
+    model: str | None = None
