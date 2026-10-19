@@ -172,7 +172,10 @@ def test_apply_is_idempotent_and_removes_drift(role_url_for_tests: str, db_engin
 
 
 def test_apply_refuses_an_unexpected_revision(db_engine: Engine) -> None:
-    with db_engine.begin() as conn, pytest.raises(RuntimeError, match="revision '0003'"):
+    with (
+        db_engine.begin() as conn,
+        pytest.raises(RuntimeError, match="revision '0004'; expected 0002"),
+    ):
         apply_role(conn, PASSWORD, expected_revision="0002")  # the test database is at 0003
     with db_engine.connect() as conn:
         assert (

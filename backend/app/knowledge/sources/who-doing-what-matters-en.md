@@ -13,6 +13,7 @@ licence: CC BY-NC-SA 3.0 IGO
 permitted_use: verbatim excerpts of the five skill summaries, non-commercial prototype, attributed; WHO does not endorse this app
 retrieved_on: 2026-10-19
 clinical_review: none
+source_verified: true
 text_note: Text taken from WHO IRIS (text of the 2022 South Sudan adaptation by HealthRight Uganda, in which only the illustrations changed); capitalised emphasis removed
 ---
 Grounding (WHO, Doing What Matters in Times of Stress). Ground yourself during emotional storms by noticing your thoughts and feelings, slowing down and connecting with your body by slowly pushing your feet into the floor, stretching and breathing, and then refocusing and engaging with the world around you. What can you see, hear, touch, taste and smell? Pay attention with curiosity to what is in front of you. Notice where you are, who is with you and what you are doing.

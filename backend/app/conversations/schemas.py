@@ -69,6 +69,13 @@ class ChatResponse(BaseModel):
     prototype: bool = True
 
 
+class DemoPromptOut(BaseModel):
+    prompt_id: str
+    en: str
+    ar: str
+    follow_up: bool
+
+
 class ChatConfig(BaseModel):
     enabled: bool
     age_band: str
@@ -79,3 +86,6 @@ class ChatConfig(BaseModel):
     # "model": an AI model writes the reply from retrieved passages.
     generator: Literal["scripted", "model"] | None = None
     model: str | None = None
+    # Restricted demo: the only questions the server accepts (empty otherwise).
+    demo_curated: bool = False
+    demo_prompts: list[DemoPromptOut] = []

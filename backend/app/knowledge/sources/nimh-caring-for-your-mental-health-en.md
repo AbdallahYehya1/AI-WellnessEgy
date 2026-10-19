@@ -12,6 +12,7 @@ licence: Public domain (NIMH website text; NIMH asks to be cited as the source)
 permitted_use: attributed summary with short quotations, non-commercial prototype
 retrieved_on: 2026-10-19
 clinical_review: none
+source_verified: true
 text_note: Summary of the page's self-care tips with short quotations; not the full page
 ---
 Self-care habits for everyday wellbeing (NIMH). Get regular exercise: "Just 30 minutes of walking every day can boost your mood", and short bouts of activity count toward your total. Eat healthy, regular meals and stay hydrated: "A balanced diet and plenty of water can improve your energy and focus throughout the day", and cutting back on caffeine and alcohol can help some people. Make sleep a priority: "Stick to a schedule, and make sure you're getting enough sleep", and limit screen light before bed because it can make falling asleep harder.

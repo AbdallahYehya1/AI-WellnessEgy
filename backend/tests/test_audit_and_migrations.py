@@ -216,6 +216,8 @@ EXPECTED_CONSTRAINTS = {
     ("knowledge_chunks", "uq_knowledge_chunks_source_id_chunk_index"),
     ("knowledge_sources", "ck_knowledge_sources_age_bands_valid"),
     ("knowledge_sources", "ck_knowledge_sources_approved_requires_reviewer"),
+    ("knowledge_sources", "ck_knowledge_sources_approved_requires_clinical_review"),  # 0004
+    ("knowledge_chunks", "uq_knowledge_chunks_source_id_content_sha256"),  # 0004
     ("knowledge_sources", "ck_knowledge_sources_review_status_valid"),
     ("knowledge_sources", "pk_knowledge_sources"),
     ("knowledge_sources", "uq_knowledge_sources_slug_version_label"),
