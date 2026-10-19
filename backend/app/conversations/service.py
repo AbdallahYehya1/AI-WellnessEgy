@@ -30,6 +30,7 @@ from app.ai.provider.base import (
     ChatProvider,
     GenerationRequest,
     Passage,
+    ProviderError,
 )
 from app.common.errors import ApiError
 from app.common.ratelimit import allow_request, requests_last_day
@@ -39,7 +40,7 @@ from app.core.logging import get_logger
 from app.knowledge.retrieval import retrieve
 from app.safety.assessor import SafetyAssessor, assess_safety_risk
 from app.safety.contracts import Outcome, SafetyDecision
-from app.safety.gate import GenerationGate, generate_with_permit
+from app.safety.gate import GenerationGate, PermitError, generate_with_permit
 from app.safety.models import SafetyEvent
 from app.safety.output import validate_output
 from app.safety.policy import SafetyPolicy
@@ -99,6 +100,17 @@ def sign_turn(key: bytes, user_id: uuid.UUID, text: str) -> str:
 
 def _signature_valid(key: bytes, user_id: uuid.UUID, text: str, signature: str) -> bool:
     return hmac.compare_digest(sign_turn(key, user_id, text), signature)
+
+
+def _failure_category(error: BaseException) -> str:
+    """A fixed, content-free label for logs: never the message, response body or key."""
+    if isinstance(error, ProviderError):
+        return f"provider_{error}"  # e.g. provider_http_403, provider_quota, provider_malformed
+    if isinstance(error, concurrent.futures.TimeoutError | TimeoutError):
+        return "timeout"
+    if isinstance(error, PermitError):
+        return "permit"
+    return f"error_{type(error).__name__}"
 
 
 def _respond(status: ChatStatus) -> ChatResponse:
@@ -192,11 +204,12 @@ def handle_message(
                 # user turns; assistant turns are never used as search input.
                 context=[t.text for t in payload.history if t.role == "user"],
             )
-    except Exception:
-        logger.error("chat_retrieval_unavailable")
+    except Exception as error:
+        logger.error("chat_retrieval_unavailable", extra={"category": _failure_category(error)})
         _record(session, user, request_id, band.value, decision, "unavailable")
         return _respond("unavailable")
     if not chunks:
+        logger.info("chat_no_evidence")
         _record(session, user, request_id, band.value, decision, "no_evidence")
         return _respond("no_evidence")
 
@@ -219,14 +232,15 @@ def handle_message(
     )
     try:
         result = future.result(timeout=PROVIDER_TIMEOUT_SECONDS)
-    except Exception:  # timeout, provider error, permit error
+    except Exception as error:  # timeout, provider error, permit error
         future.cancel()
-        logger.error("chat_generation_failed")
+        logger.error("chat_generation_failed", extra={"category": _failure_category(error)})
         _record(session, user, request_id, band.value, decision, "unavailable")
         return _respond("unavailable")
 
     retrieved = {str(c.chunk_id): c for c in chunks}
     if not validate_output(result, set(retrieved), band_config.max_reply_chars):
+        logger.warning("chat_output_rejected")  # e.g. a citation of an unretrieved passage
         _record(session, user, request_id, band.value, decision, "unable_to_answer")
         return _respond("unable_to_answer")
 
