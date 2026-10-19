@@ -18,6 +18,7 @@ const NOTICES: Record<Locale, Record<string, { tone: "info" | "danger"; text: st
       tone: "info",
       text: "Your password has been updated. We've also ended your other sessions, which can take a little while to apply on every device. Sign in with your new password.",
     },
+    confirmed: { tone: "info", text: "Your email address is confirmed. Sign in to continue." },
     "sign-in-to-continue": { tone: "info", text: "If you just confirmed your email, sign in below to continue." },
     "confirmation-failed": {
       tone: "danger",
@@ -30,6 +31,7 @@ const NOTICES: Record<Locale, Record<string, { tone: "info" | "danger"; text: st
       tone: "info",
       text: "كلمة السر اتغيّرت. وقفنا كمان جلساتك التانية، وده ممكن ياخد شوية وقت علشان يتطبق على كل الأجهزة. سجّل الدخول بكلمة السر الجديدة.",
     },
+    confirmed: { tone: "info", text: "بريدك الإلكتروني اتأكّد. سجّل الدخول علشان تكمّل." },
     "sign-in-to-continue": { tone: "info", text: "لو لسه مأكّد بريدك، سجّل الدخول تحت علشان تكمّل." },
     "confirmation-failed": {
       tone: "danger",

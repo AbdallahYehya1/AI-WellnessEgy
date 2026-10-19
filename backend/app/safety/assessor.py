@@ -58,6 +58,20 @@ def _checked(result: object) -> Assessment:
     return result
 
 
+class CuratedPromptAssessor:
+    """Restricted demo assessor: LOW only when every user turn is a reviewed,
+    predefined question; anything else is UNKNOWN, so the policy fails closed.
+    It never interprets free text and makes no clinical judgement."""
+
+    def assess(self, window: list[str], age_band: str) -> Assessment:
+        from app.conversations.demo import match_prompt
+
+        *earlier, latest = window if window else [""]
+        if match_prompt(latest, list(earlier)) is None:
+            return Assessment(RiskLevel.UNKNOWN, reason_code="curated_unapproved")
+        return Assessment(RiskLevel.LOW, reason_code="curated_prompt")
+
+
 class SyntheticTestAssessor:
     """TEST-ONLY assessor driven by explicit markers. Not clinical."""
 

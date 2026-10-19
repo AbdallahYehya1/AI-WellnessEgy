@@ -615,3 +615,12 @@ with no real-user access.
   migrations `0003`/`0004`. With curated mode and Groq, only predetermined text and
   public WHO/NIMH passages reach the provider. A clinical assessor and policy (D-7)
   remain required for any free-form chat.
+
+- **2026-10-20 update (production curated policy):** the restricted demo now runs with
+  `ENVIRONMENT=production` under `curated-educational-demo-v1`.
+  - It's a non-synthetic, non-clinical policy limited to predefined questions, with
+    `CuratedPromptAssessor`: LOW only for approved questions, otherwise UNKNOWN, which
+    fails closed.
+  - Production accepts it only with `CHAT_DEMO_CURATED` and an allow-list.
+  - `synthetic-test-v0` remains refused in production.
+  - Free-form chat anywhere deployed still needs a clinical assessor and policy (D-7).

@@ -45,6 +45,49 @@ Ingest (as the database owner, never as app_backend):
    line and treatment/medication details (crisis handling belongs to the safety gate;
    the assistant must not discuss medication).
 
+5. nimh-generalized-anxiety-disorder-en.md
+   NIMH, "Generalized Anxiety Disorder: What You Need to Know" (revised 2025)
+   https://www.nimh.nih.gov/health/publications/generalized-anxiety-disorder-gad
+   Public domain. Education and self-management only; medication and US-only crisis
+   lines excluded.
+
+6. nimh-depression-en.md
+   NIMH, "Depression" (NIH Publication No. 24-MH-8079, 2024)
+   https://www.nimh.nih.gov/health/publications/depression
+   Public domain. Low-mood education and self-care only. Excluded: the symptom line
+   about thoughts of death or suicide (crisis handling belongs to the safety gate),
+   medication details and US-only crisis lines.
+
+7. nccih-meditation-mindfulness-en.md
+   NCCIH, "Meditation and Mindfulness: Effectiveness and Safety" (updated June 2022)
+   https://www.nccih.nih.gov/health/meditation-and-mindfulness-what-you-need-to-know
+   Public domain ("not copyrighted"; duplication encouraged). Summary with quotations.
+
+8. cdc-managing-stress-en.md
+   CDC, "Managing Stress" (page dated 2026-05-12)
+   https://www.cdc.gov/mental-health/living-with/index.html
+   U.S. federal work (generally public domain); coping list only.
+
+9. cdc-about-sleep-en.md
+   CDC, "About Sleep" (page dated 2024-05-15)
+   https://www.cdc.gov/sleep/about/index.html
+   U.S. federal work; adult sleep amounts and the habits list.
+
+10. cdc-physical-activity-benefits-en.md
+   CDC, "Benefits of Physical Activity" (page dated 2025-12-04)
+   https://www.cdc.gov/physical-activity-basics/benefits/index.html
+   U.S. federal work; mental-health and sleep benefits and the adult guideline.
+
+NOT INGESTED, and why:
+- WHO website fact sheets (including the Arabic ones). WHO's copyright page licenses
+  WHO *publications* under CC BY-NC-SA 3.0 IGO but states no licence for web content.
+  They need WHO permission, or use WHO publications instead.
+- Egyptian help resources (hotlines, services). No official source was supplied, and
+  none will be invented: an official Egyptian Ministry of Health / General Secretariat
+  of Mental Health publication listing current services is required.
+- Official Arabic versions of the NIMH, NCCIH and CDC material don't exist. Machine
+  translations are not ingested as official Arabic.
+
 Retrieved: 2026-10-19. Re-check the publisher pages before any clinical review, and
 record the reviewer, date and decision in each file (reviewed_by, reviewed_at,
 clinical_review) before changing review_status to approved.

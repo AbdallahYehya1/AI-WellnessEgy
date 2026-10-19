@@ -141,3 +141,23 @@ describe("updateSession (proxy)", () => {
     expect(location(await updateSession(request("/")))).toBeNull();
   });
 });
+
+describe("proxy: email links that land on the home page", () => {
+  it.each([
+    "?code=abc123",
+    "?token_hash=th&type=recovery",
+    "?error=access_denied&error_code=otp_expired",
+  ])("forwards %s to /auth/confirm unchanged", async (query) => {
+    const { proxy } = await import("@/proxy");
+    const response = await proxy(new NextRequest(`http://localhost:3000/${query}`));
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.pathname).toBe("/auth/confirm");
+    expect(location.search).toBe(query);
+  });
+
+  it("leaves an ordinary home-page visit alone", async () => {
+    const { proxy } = await import("@/proxy");
+    const response = await proxy(new NextRequest("http://localhost:3000/?lang=ar"));
+    expect(response.headers.get("location")).toBeNull();
+  });
+});

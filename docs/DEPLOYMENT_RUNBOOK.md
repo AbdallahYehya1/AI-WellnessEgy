@@ -236,3 +236,64 @@ email** back on.
 This is suitable for controlled testing only, because Gmail limits daily sending. Do not
 count "settings saved" as delivery: verify with a real confirmation email and a real
 reset email.
+
+## 10. Production restricted RAG demo (supersedes the staging setup in section 8)
+
+The backend stays `ENVIRONMENT=production`. Production never runs `synthetic-test-v0`.
+The demo uses its own policy, `curated-educational-demo-v1`, which:
+- authorises generation only for the reviewed, predefined questions;
+- is assessed by `CuratedPromptAssessor`, which never interprets free text;
+- is allowed in production only with `CHAT_DEMO_CURATED=true` and a non-empty
+  allow-list.
+
+Free text is refused before assessment, retrieval or any provider call.
+
+Backend project → Environment Variables (Production), then **Redeploy**:
+
+| Variable | Value |
+|---|---|
+| `CHAT_ENABLED` | `true` |
+| `CHAT_SAFETY_POLICY` | `curated-educational-demo-v1` |
+| `CHAT_SIGNING_KEY` | contents of `~/aiwe-secrets/chat_signing_key` |
+| `CHAT_DEMO_CURATED` | `true` |
+| `CHAT_DEMO_ALLOWED_USERS` | your Supabase user id (Authentication → Users → your row → UID), comma-separated if more than one |
+| `CHAT_PROVIDER` | `fake` (scripted quotes, labelled "no AI model") |
+
+Leave `ENVIRONMENT=production`. Any unsafe combination makes the backend refuse to start
+chat:
+- curated policy without curated mode;
+- curated mode without an allow-list;
+- `synthetic-test-v0` in production;
+- no signing key.
+
+The rest of the API keeps working in every case.
+
+## 11. Supabase Auth: URL configuration and email templates
+
+Authentication → URL Configuration:
+- Site URL: `https://ai-wellness-egy.vercel.app`
+- Redirect URLs: add `https://ai-wellness-egy.vercel.app/**`
+
+Authentication → Emails → Templates. Replace the link in each template:
+
+- **Confirm signup:**
+  ```html
+  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">Confirm your email</a>
+  ```
+- **Reset password:**
+  ```html
+  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password">Reset your password</a>
+  ```
+
+Why: the token-hash link is verified by our `/auth/confirm` route in any browser or on
+any device. Recovery is decided by Supabase's verified `type=recovery`, never by `next`.
+
+Even without these changes, links that land on the home page are now forwarded to
+`/auth/confirm`. The default code-based link only works in the browser that requested
+the email, though.
+
+Expected results:
+- **Confirmation:** `/sign-in` with "Your email address is confirmed. Sign in to
+  continue."
+- **Recovery:** `/reset-password`. After saving: `/sign-in` with "Your password has been
+  updated".

@@ -84,7 +84,11 @@ class ChatRuntime:
     def retrievable_statuses(self) -> tuple[str, ...]:
         # Under the test-only policy: also `draft` (authentic publisher guidance not yet
         # clinically reviewed) and `synthetic` fixtures. Any non-test policy: approved only.
-        return ("approved", "draft", "synthetic") if self.policy.synthetic else ("approved",)
+        if self.policy.synthetic:
+            return ("approved", "draft", "synthetic")
+        if self.policy.curated_only:  # real publisher passages, never synthetic fixtures
+            return ("approved", "draft")
+        return ("approved",)
 
 
 def sign_turn(key: bytes, user_id: uuid.UUID, text: str) -> str:

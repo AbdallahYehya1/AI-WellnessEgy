@@ -43,7 +43,7 @@ DEMO_PROMPTS = [
 @pytest.fixture
 def curated(db_engine: Engine) -> None:
     with Session(db_engine) as session, session.begin():
-        assert ingest_directory(session, SOURCES) == 4
+        assert ingest_directory(session, SOURCES) == 10
 
 
 @pytest.fixture
@@ -395,7 +395,7 @@ def test_curated_import_stores_provenance_and_is_repeatable(db_engine: Engine) -
         hashes = conn.execute(
             text("select count(*), count(distinct content_sha256) from app.knowledge_chunks")
         ).one()
-    assert len(rows) == 4
+    assert len(rows) == 10
     for slug, verified, clinical, licence, retrieved in rows:
         assert verified is True and clinical == "none" and licence and retrieved, slug
     assert all(sections), "every curated passage has its heading as section"

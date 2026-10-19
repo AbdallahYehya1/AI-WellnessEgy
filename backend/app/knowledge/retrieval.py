@@ -167,6 +167,64 @@ CONCEPTS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ("مختص", "متخصص", "اتعامل", "تعامل", "نصايح", "نصائح"),
     ),
 }
+CONCEPTS.update(
+    {
+        # Second source batch (NIMH anxiety and depression, NCCIH, CDC). Vocabulary from
+        # general domain knowledge, written before held-out v4 was evaluated.
+        "anxiety": (
+            ("anxiety", "anxious", "worry", "worri", "nervous", "on edge", "panic", "fear"),
+            ("قلق", "قلقان", "خوف", "خايف", "هلع", "توتر"),
+        ),
+        "low_mood": (
+            (
+                "depress",
+                "low mood",
+                "feel down",
+                "feeling down",
+                "feel low",
+                "unmotivated",
+                "no energy",
+                "empty",
+                "sad",
+            ),
+            ("اكتئاب", "مكتئب", "مزاجي", "مزاج", "زهقان", "حزين", "مخنوق", "طاقه"),
+        ),
+        "mindfulness": (
+            ("mindful", "meditat", "present moment", "breathing practice"),
+            ("تامل", "يقظه", "ميديتيشن", "مايندفولنس"),
+        ),
+        # Not bare "exercise": "grounding exercise" is a practice, not activity.
+        "physical_activity": (
+            (
+                "physical activity",
+                "physically active",
+                "workout",
+                "work out",
+                "gym",
+                "walk",
+                "running",
+                "jog",
+                "sport",
+                "move more",
+                "active",
+            ),
+            ("رياضه", "تمارين رياضيه", "مشي", "جري", "نشاط", "اتمرن"),
+        ),
+        "media": (
+            ("news", "social media", "doomscroll", "scrolling", "screen time"),
+            ("اخبار", "سوشيال", "موبايل"),
+        ),
+    }
+)
+CONCEPTS["sleep"] = (
+    CONCEPTS["sleep"][0] + ("bedroom", "bedtime", "rest", "hours of sleep"),
+    CONCEPTS["sleep"][1] + ("سرير", "سهر"),
+)
+CONCEPTS["coping"] = (
+    CONCEPTS["coping"][0] + ("doctor", "provider", "see someone", "professional help"),
+    CONCEPTS["coping"][1] + ("دكتور", "طبيب", "اخصائي"),
+)
+
 # Search terms each concept contributes, in the documents' own wording.
 EXPANSIONS: dict[str, tuple[str, str]] = {
     "stress": ("stress coping", "الضغط النفسي الإجهاد"),
@@ -179,6 +237,11 @@ EXPANSIONS: dict[str, tuple[str, str]] = {
     "habits": ("habits exercise sleep gratitude relaxing", "الأنشطة"),
     "sleep": ("sleep", "النوم"),
     "coping": ("coping professional", "الضغط النفسي"),
+    "anxiety": ("anxiety worry nervous generalized anxiety disorder", "القلق"),
+    "low_mood": ("low mood depression sad interest energy", "حزناً"),
+    "mindfulness": ("mindfulness meditation present moment", "الانتباه"),
+    "physical_activity": ("physical activity moderate-intensity walking", "النشاط"),
+    "media": ("news social media breaks unwind", "الأخبار"),
 }
 
 _DIACRITICS = re.compile(
