@@ -86,7 +86,7 @@ def create_app(
     app.state.token_verifier = token_verifier or SupabaseTokenVerifier(settings)
     app.state.session_factory = session_factory or session_factory_for(settings)
     app.state.consent_catalog = consent_catalog or DEFAULT_CATALOG
-    app.state.chat_runtime = chat_runtime or build_chat_runtime(settings)
+    app.state.chat_runtime = chat_runtime or _chat_runtime_or_none(settings)
     app.dependency_overrides[get_settings] = lambda: settings
     register_error_handlers(app)
     app.include_router(health_router)
@@ -97,17 +97,26 @@ def create_app(
     return app
 
 
+def _chat_runtime_or_none(settings: Settings) -> ChatRuntime | None:
+    """A failure while building chat turns chat off; it never stops the API."""
+    try:
+        return build_chat_runtime(settings)
+    except Exception as error:
+        logger.error("chat_disabled", extra={"reason": f"build_failed:{type(error).__name__}"})
+        return None
+
+
 def build_chat_runtime(settings: Settings) -> ChatRuntime | None:
     """Chat runs only when enabled with a policy allowed in this environment
     (validated in Settings). The provider is the scripted fake unless Groq is
     configured *and* approved; a misconfigured Groq turns chat off, it never
     falls back to another provider."""
-    if not settings.chat_enabled:
-        return None
     problems = settings.chat_config_problems()
-    if problems or settings.chat_safety_policy is None:
+    if problems:
         # Fixed reason text only (never values): chat stays off, the API keeps working.
         logger.warning("chat_disabled", extra={"reason": "; ".join(problems)})
+        return None
+    if not settings.chat_enabled or settings.chat_safety_policy is None:
         return None
     from app.ai.provider.base import ChatProvider
     from app.ai.provider.fake import FakeProvider
