@@ -92,12 +92,15 @@ def parse(text: str) -> ParsedDocument:
 
 
 def chunk(body: str) -> list[str]:
+    """Paragraphs grouped up to CHUNK_TARGET_CHARS; a headed paragraph ("Grounding (WHO,
+    ...).") always starts a new chunk, so each cited passage is one section."""
     chunks: list[str] = []
     current = ""
     for paragraph in (p.strip() for p in body.split("\n\n")):
         if not paragraph:
             continue
-        if current and len(current) + len(paragraph) + 2 > CHUNK_TARGET_CHARS:
+        starts_section = _SECTION.match(paragraph) is not None
+        if current and (starts_section or len(current) + len(paragraph) + 2 > CHUNK_TARGET_CHARS):
             chunks.append(current)
             current = paragraph
         else:
