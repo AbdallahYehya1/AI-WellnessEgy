@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pydantic import ValidationError
 
 from app.ai.prompts.age_bands import ENABLEABLE_BANDS, AgeBand, band_enabled, resolve_age_band
 from app.ai.provider.base import GenerationResult
@@ -216,8 +215,12 @@ def test_chunks_stay_within_the_size_limit() -> None:
     ],
 )
 def test_chat_settings_fail_closed(values: dict[str, Any]) -> None:
-    with pytest.raises(ValidationError):
-        Settings(**values)
+    """Unsafe chat settings keep chat OFF without crashing the rest of the API."""
+    from app.main import build_chat_runtime
+
+    settings = Settings(**values)  # the API still starts
+    assert settings.chat_config_problems() or values.get("chat_safety_policy") == "unknown"
+    assert build_chat_runtime(settings) is None
 
 
 def test_chat_is_off_by_default() -> None:

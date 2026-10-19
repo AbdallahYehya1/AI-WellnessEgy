@@ -14,7 +14,7 @@ from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["development", "test", "staging", "production"]
@@ -122,38 +122,45 @@ class Settings(BaseSettings):
             raise ValueError("SUPABASE_JWT_SECRET is too short to be a Supabase JWT secret")
         return value
 
-    @model_validator(mode="after")
-    def _chat_policy_is_allowed(self) -> Settings:
+    def chat_config_problems(self) -> list[str]:
+        """Why chat must stay off with this configuration (empty = chat may start).
+
+        Checked when the chat runtime is built, NOT at startup: an unsafe or incomplete
+        chat configuration turns chat off and logs the reason, but never takes down the
+        rest of the API (2026-10-20: a startup ValueError made every route fail).
+        """
         # Imported lazily to keep config free of import cycles.
         from app.safety.policy import policy_allowed_in
 
-        if self.chat_enabled:
-            if self.chat_safety_policy is None:
-                raise ValueError("CHAT_ENABLED requires CHAT_SAFETY_POLICY")
-            if not policy_allowed_in(
-                self.chat_safety_policy, self.environment, curated=self.chat_demo_curated
-            ):
-                raise ValueError(
-                    "CHAT_SAFETY_POLICY is not approved for this environment; "
-                    "chat cannot start (OPEN_DECISIONS D-7)"
-                )
-            if (
-                self.chat_demo_curated
-                and self.chat_demo_access == "allowlist"
-                and not self.chat_demo_allowed_users.strip()
-            ):
-                raise ValueError(
-                    "CHAT_DEMO_CURATED requires CHAT_DEMO_ALLOWED_USERS "
-                    "(or CHAT_DEMO_ACCESS=all_consented_adults)"
-                )
-            if self.is_deployed and (
-                self.chat_signing_key is None or len(self.chat_signing_key.get_secret_value()) < 32
-            ):
-                # Also needed for correctness on serverless: every instance must share it.
-                raise ValueError(
-                    "CHAT_SIGNING_KEY (32+ characters) is required in production and staging"
-                )
-        return self
+        if not self.chat_enabled:
+            return []
+        if self.chat_safety_policy is None:
+            return ["CHAT_ENABLED requires CHAT_SAFETY_POLICY"]
+        problems: list[str] = []
+        if not policy_allowed_in(
+            self.chat_safety_policy, self.environment, curated=self.chat_demo_curated
+        ):
+            problems.append(
+                "CHAT_SAFETY_POLICY is not approved for this environment; "
+                "chat cannot start (OPEN_DECISIONS D-7)"
+            )
+        if (
+            self.chat_demo_curated
+            and self.chat_demo_access == "allowlist"
+            and not self.chat_demo_allowed_users.strip()
+        ):
+            problems.append(
+                "CHAT_DEMO_CURATED requires CHAT_DEMO_ALLOWED_USERS "
+                "(or CHAT_DEMO_ACCESS=all_consented_adults)"
+            )
+        if self.is_deployed and (
+            self.chat_signing_key is None or len(self.chat_signing_key.get_secret_value()) < 32
+        ):
+            # Also needed for correctness on serverless: every instance must share it.
+            problems.append(
+                "CHAT_SIGNING_KEY (32+ characters) is required in production and staging"
+            )
+        return problems
 
     @property
     def is_production(self) -> bool:

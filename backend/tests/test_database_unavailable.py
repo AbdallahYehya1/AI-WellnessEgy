@@ -138,15 +138,20 @@ def test_staging_is_hardened_like_production() -> None:
         settings = Settings(environment=environment)
         assert settings.is_deployed and not settings.docs_enabled
     assert Settings(environment="development").docs_enabled
-    with pytest.raises(ValueError, match="CHAT_SIGNING_KEY"):
-        Settings(environment="staging", chat_enabled=True, chat_safety_policy="synthetic-test-v0")
-    with pytest.raises(ValueError, match="not approved for this environment"):
-        Settings(
-            environment="production",
-            chat_enabled=True,
-            chat_safety_policy="synthetic-test-v0",
-            chat_signing_key=SecretStr("k" * 32),
-        )
+    no_key = Settings(
+        environment="staging", chat_enabled=True, chat_safety_policy="synthetic-test-v0"
+    )
+    assert any("CHAT_SIGNING_KEY" in p for p in no_key.chat_config_problems())
+    synthetic_in_production = Settings(
+        environment="production",
+        chat_enabled=True,
+        chat_safety_policy="synthetic-test-v0",
+        chat_signing_key=SecretStr("k" * 32),
+    )
+    assert any(
+        "not approved for this environment" in p
+        for p in synthetic_in_production.chat_config_problems()
+    )
     staging_chat = Settings(
         environment="staging",
         chat_enabled=True,

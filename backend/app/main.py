@@ -102,7 +102,12 @@ def build_chat_runtime(settings: Settings) -> ChatRuntime | None:
     (validated in Settings). The provider is the scripted fake unless Groq is
     configured *and* approved; a misconfigured Groq turns chat off, it never
     falls back to another provider."""
-    if not settings.chat_enabled or settings.chat_safety_policy is None:
+    if not settings.chat_enabled:
+        return None
+    problems = settings.chat_config_problems()
+    if problems or settings.chat_safety_policy is None:
+        # Fixed reason text only (never values): chat stays off, the API keeps working.
+        logger.warning("chat_disabled", extra={"reason": "; ".join(problems)})
         return None
     from app.ai.provider.base import ChatProvider
     from app.ai.provider.fake import FakeProvider
