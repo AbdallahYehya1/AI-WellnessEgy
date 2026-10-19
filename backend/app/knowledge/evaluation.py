@@ -284,6 +284,100 @@ HELD_OUT_V3: tuple[Case, ...] = (
 )
 
 
+# Held-out v4: written 2026-10-20 BEFORE the second batch of sources and vocabulary,
+# evaluated once afterwards, never used to tune. New-topic slugs are named here
+# before those documents exist.
+NIMH_GAD = "nimh-generalized-anxiety-disorder-en"
+NIMH_DEPRESSION = "nimh-depression-en"
+NCCIH_MINDFULNESS = "nccih-meditation-mindfulness-en"
+CDC_STRESS = "cdc-managing-stress-en"
+CDC_SLEEP = "cdc-about-sleep-en"
+CDC_ACTIVITY = "cdc-physical-activity-benefits-en"
+HELD_OUT_V4: tuple[Case, ...] = (
+    Case(
+        "v4-en-worry-control",
+        "en",
+        "I can't stop worrying about everything, is that normal?",
+        frozenset({NIMH_GAD, NIMH_STRESS, NIMH_CARE}),
+    ),
+    Case(
+        "v4-en-anxiety-signs",
+        "en",
+        "What are common signs of an anxiety problem?",
+        frozenset({NIMH_GAD}),
+    ),
+    Case(
+        "v4-en-feeling-down",
+        "en",
+        "What can I do on days when I feel really down?",
+        frozenset({NIMH_DEPRESSION, NIMH_CARE, WHO_EN}),
+    ),
+    Case(
+        "v4-en-mindfulness",
+        "en",
+        "What is mindfulness and does it help with stress?",
+        frozenset({NCCIH_MINDFULNESS}),
+    ),
+    Case(
+        "v4-en-meditation-safe",
+        "en",
+        "Is meditation safe for everyone?",
+        frozenset({NCCIH_MINDFULNESS}),
+    ),
+    Case(
+        "v4-en-hours-sleep",
+        "en",
+        "How many hours of sleep does an adult need?",
+        frozenset({CDC_SLEEP}),
+    ),
+    Case(
+        "v4-en-bedroom",
+        "en",
+        "How should I set up my bedroom for better rest?",
+        frozenset({CDC_SLEEP}),
+    ),
+    Case(
+        "v4-en-walk-mood",
+        "en",
+        "Does going for a walk improve my mood?",
+        frozenset({CDC_ACTIVITY, NIMH_CARE, NIMH_DEPRESSION}),
+    ),
+    Case(
+        "v4-en-news-break",
+        "en",
+        "Should I take a break from the news and social media?",
+        frozenset({CDC_STRESS}),
+    ),
+    Case(
+        "v4-en-when-help",
+        "en",
+        "When should I talk to a doctor about my anxiety?",
+        frozenset({NIMH_GAD, NIMH_CARE, NIMH_STRESS}),
+    ),
+    Case(
+        "v4-ar-anxiety",
+        "ar",
+        "ما الفرق بين القلق العادي واضطراب القلق؟",
+        frozenset({NIMH_GAD, WHO_AR}),
+    ),
+    Case(
+        "v4-arz-mood",
+        "arz",
+        "مزاجي وحش اليومين دول أعمل إيه؟",
+        frozenset({NIMH_DEPRESSION, WHO_AR, NIMH_CARE}),
+    ),
+    Case(
+        "v4-arz-sport",
+        "arz",
+        "الرياضة بتفرق في الحالة النفسية؟",
+        frozenset({CDC_ACTIVITY, NIMH_CARE}),
+    ),
+    Case("v4-mixed-mindful", "mixed", "إيه هو ال mindfulness؟", frozenset({NCCIH_MINDFULNESS})),
+    Case("v4-off-supplement", "off-topic", "Which vitamin supplements cure anxiety?", frozenset()),
+    Case("v4-off-stock", "off-topic", "Should I buy Bitcoin this week?", frozenset()),
+)
+
+
 def _slugs_by_chunk(session: Session) -> dict[str, str]:
     rows = session.execute(
         text(
