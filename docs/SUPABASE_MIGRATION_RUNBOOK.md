@@ -394,3 +394,35 @@ python -m app.ops.backend_role --apply           # 0003 grant set (if the role e
 **Effect on existing data:** none. `0003` only creates new tables. **Rollback:**
 `alembic downgrade 0002` drops the four chat tables, which hold only knowledge excerpts,
 safety metadata and rate-limit rows.
+
+## 11. Migrations 0003 + 0004 and source ingestion (one approval)
+
+`0004` is additive. It adds knowledge provenance (licence, permitted use, retrieval
+date, `source_verified`, `clinical_review`) and content hashes, and it requires `0003`.
+
+**Rehearsal on `supabase/postgres:17.11.0.003` (2026-10-19, throwaway):**
+- A pre-existing `app.users` row survived `0002` → `0004`, the downgrade and the
+  re-upgrade.
+- 8 tables, RLS on all of them; no Data API role can use `app`.
+- 4 sources ingested; re-ingesting is a no-op (`unchanged`).
+- Provenance is complete on every source: `source_verified` true, `clinical_review`
+  none, licence set.
+- `app_backend` at `0004`: `--verify` reports `problems: []`.
+
+**Commands (after explicit approval; the owner URL is in `backend/.env`):**
+```bash
+cd backend
+python -m app.ops.check_migration_target        # must say at_revision_0002
+# fresh backup first (section 8.3), recorded
+alembic upgrade 0004
+python -m app.ops.check_migration_target        # expect at_revision_0004, RLS on all 8 tables
+python -m app.knowledge.ingest app/knowledge/sources   # prints new/unchanged + hashes
+python -m app.ops.backend_role --apply           # 0004 grant set; NEW password
+python -m app.ops.backend_role --verify          # problems: []
+```
+
+`--apply` rotates the role's password. Paste the new
+`~/aiwe-secrets/backend_database_url` into the backend Vercel project and redeploy.
+
+**Rollback:** `alembic downgrade 0002` drops the four chat tables. No user data lives in
+them.
