@@ -11,14 +11,34 @@ serialisation by accident. Nothing in this module may be sent to a browser.
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, PrivateAttr, SecretStr, ValidationError, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["development", "test", "staging", "production"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+# Chat settings. An invalid value in one of these turns chat off; it never stops the
+# rest of the API from starting (see get_settings).
+CHAT_FIELDS = frozenset(
+    {
+        "chat_enabled",
+        "chat_safety_policy",
+        "chat_signing_key",
+        "chat_rate_limit_per_minute",
+        "chat_provider",
+        "chat_external_provider_approved",
+        "groq_api_key",
+        "groq_model",
+        "chat_demo_curated",
+        "chat_demo_allowed_users",
+        "chat_demo_access",
+        "chat_provider_daily_limit",
+    }
+)
+_LOWERCASE_FIELDS = frozenset({"environment", "chat_provider", "chat_demo_access"})
 
 
 class Settings(BaseSettings):
@@ -83,6 +103,42 @@ class Settings(BaseSettings):
     # the provider, protecting a shared free quota. Over it, chat answers "unavailable".
     chat_provider_daily_limit: int = Field(default=300, gt=0, le=100_000)
 
+    # Chat variables whose value was invalid; chat stays off (names only, never values).
+    _invalid_chat_settings: list[str] = PrivateAttr(default_factory=list)
+
+    @field_validator(
+        "environment",
+        "log_level",
+        "chat_enabled",
+        "chat_safety_policy",
+        "chat_rate_limit_per_minute",
+        "chat_provider",
+        "chat_external_provider_approved",
+        "groq_model",
+        "chat_demo_curated",
+        "chat_demo_allowed_users",
+        "chat_demo_access",
+        "chat_provider_daily_limit",
+        mode="before",
+    )
+    @classmethod
+    def _tidy_pasted_value(cls, value: Any, info: ValidationInfo) -> Any:
+        # Dashboard values often arrive with a trailing newline, spaces, quotes or
+        # capitals ("True", " groq", '"all_consented_adults"'); such a value once failed
+        # validation and took the whole API down (2026-10-20).
+        if not isinstance(value, str):
+            return value
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1].strip()
+        if info.field_name == "log_level":
+            return value.upper()
+        if info.field_name in _LOWERCASE_FIELDS:
+            return value.lower()
+        if info.field_name == "chat_safety_policy" and not value:
+            return None
+        return value
+
     @field_validator("supabase_url")
     @classmethod
     def _normalise_supabase_url(cls, value: str | None) -> str | None:
@@ -132,6 +188,8 @@ class Settings(BaseSettings):
         # Imported lazily to keep config free of import cycles.
         from app.safety.policy import policy_allowed_in
 
+        if self._invalid_chat_settings:
+            return [f"invalid value for {name.upper()}" for name in self._invalid_chat_settings]
         if not self.chat_enabled:
             return []
         if self.chat_safety_policy is None:
@@ -190,4 +248,15 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    """Settings from the environment. An invalid chat variable disables chat only;
+    any other invalid variable still stops startup (fail closed)."""
+    try:
+        return Settings()
+    except ValidationError as error:
+        invalid = {str(e["loc"][0]) for e in error.errors() if e["loc"]}
+        if not invalid or not invalid <= CHAT_FIELDS:
+            raise
+        defaults: dict[str, Any] = {name: Settings.model_fields[name].default for name in invalid}
+        settings = Settings(**{**defaults, "chat_enabled": False})
+        settings._invalid_chat_settings = sorted(invalid)
+        return settings
