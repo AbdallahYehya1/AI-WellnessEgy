@@ -206,6 +206,84 @@ HELD_OUT_V2: tuple[Case, ...] = (
 )
 
 
+# Held-out v3: written 2026-10-19 AFTER the final lexicon, evaluated once, never used
+# to tune anything. This is the honest generalisation figure.
+HELD_OUT_V3: tuple[Case, ...] = (
+    Case(
+        "v3-en-tense-meeting",
+        "en",
+        "I get really tense before team meetings, what helps?",
+        frozenset({WHO_EN, NIMH_STRESS, NIMH_CARE}),
+    ),
+    Case(
+        "v3-en-five-senses",
+        "en",
+        "Is there an exercise where I notice what I can see and hear?",
+        frozenset({WHO_EN}),
+    ),
+    Case(
+        "v3-en-negative-self-talk",
+        "en",
+        "How do I deal with negative self-talk?",
+        frozenset({WHO_EN, NIMH_STRESS, NIMH_CARE}),
+    ),
+    Case(
+        "v3-en-gratitude",
+        "en",
+        "Does writing down things I'm thankful for help?",
+        frozenset({NIMH_CARE, NIMH_STRESS}),
+    ),
+    Case(
+        "v3-en-screens-bed",
+        "en",
+        "Is using my phone before bed bad for my rest?",
+        frozenset({NIMH_CARE, NIMH_STRESS}),
+    ),
+    Case(
+        "v3-en-weight-loss", "off-topic", "What is the best diet to lose 10 kg fast?", frozenset()
+    ),
+    Case(
+        "v3-en-help-when",
+        "en",
+        "How long should symptoms last before I see someone?",
+        frozenset({NIMH_CARE}),
+    ),
+    Case("v3-ar-negative-thoughts", "ar", "كيف أتخلص من الأفكار السلبية؟", frozenset({WHO_AR})),
+    Case("v3-ar-kindness-self", "ar", "كيف أعامل نفسي بلطف؟", frozenset({WHO_AR})),
+    Case("v3-ar-pressure-work", "ar", "أشعر بضغط كبير في العمل", frozenset({WHO_AR})),
+    Case(
+        "v3-arz-cant-sleep",
+        "arz",
+        "مش عارف أنام بالليل خالص",
+        frozenset({WHO_AR, NIMH_CARE, NIMH_STRESS}),
+    ),
+    Case("v3-arz-alone", "arz", "حاسس إني لوحدي ومحدش جنبي", frozenset({WHO_AR, NIMH_CARE})),
+    Case("v3-arz-overthinking", "arz", "بفكر كتير في حاجات وحشة", frozenset({WHO_AR})),
+    Case(
+        "v3-mixed-calm-down",
+        "mixed",
+        "ezay ahda lama akon metwatar?",
+        frozenset({WHO_EN, WHO_AR, NIMH_STRESS}),
+    ),
+    Case(
+        "v3-mixed-stress-work",
+        "mixed",
+        "عندي stress من الشغل جامد",
+        frozenset({WHO_AR, NIMH_STRESS, NIMH_CARE, WHO_EN}),
+    ),
+    Case(
+        "v3-mixed-habits",
+        "mixed",
+        "إيه ال habits اللي تساعدني أكون أحسن؟",
+        frozenset({NIMH_CARE, NIMH_STRESS, WHO_AR}),
+    ),
+    Case("v3-off-football", "off-topic", "مين كسب ماتش الأهلي امبارح؟", frozenset()),
+    Case("v3-off-recipe", "off-topic", "How do I make molokhia?", frozenset()),
+    Case("v3-off-diagnosis", "off-topic", "Do I have bipolar disorder?", frozenset()),
+    Case("v3-off-coding", "off-topic", "Explain recursion in JavaScript", frozenset()),
+)
+
+
 def _slugs_by_chunk(session: Session) -> dict[str, str]:
     rows = session.execute(
         text(
