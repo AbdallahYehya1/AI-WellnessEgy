@@ -50,6 +50,21 @@ DEMO_PROMPTS: tuple[DemoPrompt, ...] = (
         "إزاي أتعامل مع الأفكار والمشاعر الصعبة؟",
     ),
     DemoPrompt(
+        "sleep",
+        "What habits help with better sleep?",
+        "إيه العادات اللي تساعد على نوم أحسن؟",
+    ),
+    DemoPrompt(
+        "activity",
+        "How does physical activity help mental wellbeing?",
+        "إزاي النشاط البدني بيساعد الصحة النفسية؟",
+    ),
+    DemoPrompt(
+        "mindfulness",
+        "What is mindfulness?",
+        "يعني إيه اليقظة الذهنية (mindfulness)؟",
+    ),
+    DemoPrompt(
         "in-arabic",
         "Can you explain that in Egyptian Arabic?",
         "ممكن تشرحها بالعامية المصرية؟",
