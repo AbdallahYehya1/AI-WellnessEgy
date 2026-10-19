@@ -24,6 +24,12 @@ test.describe("first visit and registration", () => {
 
     const mail = (await outbox()).find((m) => m.to === user.email);
     await page.goto(mail!.link);
+    // Confirmation shows its own success notice and asks for an explicit sign-in.
+    await page.waitForURL("**/sign-in?status=confirmed");
+    await expect(page.getByText("Your email address is confirmed. Sign in to continue.")).toBeVisible();
+    await page.getByLabel("Email").fill(user.email);
+    await page.getByLabel("Password", { exact: true }).fill(user.password);
+    await page.getByRole("button", { name: "Sign in" }).click();
     await completeOnboarding(page);
 
     await expect(page.getByText(/not a medical assessment/)).toBeVisible();
