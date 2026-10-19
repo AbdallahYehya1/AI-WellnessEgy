@@ -134,6 +134,78 @@ HELD_OUT: tuple[Case, ...] = (
 )
 
 
+# Held-out v2: written 2026-10-19 BEFORE the second round of retrieval changes, and
+# never used to tune them. (HELD_OUT above was seen during that round, so it is now
+# reported as a tuning set.) Expected slugs list every acceptable source.
+HELD_OUT_V2: tuple[Case, ...] = (
+    Case(
+        "v2-en-workload",
+        "en",
+        "What can I do when I feel overwhelmed by my workload?",
+        frozenset({NIMH_STRESS, NIMH_CARE, WHO_EN}),
+    ),
+    Case(
+        "v2-en-presentation",
+        "en",
+        "How do I calm down quickly before a presentation?",
+        frozenset({WHO_EN, NIMH_STRESS}),
+    ),
+    Case(
+        "v2-en-sleep-tips",
+        "en",
+        "Tips for better sleep habits",
+        frozenset({NIMH_CARE, NIMH_STRESS}),
+    ),
+    Case("v2-en-replaying", "en", "I keep replaying a bad memory in my head", frozenset({WHO_EN})),
+    Case(
+        "v2-en-compassion",
+        "en",
+        "How can I be more compassionate toward myself?",
+        frozenset({WHO_EN}),
+    ),
+    Case("v2-en-values", "en", "What does acting on my values mean?", frozenset({WHO_EN})),
+    Case(
+        "v2-en-isolated",
+        "en",
+        "I feel isolated and disconnected from people",
+        frozenset({NIMH_CARE, NIMH_STRESS}),
+    ),
+    Case(
+        "v2-en-coffee",
+        "en",
+        "Should I cut down on coffee when stressed?",
+        frozenset({NIMH_STRESS, NIMH_CARE}),
+    ),
+    Case("v2-ar-anxiety", "ar", "كيف أتعامل مع القلق؟", frozenset({WHO_AR})),
+    Case("v2-ar-tareed", "ar", "ما هي تمارين التأريض؟", frozenset({WHO_AR})),
+    Case("v2-ar-sadness", "ar", "كيف أتعامل مع الحزن؟", frozenset({WHO_AR})),
+    Case("v2-arz-mind", "arz", "دماغي مش بتبطل تفكير", frozenset({WHO_AR})),
+    Case("v2-arz-pressured", "arz", "حاسس إني مضغوط جدا الأيام دي", frozenset({WHO_AR})),
+    Case("v2-arz-calmer", "arz", "إزاي أبقى أهدى؟", frozenset({WHO_AR})),
+    Case(
+        "v2-mixed-reduce-stress",
+        "mixed",
+        "3ayez a3raf ezay a2alel el stress",
+        frozenset({NIMH_STRESS, NIMH_CARE, WHO_EN}),
+    ),
+    Case(
+        "v2-mixed-sleep-arabizi",
+        "mixed",
+        "ana mesh 3aref anam kwayes",
+        frozenset({NIMH_CARE, NIMH_STRESS, WHO_AR}),
+    ),
+    Case(
+        "v2-mixed-tips-sleep",
+        "mixed",
+        "محتاج tips للنوم",
+        frozenset({NIMH_CARE, NIMH_STRESS, WHO_AR}),
+    ),
+    Case("v2-off-weather", "off-topic", "What's the weather in Cairo tomorrow?", frozenset()),
+    Case("v2-off-translate", "off-topic", "Translate this sentence into French", frozenset()),
+    Case("v2-off-medication", "off-topic", "What dose of sertraline should I take?", frozenset()),
+)
+
+
 def _slugs_by_chunk(session: Session) -> dict[str, str]:
     rows = session.execute(
         text(
