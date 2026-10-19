@@ -213,7 +213,10 @@ def test_groq_reply_maps_passage_ids_to_chunk_ids(groq_url: str) -> None:
     assert result.cited_chunk_ids == ["chunk-a"]
     sent = FakeGroq.requests[0]
     assert sent["model"] == "openai/gpt-oss-20b"
-    assert sent["max_tokens"] == 600 and sent["response_format"] == {"type": "json_object"}
+    assert sent["max_completion_tokens"] == 1024
+    assert sent["response_format"] == {"type": "json_object"}
+    # gpt-oss is a reasoning model: little reasoning, and never returned to us.
+    assert sent["reasoning_effort"] == "low" and sent["include_reasoning"] is False
     assert "[P1] Grounding text." in sent["messages"][1]["content"]
     assert FakeGroq.headers_seen[0]["Authorization"] == "Bearer test-key"
 

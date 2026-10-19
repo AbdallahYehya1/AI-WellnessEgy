@@ -32,7 +32,7 @@ from app.ai.provider.base import (
     Passage,
 )
 from app.common.errors import ApiError
-from app.common.ratelimit import allow_request
+from app.common.ratelimit import allow_request, requests_last_day
 from app.conversations.demo import DEMO_NOTICE, match_prompt
 from app.conversations.schemas import ChatReply, ChatRequest, ChatResponse, ChatStatus, Citation
 from app.core.logging import get_logger
@@ -79,6 +79,8 @@ class ChatRuntime:
     # Restricted demo (app/conversations/demo.py): approved questions, listed accounts.
     demo_curated: bool = False
     demo_allowed: frozenset[str] = frozenset()
+    demo_all_consented_adults: bool = False  # explicit access mode, see Settings
+    provider_daily_limit: int = 300
 
     @property
     def retrievable_statuses(self) -> tuple[str, ...]:
@@ -155,6 +157,16 @@ def handle_message(
         raise ApiError(
             429, "rate_limited", "Too many messages. Please wait a minute and try again."
         )
+    if getattr(runtime.provider, "kind", "scripted") == "model":
+        try:
+            with session.begin_nested():
+                used = requests_last_day(session)
+        except Exception:  # cannot tell: fail closed
+            logger.error("chat_daily_limit_unavailable")
+            return _respond("unavailable")
+        if used > runtime.provider_daily_limit:
+            logger.warning("chat_daily_limit_reached")
+            return _respond("unavailable")
 
     request_id = uuid.uuid4()
     window = [t.text for t in payload.history if t.role == "user"] + [payload.message]

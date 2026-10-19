@@ -143,6 +143,8 @@ def build_chat_runtime(settings: Settings) -> ChatRuntime | None:
         rate_limit_per_minute=settings.chat_rate_limit_per_minute,
         demo_curated=settings.chat_demo_curated,
         demo_allowed=parse_allowlist(settings.chat_demo_allowed_users),
+        demo_all_consented_adults=settings.chat_demo_access == "all_consented_adults",
+        provider_daily_limit=settings.chat_provider_daily_limit,
     )
 
 

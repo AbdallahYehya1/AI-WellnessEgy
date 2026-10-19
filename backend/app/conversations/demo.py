@@ -111,7 +111,13 @@ def parse_allowlist(raw: str) -> frozenset[str]:
     return frozenset(item.strip().casefold() for item in raw.split(",") if item.strip())
 
 
-def is_allowed(principal: AuthenticatedPrincipal, allowlist: frozenset[str]) -> bool:
+def is_allowed(
+    principal: AuthenticatedPrincipal, allowlist: frozenset[str], *, everyone: bool = False
+) -> bool:
+    """Allow-list check. ``everyone`` is the explicit all-consented-adults mode: the
+    caller has already passed authentication, the consent gate and the adult band."""
+    if everyone:
+        return True
     candidates = {str(principal.user_id).casefold()}
     if principal.email:
         candidates.add(principal.email.casefold())

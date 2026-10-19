@@ -32,6 +32,17 @@ class ChatRateEvent(Base):
     )
 
 
+def requests_last_day(session: Session) -> int:
+    """Chat requests by all users in the last 24 hours (a shared-quota guard)."""
+    return int(
+        session.execute(
+            select(func.count())
+            .select_from(ChatRateEvent)
+            .where(ChatRateEvent.created_at > func.clock_timestamp() - text("interval '1 day'"))
+        ).scalar_one()
+    )
+
+
 def allow_request(session: Session, user_id: uuid.UUID, limit_per_minute: int) -> bool:
     """Record one request and return whether it is within the limit."""
     # Serialise concurrent requests from the same user.

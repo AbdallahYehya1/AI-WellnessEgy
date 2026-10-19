@@ -297,3 +297,25 @@ Expected results:
   continue."
 - **Recovery:** `/reset-password`. After saving: `/sign-in` with "Your password has been
   updated".
+
+## 12. Chat for every consenting adult, with Groq (current configuration)
+
+Backend project → Environment Variables (Production). Keep `ENVIRONMENT=production`.
+
+| Variable | Value | Notes |
+|---|---|---|
+| `CHAT_ENABLED` | `true` | Kill switch: `false` turns chat off for everyone |
+| `CHAT_SAFETY_POLICY` | `curated-educational-demo-v1` | Never `synthetic-test-v0` (refused in production) |
+| `CHAT_SIGNING_KEY` | contents of `~/aiwe-secrets/chat_signing_key` | Required in production |
+| `CHAT_DEMO_CURATED` | `true` | Approved questions only; free text refused before any processing |
+| `CHAT_DEMO_ACCESS` | `all_consented_adults` | Every signed-in adult with current consent; set `allowlist` to restrict again |
+| `CHAT_DEMO_ALLOWED_USERS` | (not needed in `all_consented_adults` mode) | Only read in `allowlist` mode |
+| `CHAT_PROVIDER` | `groq` | `fake` = scripted quotes, no AI |
+| `CHAT_EXTERNAL_PROVIDER_APPROVED` | `true` | Required for Groq; without it chat stays off (never a silent fallback) |
+| `GROQ_API_KEY` | your key | Sensitive; server-only |
+| `GROQ_MODEL` | `openai/gpt-oss-20b` | Production model on Groq |
+| `CHAT_PROVIDER_DAILY_LIMIT` | `300` (default) | All-user ceiling per 24 h while Groq is the provider |
+| `CHAT_RATE_LIMIT_PER_MINUTE` | `10` (default) | Per user |
+
+Any missing or unsafe combination turns chat off and logs the reason (`chat_disabled`).
+The rest of the API keeps working.
