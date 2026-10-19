@@ -58,7 +58,19 @@ export default async function ChatPage() {
         {config.data.enabled ? <p className="text-xs text-ink-muted">{c.notSaved}</p> : null}
       </header>
       {config.data.enabled ? (
-        <ChatClient send={sendChat} locale={locale} />
+        <ChatClient
+          send={sendChat}
+          locale={locale}
+          demoPrompts={
+            config.data.demo_curated
+              ? (config.data.demo_prompts ?? []).map((p) => ({
+                  id: p.prompt_id,
+                  text: locale === "ar" ? p.ar : p.en,
+                  followUp: p.follow_up,
+                }))
+              : undefined
+          }
+        />
       ) : (
         <div className="space-y-4 py-6">
           <p role="status" className="text-ink-muted">

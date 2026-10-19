@@ -149,7 +149,7 @@ describe("chat client", () => {
     await user.click(screen.getByRole("button", { name: "Send" }));
   }
 
-  it("labels publisher guidance as not clinically reviewed and shows its URL as text", async () => {
+  it("labels publisher guidance as not clinically reviewed and links to the original source", async () => {
     const draft = {
       ...CITATION,
       source_title: "Doing What Matters in Times of Stress",
@@ -167,9 +167,40 @@ describe("chat client", () => {
     await type("grounding");
     expect(await screen.findByText("Grounding answer.")).toBeTruthy();
     expect(screen.getByText("Publisher guidance, not clinically reviewed")).toBeTruthy();
-    const url = screen.getByText("https://www.who.int/publications/i/item/9789240003927");
-    expect(url.tagName).toBe("SPAN"); // text, never a link
+    const link = screen.getByRole("link", { name: /who\.int\/publications/ });
+    expect(link.getAttribute("href")).toBe("https://www.who.int/publications/i/item/9789240003927");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
     expect(screen.queryByText(/Synthetic test content/)).toBeNull();
+  });
+
+  it("never links to a source outside the curated publishers' HTTPS domains", async () => {
+    const odd = { ...CITATION, source_ref: "https://example.org/page", synthetic: false, review_status: "draft" };
+    const send = vi.fn().mockResolvedValue({
+      kind: "response",
+      response: { ...reply("Answer."), reply: { text: "Answer.", signature: "s", citations: [odd] } },
+    });
+    render(<ChatClient send={send} />);
+    await type("grounding");
+    expect(await screen.findByText("Answer.")).toBeTruthy();
+    expect(screen.getByText("https://example.org/page").tagName).toBe("SPAN");
+    expect(screen.queryByRole("link", { name: /example\.org/ })).toBeNull();
+  });
+
+  it("demo mode: only the listed questions, sent as-is, with follow-ups after a reply", async () => {
+    const send = vi.fn().mockResolvedValue({ kind: "response", response: reply("Grounding answer.") });
+    const prompts = [
+      { id: "grounding", text: "Can you explain a simple grounding exercise?", followUp: false },
+      { id: "summary", text: "Can you give me a short summary?", followUp: true },
+    ];
+    render(<ChatClient send={send} demoPrompts={prompts} />);
+    expect(screen.queryByLabelText("Your message")).toBeNull(); // no free-text box
+    expect(screen.queryByRole("button", { name: prompts[1]!.text })).toBeNull(); // no follow-up yet
+    await userEvent.setup().click(screen.getByRole("button", { name: prompts[0]!.text }));
+    expect(await screen.findByText("Grounding answer.")).toBeTruthy();
+    expect(send).toHaveBeenCalledWith(prompts[0]!.text, []);
+    const followUps = screen.getByRole("list", { name: "Follow-up questions" });
+    expect(within(followUps).getByRole("button", { name: prompts[1]!.text })).toBeTruthy();
   });
 
   it("shows the reply with labelled synthetic citations and sends signed turns back", async () => {

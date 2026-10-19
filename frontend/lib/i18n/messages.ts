@@ -206,6 +206,11 @@ const en = {
     sources: "Sources",
     synthetic: "Synthetic test content",
     draft: "Publisher guidance, not clinically reviewed",
+    openSource: "opens the original source in a new tab",
+    demoNotice:
+      "Demonstration mode: choose one of the listed questions. You can't type your own message here, so nothing personal is sent.",
+    demoStartersLabel: "Example questions",
+    followUpsLabel: "Follow-up questions",
     noticeTitles: {
       support: "Support",
       out_of_scope: "Outside what I can help with",
@@ -440,6 +445,10 @@ const ar: Messages = {
     sources: "المصادر",
     synthetic: "محتوى اختباري",
     draft: "إرشادات من الناشر، مش متراجعة إكلينيكيًا",
+    openSource: "بيفتح المصدر الأصلي في تبويب جديد",
+    demoNotice: "وضع العرض التجريبي: اختار سؤال من الأسئلة دي. مش متاح تكتب رسالتك هنا، فمفيش أي حاجة شخصية بتتبعت.",
+    demoStartersLabel: "أسئلة مثال",
+    followUpsLabel: "أسئلة متابعة",
     noticeTitles: {
       support: "دعم",
       out_of_scope: "خارج اللي أقدر أساعد فيه",
