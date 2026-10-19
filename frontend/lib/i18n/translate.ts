@@ -18,6 +18,8 @@ const AR: Record<string, string> = {
   "The email or password is incorrect.": "البريد الإلكتروني أو كلمة السر غلط.",
   "Too many attempts. Please wait a few minutes and try again.": "محاولات كتير. استنى كام دقيقة وحاول تاني.",
   "We couldn't create your account right now. Please try again.": "مقدرناش نعمل حسابك دلوقتي. حاول تاني.",
+  "During testing, this app can only send email to approved test addresses. Please use your test account's email address.":
+    "أثناء فترة الاختبار، التطبيق يقدر يبعت إيميلات لعناوين الاختبار المعتمدة بس. استخدم إيميل حساب الاختبار بتاعك.",
   "We couldn't send the reset email right now. Please try again in a few minutes.": "مقدرناش نبعت رسالة إعادة التعيين دلوقتي. حاول تاني بعد كام دقيقة.",
   "We couldn't sign you in right now. Please try again.": "مقدرناش ندخّلك دلوقتي. حاول تاني.",
   "We couldn't update your password right now. Please try again.": "مقدرناش نغيّر كلمة السر دلوقتي. حاول تاني.",
