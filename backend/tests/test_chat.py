@@ -414,6 +414,8 @@ def test_config_reports_the_adult_prototype(client: TestClient) -> None:
         "prototype": True,
         "generator": "scripted",  # the fake provider: no AI model
         "model": None,
+        "demo_curated": False,  # local test runtime: not the restricted demo
+        "demo_prompts": [],
     }
 
 

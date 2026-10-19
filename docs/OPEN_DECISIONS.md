@@ -603,3 +603,15 @@ with no real-user access.
   licence, permitted use, retrieval date and clinical-review state, and `approved` can't
   carry `clinical_review: none`.
 - Becoming `approved` needs a qualified reviewer's recorded sign-off (D-7).
+
+- **2026-10-19 update (curated demo):** deployed chat now runs only in
+  `CHAT_DEMO_CURATED` mode:
+  - approved, predetermined low-risk questions only; free text is refused before
+    assessment, retrieval or any provider call;
+  - only the accounts in `CHAT_DEMO_ALLOWED_USERS`;
+  - earlier user turns must also be approved questions.
+
+  Approval is still needed for `ENVIRONMENT=staging` on the backend project and for
+  migrations `0003`/`0004`. With curated mode and Groq, only predetermined text and
+  public WHO/NIMH passages reach the provider. A clinical assessor and policy (D-7)
+  remain required for any free-form chat.

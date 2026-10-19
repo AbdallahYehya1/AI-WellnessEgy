@@ -134,6 +134,156 @@ HELD_OUT: tuple[Case, ...] = (
 )
 
 
+# Held-out v2: written 2026-10-19 BEFORE the second round of retrieval changes, and
+# never used to tune them. (HELD_OUT above was seen during that round, so it is now
+# reported as a tuning set.) Expected slugs list every acceptable source.
+HELD_OUT_V2: tuple[Case, ...] = (
+    Case(
+        "v2-en-workload",
+        "en",
+        "What can I do when I feel overwhelmed by my workload?",
+        frozenset({NIMH_STRESS, NIMH_CARE, WHO_EN}),
+    ),
+    Case(
+        "v2-en-presentation",
+        "en",
+        "How do I calm down quickly before a presentation?",
+        frozenset({WHO_EN, NIMH_STRESS}),
+    ),
+    Case(
+        "v2-en-sleep-tips",
+        "en",
+        "Tips for better sleep habits",
+        frozenset({NIMH_CARE, NIMH_STRESS}),
+    ),
+    Case("v2-en-replaying", "en", "I keep replaying a bad memory in my head", frozenset({WHO_EN})),
+    Case(
+        "v2-en-compassion",
+        "en",
+        "How can I be more compassionate toward myself?",
+        frozenset({WHO_EN}),
+    ),
+    Case("v2-en-values", "en", "What does acting on my values mean?", frozenset({WHO_EN})),
+    Case(
+        "v2-en-isolated",
+        "en",
+        "I feel isolated and disconnected from people",
+        frozenset({NIMH_CARE, NIMH_STRESS}),
+    ),
+    Case(
+        "v2-en-coffee",
+        "en",
+        "Should I cut down on coffee when stressed?",
+        frozenset({NIMH_STRESS, NIMH_CARE}),
+    ),
+    Case("v2-ar-anxiety", "ar", "كيف أتعامل مع القلق؟", frozenset({WHO_AR})),
+    Case("v2-ar-tareed", "ar", "ما هي تمارين التأريض؟", frozenset({WHO_AR})),
+    Case("v2-ar-sadness", "ar", "كيف أتعامل مع الحزن؟", frozenset({WHO_AR})),
+    Case("v2-arz-mind", "arz", "دماغي مش بتبطل تفكير", frozenset({WHO_AR})),
+    Case("v2-arz-pressured", "arz", "حاسس إني مضغوط جدا الأيام دي", frozenset({WHO_AR})),
+    Case("v2-arz-calmer", "arz", "إزاي أبقى أهدى؟", frozenset({WHO_AR})),
+    Case(
+        "v2-mixed-reduce-stress",
+        "mixed",
+        "3ayez a3raf ezay a2alel el stress",
+        frozenset({NIMH_STRESS, NIMH_CARE, WHO_EN}),
+    ),
+    Case(
+        "v2-mixed-sleep-arabizi",
+        "mixed",
+        "ana mesh 3aref anam kwayes",
+        frozenset({NIMH_CARE, NIMH_STRESS, WHO_AR}),
+    ),
+    Case(
+        "v2-mixed-tips-sleep",
+        "mixed",
+        "محتاج tips للنوم",
+        frozenset({NIMH_CARE, NIMH_STRESS, WHO_AR}),
+    ),
+    Case("v2-off-weather", "off-topic", "What's the weather in Cairo tomorrow?", frozenset()),
+    Case("v2-off-translate", "off-topic", "Translate this sentence into French", frozenset()),
+    Case("v2-off-medication", "off-topic", "What dose of sertraline should I take?", frozenset()),
+)
+
+
+# Held-out v3: written 2026-10-19 AFTER the final lexicon, evaluated once, never used
+# to tune anything. This is the honest generalisation figure.
+HELD_OUT_V3: tuple[Case, ...] = (
+    Case(
+        "v3-en-tense-meeting",
+        "en",
+        "I get really tense before team meetings, what helps?",
+        frozenset({WHO_EN, NIMH_STRESS, NIMH_CARE}),
+    ),
+    Case(
+        "v3-en-five-senses",
+        "en",
+        "Is there an exercise where I notice what I can see and hear?",
+        frozenset({WHO_EN}),
+    ),
+    Case(
+        "v3-en-negative-self-talk",
+        "en",
+        "How do I deal with negative self-talk?",
+        frozenset({WHO_EN, NIMH_STRESS, NIMH_CARE}),
+    ),
+    Case(
+        "v3-en-gratitude",
+        "en",
+        "Does writing down things I'm thankful for help?",
+        frozenset({NIMH_CARE, NIMH_STRESS}),
+    ),
+    Case(
+        "v3-en-screens-bed",
+        "en",
+        "Is using my phone before bed bad for my rest?",
+        frozenset({NIMH_CARE, NIMH_STRESS}),
+    ),
+    Case(
+        "v3-en-weight-loss", "off-topic", "What is the best diet to lose 10 kg fast?", frozenset()
+    ),
+    Case(
+        "v3-en-help-when",
+        "en",
+        "How long should symptoms last before I see someone?",
+        frozenset({NIMH_CARE}),
+    ),
+    Case("v3-ar-negative-thoughts", "ar", "كيف أتخلص من الأفكار السلبية؟", frozenset({WHO_AR})),
+    Case("v3-ar-kindness-self", "ar", "كيف أعامل نفسي بلطف؟", frozenset({WHO_AR})),
+    Case("v3-ar-pressure-work", "ar", "أشعر بضغط كبير في العمل", frozenset({WHO_AR})),
+    Case(
+        "v3-arz-cant-sleep",
+        "arz",
+        "مش عارف أنام بالليل خالص",
+        frozenset({WHO_AR, NIMH_CARE, NIMH_STRESS}),
+    ),
+    Case("v3-arz-alone", "arz", "حاسس إني لوحدي ومحدش جنبي", frozenset({WHO_AR, NIMH_CARE})),
+    Case("v3-arz-overthinking", "arz", "بفكر كتير في حاجات وحشة", frozenset({WHO_AR})),
+    Case(
+        "v3-mixed-calm-down",
+        "mixed",
+        "ezay ahda lama akon metwatar?",
+        frozenset({WHO_EN, WHO_AR, NIMH_STRESS}),
+    ),
+    Case(
+        "v3-mixed-stress-work",
+        "mixed",
+        "عندي stress من الشغل جامد",
+        frozenset({WHO_AR, NIMH_STRESS, NIMH_CARE, WHO_EN}),
+    ),
+    Case(
+        "v3-mixed-habits",
+        "mixed",
+        "إيه ال habits اللي تساعدني أكون أحسن؟",
+        frozenset({NIMH_CARE, NIMH_STRESS, WHO_AR}),
+    ),
+    Case("v3-off-football", "off-topic", "مين كسب ماتش الأهلي امبارح؟", frozenset()),
+    Case("v3-off-recipe", "off-topic", "How do I make molokhia?", frozenset()),
+    Case("v3-off-diagnosis", "off-topic", "Do I have bipolar disorder?", frozenset()),
+    Case("v3-off-coding", "off-topic", "Explain recursion in JavaScript", frozenset()),
+)
+
+
 def _slugs_by_chunk(session: Session) -> dict[str, str]:
     rows = session.execute(
         text(

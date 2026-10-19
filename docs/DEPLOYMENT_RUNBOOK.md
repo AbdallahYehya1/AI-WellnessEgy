@@ -187,3 +187,52 @@ steps below apply once a domain exists.
   commit.
 - **Secret exposure:** rotate the secret at its source (Supabase, Vercel, Groq, email provider),
   redeploy, and record the incident.
+
+## 8. Restricted RAG demo on the backend project (D-48) [approval]
+
+The prototype's safety assessor isn't clinical, so the deployed backend runs chat
+**only** in curated demo mode:
+- only the approved, predetermined questions are accepted (English and Egyptian Arabic,
+  plus follow-ups);
+- only the listed accounts can use it;
+- free text is refused before assessment, retrieval or any provider call.
+
+Backend project → Environment Variables (Production), then redeploy:
+
+| Variable | Value |
+|---|---|
+| `ENVIRONMENT` | `staging`. Hardened like production; the only difference is that the test-only chat policy is allowed. |
+| `CHAT_ENABLED` | `true` |
+| `CHAT_SAFETY_POLICY` | `synthetic-test-v0` |
+| `CHAT_SIGNING_KEY` | 32+ random characters (generated into a file, never pasted in chat) |
+| `CHAT_DEMO_CURATED` | `true` |
+| `CHAT_DEMO_ALLOWED_USERS` | the test accounts' emails, comma-separated |
+| `CHAT_PROVIDER` | `fake` (scripted quotes) or `groq` (D-47) |
+| `CHAT_EXTERNAL_PROVIDER_APPROVED`, `GROQ_API_KEY`, `GROQ_MODEL` | only for Groq, after D-47 |
+
+Migrations `0003` and `0004` and the source ingestion must be done first (migration
+runbook section 11).
+
+## 9. Free email: dedicated Gmail via Supabase custom SMTP
+
+Google documents `smtp.gmail.com`, port 587 (TLS) or 465 (SSL), signing in with the
+full address and an **App Password**. App Passwords need 2-Step Verification, and are
+unavailable with Advanced Protection, with security-key-only 2-Step Verification, or on
+work and school accounts.
+
+Supabase → Authentication → Emails → SMTP Settings:
+
+| Field | Value |
+|---|---|
+| Host | `smtp.gmail.com` |
+| Port | `587` |
+| Username | the full Gmail address |
+| Password | the App Password (entered only there) |
+| Sender | the same Gmail address |
+
+After saving, Supabase emails any address, 30 per hour by default. Then turn **Confirm
+email** back on.
+
+This is suitable for controlled testing only, because Gmail limits daily sending. Do not
+count "settings saved" as delivery: verify with a real confirmation email and a real
+reset email.

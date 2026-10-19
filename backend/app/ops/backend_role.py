@@ -58,7 +58,8 @@ GRANTS_0003: dict[str, tuple[str, ...]] = {
     "safety_events": ("INSERT",),
     "chat_rate_events": ("SELECT", "INSERT", "DELETE"),
 }
-GRANTS_BY_REVISION = {"0002": GRANTS_0002, "0003": GRANTS_0003}
+# 0004 only adds columns to the knowledge tables: same grants as 0003.
+GRANTS_BY_REVISION = {"0002": GRANTS_0002, "0003": GRANTS_0003, "0004": GRANTS_0003}
 GRANTS = GRANTS_0002
 SUPPORTED_REVISION = "0002"
 # Columns the ORM reads back (RETURNING) after an append, where it needs no full SELECT.
@@ -71,6 +72,7 @@ AUDIT_RETURNING_COLUMNS = RETURNING_COLUMNS["audit_events"]
 SEQUENCES_BY_REVISION: dict[str, tuple[str, ...]] = {
     "0002": (),
     "0003": ("chat_rate_events_id_seq",),
+    "0004": ("chat_rate_events_id_seq",),
 }
 ROLE_SETTINGS = {
     "statement_timeout": "5s",

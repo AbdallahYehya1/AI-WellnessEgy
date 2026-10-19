@@ -15,10 +15,26 @@ type Entry =
   | { id: number; kind: "assistant"; text: string; signature: string; citations: ChatCitation[] }
   | { id: number; kind: "notice"; status: ChatStatus; text: string };
 
+export type DemoPrompt = { id: string; text: string; followUp: boolean };
+
 type Props = {
   send: (message: string, history: ChatTurn[]) => Promise<ChatActionResult>;
   locale?: Locale;
+  /** Restricted demo: the only questions the server accepts. No free-text box. */
+  demoPrompts?: DemoPrompt[];
 };
+
+// Source links are shown only for HTTPS pages on the curated publishers' domains.
+const LINKABLE_HOSTS = new Set(["www.who.int", "who.int", "www.nimh.nih.gov", "nimh.nih.gov"]);
+
+function linkableSource(ref: string): string | null {
+  try {
+    const url = new URL(ref);
+    return url.protocol === "https:" && LINKABLE_HOSTS.has(url.hostname) ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Only user turns and server-signed assistant turns go back to the server. */
 function historyFrom(entries: Entry[]): ChatTurn[] {
@@ -44,8 +60,9 @@ const NOTICE_TONE: Record<ChatStatus, string> = {
  * to localStorage, sessionStorage, cookies or analytics, and it disappears on
  * refresh (D-37). Server notices are shown as the server wrote them.
  */
-export function ChatClient({ send, locale = "en" }: Props) {
+export function ChatClient({ send, locale = "en", demoPrompts }: Props) {
   const t = messages[locale].chat;
+  const demo = (demoPrompts?.length ?? 0) > 0;
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<{ message: string; code?: ChatErrorCode } | null>(null);
@@ -82,7 +99,10 @@ export function ChatClient({ send, locale = "en" }: Props) {
 
   function submit(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
-    const message = draft.trim();
+    sendMessage(draft.trim());
+  }
+
+  function sendMessage(message: string) {
     if (!message || pending) return;
     const history = historyFrom(entries);
     const userEntry: Entry = { id: nextId, kind: "user", text: message };
@@ -141,6 +161,7 @@ export function ChatClient({ send, locale = "en" }: Props) {
               <h2 className="text-lg font-bold">{t.welcomeTitle}</h2>
               <p className="text-sm text-ink-muted">{t.welcomeBody}</p>
             </div>
+            {demo ? null : (
             <ul aria-label={t.startersLabel} className="grid gap-2 sm:grid-cols-2">
               {t.starters.map((starter) => (
                 <li key={starter}>
@@ -154,6 +175,7 @@ export function ChatClient({ send, locale = "en" }: Props) {
                 </li>
               ))}
             </ul>
+            )}
           </div>
         ) : null}
 
@@ -178,6 +200,7 @@ export function ChatClient({ send, locale = "en" }: Props) {
                     sourcesLabel={t.sources}
                     syntheticLabel={t.synthetic}
                     draftLabel={t.draft}
+                    openLabel={t.openSource}
                   />
                 </div>
               ) : (
@@ -224,6 +247,15 @@ export function ChatClient({ send, locale = "en" }: Props) {
           </div>
         ) : null}
 
+        {demo ? (
+          <DemoQuestions
+            prompts={(demoPrompts ?? []).filter((p) => (entries.length === 0 ? !p.followUp : true))}
+            label={entries.length === 0 ? t.demoStartersLabel : t.followUpsLabel}
+            notice={t.demoNotice}
+            disabled={pending}
+            onAsk={sendMessage}
+          />
+        ) : (
         <form onSubmit={submit} className="space-y-2" noValidate>
           <label htmlFor="chat-message" className="text-sm font-semibold">
             {t.inputLabel}
@@ -250,6 +282,7 @@ export function ChatClient({ send, locale = "en" }: Props) {
             {t.inputHint}
           </p>
         </form>
+        )}
 
         {entries.length > 0 ? (
           confirmingReset ? (
@@ -278,16 +311,53 @@ export function ChatClient({ send, locale = "en" }: Props) {
   );
 }
 
+function DemoQuestions({
+  prompts,
+  label,
+  notice,
+  disabled,
+  onAsk,
+}: {
+  prompts: DemoPrompt[];
+  label: string;
+  notice: string;
+  disabled: boolean;
+  onAsk: (text: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-ink-muted">{notice}</p>
+      <ul aria-label={label} className="grid gap-2 sm:grid-cols-2">
+        {prompts.map((p) => (
+          <li key={p.id}>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onAsk(p.text)}
+              dir="auto"
+              className="min-h-11 w-full rounded-xl border border-line-strong bg-surface px-4 py-2.5 text-start text-sm hover:bg-surface-muted disabled:opacity-60"
+            >
+              {p.text}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function Citations({
   citations,
   sourcesLabel,
   syntheticLabel,
   draftLabel,
+  openLabel,
 }: {
   citations: ChatCitation[];
   sourcesLabel: string;
   syntheticLabel: string;
   draftLabel: string;
+  openLabel: string;
 }) {
   if (citations.length === 0) return null;
   return (
@@ -305,7 +375,18 @@ function Citations({
             ) : c.review_status === "draft" ? (
               <span className="ms-1 rounded bg-info-bg px-1.5 font-semibold text-info-ink">{draftLabel}</span>
             ) : null}
-            {c.source_ref.startsWith("https://") ? (
+            {linkableSource(c.source_ref) ? (
+              <a
+                href={linkableSource(c.source_ref) ?? undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                dir="ltr"
+                className="block break-all text-primary-strong underline underline-offset-2"
+              >
+                {c.source_ref}
+                <span className="sr-only"> ({openLabel})</span>
+              </a>
+            ) : c.source_ref.startsWith("https://") ? (
               <span className="block break-all text-ink-muted" dir="ltr">
                 {c.source_ref}
               </span>

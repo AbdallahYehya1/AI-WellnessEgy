@@ -26,6 +26,9 @@ x-api-environment: &api-environment
   CHAT_EXTERNAL_PROVIDER_APPROVED: ${CHAT_EXTERNAL_PROVIDER_APPROVED:-false}
   GROQ_API_KEY: ${GROQ_API_KEY:-}
   GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-20b}
+  # Restricted demo (D-48): approved questions only, listed accounts only.
+  CHAT_DEMO_CURATED: ${CHAT_DEMO_CURATED:-false}
+  CHAT_DEMO_ALLOWED_USERS: ${CHAT_DEMO_ALLOWED_USERS:-}
 
 services:
   db:

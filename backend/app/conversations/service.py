@@ -33,6 +33,7 @@ from app.ai.provider.base import (
 )
 from app.common.errors import ApiError
 from app.common.ratelimit import allow_request
+from app.conversations.demo import DEMO_NOTICE, match_prompt
 from app.conversations.schemas import ChatReply, ChatRequest, ChatResponse, ChatStatus, Citation
 from app.core.logging import get_logger
 from app.knowledge.retrieval import retrieve
@@ -75,6 +76,9 @@ class ChatRuntime:
     signing_key: bytes
     rate_limit_per_minute: int
     gate: GenerationGate = field(default_factory=GenerationGate)
+    # Restricted demo (app/conversations/demo.py): approved questions, listed accounts.
+    demo_curated: bool = False
+    demo_allowed: frozenset[str] = frozenset()
 
     @property
     def retrievable_statuses(self) -> tuple[str, ...]:
@@ -130,6 +134,12 @@ def handle_message(
             runtime.signing_key, user.id, turn.text, turn.signature or ""
         ):
             raise ApiError(422, "invalid_history", "The conversation history couldn't be verified.")
+
+    if runtime.demo_curated:
+        earlier = [t.text for t in payload.history if t.role == "user"]
+        if match_prompt(payload.message, earlier) is None:
+            # Refused before assessment, retrieval or any provider call.
+            return ChatResponse(status="out_of_scope", notice=DEMO_NOTICE)
 
     try:
         with session.begin_nested():  # a limiter error must not poison the request transaction

@@ -13,6 +13,7 @@ licence: CC BY-NC-SA 3.0 IGO
 permitted_use: excerpts of the official WHO Arabic edition (ISBN 978-92-4-001167-0), non-commercial prototype, attributed; WHO does not endorse this app
 retrieved_on: 2026-10-19
 clinical_review: none
+source_verified: true
 text_note: Text extracted from the WHO IRIS PDF; extraction artefacts (broken ligatures, dropped alif in lam-alif) corrected by hand; not certified verbatim
 ---
 الارتكاز (منظمة الصحة العالمية، القيام بما يهم في أوقات الضغط النفسي). ارتكز في الأرض أثناء العواصف الانفعالية من خلال ملاحظة أفكارك ومشاعرك، والإبطاء، والتواصل مع جسدك بضغط قدميك في الأرض ببطء، والتمطط والتنفس، ثم بعد ذلك إعادة التركيز والاندماج في العالم من حولك. ماذا تستطيع أن ترى وتسمع وتلمس وتتذوق وتشم؟ أعطِ ما أمامك انتباهك بفضول. ولاحظ أين تكون ومن معك وماذا تفعل.

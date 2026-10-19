@@ -202,6 +202,9 @@ export type ChatConfig = {
   /** "scripted": a test generator quotes passages; "model": an AI model writes replies. */
   generator?: "scripted" | "model" | null;
   model?: string | null;
+  /** Restricted demo: only these questions are accepted. */
+  demo_curated?: boolean;
+  demo_prompts?: { prompt_id: string; en: string; ar: string; follow_up: boolean }[];
 };
 
 /** A turn sent back to the server. Assistant turns carry the server signature. */

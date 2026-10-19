@@ -35,26 +35,105 @@ _ARABIC_REQUEST = re.compile(
     r"\b(arabic|egyptian|3arabi|masri)\b|بالعربي|بالعربية|عربي|بالمصري|مصري", re.IGNORECASE
 )
 
-# concept -> (English word prefixes or phrases, Arabic word prefixes).
+# concept -> (English/Arabizi word prefixes or phrases, Arabic word prefixes).
+# Arabic terms are written in normalised form (see normalize_arabic) and are
+# matched against normalised words with common prefixes removed.
 CONCEPTS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "stress": (
-        ("stress", "pressure", "overwhelm", "tense", "worr", "anxi", "nervous", "burnout"),
-        ("ضغط", "الضغط", "متوتر", "توتر", "التوتر", "قلق", "مضغوط", "الإجهاد", "مخنوق"),
+        (
+            "stress",
+            "pressure",
+            "overwhelm",
+            "tense",
+            "worr",
+            "anxi",
+            "nervous",
+            "burnout",
+            "workload",
+            "frazzled",
+            "on edge",
+            # Arabizi
+            "da8t",
+            "daght",
+            "metdaye2",
+            "mdaye2",
+            "2ala2",
+            "tawattor",
+            "mot2atar",
+        ),
+        (
+            "ضغط",
+            "مضغوط",
+            "متوتر",
+            "توتر",
+            "قلق",
+            "قلقان",
+            "اجهاد",
+            "مخنوق",
+            "متضايق",
+            "مرهق",
+            "ارهاق",
+        ),
     ),
     "grounding": (
-        ("grounding", "calm", "breath", "panic", "anchor"),
-        ("الارتكاز", "ارتكز", "اهدى", "أهدأ", "اهدا", "هدوء", "التنفس", "تنفس"),
+        ("grounding", "ground myself", "calm", "breath", "panic", "anchor", "settle", "relax"),
+        (
+            "ارتكاز",
+            "ارتكز",
+            "تاريض",
+            "اهدي",
+            "اهدا",
+            "اهدى",
+            "هدوء",
+            "هادي",
+            "تنفس",
+            "اتنفس",
+            "نفس عميق",
+        ),
     ),
     "thoughts": (
-        ("thought", "hooked", "unhook", "feeling", "emotion", "overthink", "rumina"),
-        ("الأفكار", "الافكار", "أفكار", "افكار", "المشاعر", "مشاعر", "شعور", "الانفكاك"),
+        (
+            "thought",
+            "hooked",
+            "unhook",
+            "feeling",
+            "emotion",
+            "overthink",
+            "rumina",
+            "replay",
+            "memor",
+            "racing",
+            "intrusive",
+            "mind won",
+            "can't stop thinking",
+        ),
+        ("افكار", "فكره", "تفكير", "بفكر", "مشاعر", "شعور", "احساس", "انفكاك", "دماغ", "ذكري"),
     ),
     "kindness": (
-        ("kind", "compassion", "critic", "blame", "hard on myself"),
-        ("اللطف", "لطيف", "قاسي", "القاسية"),
+        (
+            "kind",
+            "compassion",
+            "critic",
+            "blame",
+            "hard on myself",
+            "self-esteem",
+            "forgive myself",
+        ),
+        ("لطف", "لطيف", "قاسي", "قسوه", "اسامح نفسي"),
     ),
-    "values": (("values", "meaning", "purpose"), ("القيم", "قيم")),
-    "making_room": (("sad", "painful", "grief"), ("حزن", "حزين", "الألم")),
+    "values": (
+        ("values", "meaning", "purpose", "motivat", "what matters", "goal"),
+        ("قيم", "هدف", "دافع", "حافز", "معني"),
+    ),
+    "making_room": (
+        ("sad", "painful", "grief", "upset", "hurt"),
+        ("حزن", "حزين", "زعلان", "متضايق", "الم", "مكسور"),
+    ),
+    # Not "اهلي" ("my family"): after removing "ال" it collides with الأهلي, the club.
+    "connection": (
+        ("lonel", "isolat", "disconnect", "alone", "friend", "family", "social", "connected"),
+        ("وحيد", "وحده", "لوحدي", "عزله", "اصحاب", "صحاب", "اصدقاء", "عيلتي"),
+    ),
     "habits": (
         (
             # Not "exercise": in "grounding exercise" it means a practice, not activity.
@@ -70,22 +149,22 @@ CONCEPTS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "hydrat",
             "gratitude",
             "grateful",
-            "relax",
             "meditat",
-            "connected",
             "journal",
             "caffeine",
+            "coffee",
+            "routine",
         ),
-        ("عادات", "عادة", "الرياضة", "رياضة", "المشي", "الامتنان", "الاسترخاء", "استرخاء"),
+        ("عادات", "عاده", "رياضه", "مشي", "امتنان", "استرخاء", "روتين", "قهوه", "اكل"),
     ),
-    # "nom"/"nawm": Arabizi for sleep.
+    # Arabizi: nom/nawm/anam/nayem = sleep, sahran = up all night.
     "sleep": (
-        ("sleep", "insomnia", "tired", "nom", "nawm"),
-        ("النوم", "نوم", "أنام", "انام", "تعبان"),
+        ("sleep", "insomnia", "tired", "nom", "nawm", "anam", "nayem", "sahran"),
+        ("نوم", "انام", "نايم", "سهران", "ارق", "تعبان"),
     ),
     "coping": (
-        ("cope", "coping", "technique", "professional", "therapist", "counsel"),
-        ("مختص", "متخصص", "أتعامل", "اتعامل", "التعامل"),
+        ("cope", "coping", "technique", "professional", "therapist", "counsel", "tips", "advice"),
+        ("مختص", "متخصص", "اتعامل", "تعامل", "نصايح", "نصائح"),
     ),
 }
 # Search terms each concept contributes, in the documents' own wording.
@@ -96,10 +175,37 @@ EXPANSIONS: dict[str, tuple[str, str]] = {
     "kindness": ("kind kindness", "اللطف لطيفاً"),
     "values": ("values", "القيم"),
     "making_room": ("making room feelings", "إفساح المجال"),
+    "connection": ("connected friends family support", "الآخرين"),
     "habits": ("habits exercise sleep gratitude relaxing", "الأنشطة"),
     "sleep": ("sleep", "النوم"),
     "coping": ("coping professional", "الضغط النفسي"),
 }
+
+_DIACRITICS = re.compile(
+    "[" + chr(0x064B) + "-" + chr(0x0652) + chr(0x0670) + chr(0x0640) + "]"
+)  # harakat, dagger alif, tatweel
+_PREFIXES = ("وال", "بال", "لل", "فال", "كال", "ال", "و", "ب", "ل", "ف")
+
+
+def normalize_arabic(word: str) -> str:
+    """Normalise spelling variants so lexicon matching is robust (not a stemmer)."""
+    word = _DIACRITICS.sub("", word)
+    word = re.sub(
+        "[" + chr(0x0622) + chr(0x0623) + chr(0x0625) + chr(0x0671) + "]", chr(0x0627), word
+    )  # alef forms -> bare alef
+    # alef maqsura -> yeh, teh marbuta -> heh
+    return word.replace(chr(0x0649), chr(0x064A)).replace(chr(0x0629), chr(0x0647))
+
+
+def _arabic_forms(word: str) -> set[str]:
+    """The normalised word, and the word with one common prefix removed."""
+    base = normalize_arabic(word)
+    forms = {base}
+    for prefix in _PREFIXES:
+        if base.startswith(prefix) and len(base) - len(prefix) >= 2:
+            forms.add(base[len(prefix) :])
+    return forms
+
 
 _SQL = text(
     """
@@ -198,13 +304,17 @@ class SearchPlan:
 
 def _concepts(text_: str) -> set[str]:
     lowered = text_.lower()
-    latin = _LATIN_WORD.findall(lowered)
-    arabic = _ARABIC_WORD.findall(text_)
+    # Arabizi digits (2, 3, 5, 7, 8, 9) are letters, so keep them inside Latin words.
+    latin = re.findall(r"[a-z0-9][a-z0-9']{2,}", lowered)
+    arabic_forms = set().union(*(_arabic_forms(w) for w in _ARABIC_WORD.findall(text_)))
+    normalized_text = " ".join(normalize_arabic(w) for w in text_.split())
     found = set()
     for name, (english, arabic_terms) in CONCEPTS.items():
         phrase = any(" " in t and t in lowered for t in english)
         word = any(w.startswith(t) for w in latin for t in english if " " not in t)
-        arabic_word = any(w.startswith(t) for w in arabic for t in arabic_terms)
+        arabic_word = any(
+            f.startswith(t) for f in arabic_forms for t in arabic_terms if " " not in t
+        ) or any(" " in t and t in normalized_text for t in arabic_terms)
         if phrase or word or arabic_word:
             found.add(name)
     return found

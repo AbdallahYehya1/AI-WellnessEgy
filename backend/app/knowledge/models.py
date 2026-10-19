@@ -11,6 +11,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Computed,
     Date,
@@ -21,6 +22,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, TSVECTOR, UUID
@@ -52,6 +54,10 @@ class KnowledgeSource(Base):
             "review_status <> 'approved' OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL)",
             name="approved_requires_reviewer",
         ),
+        CheckConstraint(
+            "review_status <> 'approved' OR clinical_review <> 'none'",
+            name="approved_requires_clinical_review",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -69,12 +75,23 @@ class KnowledgeSource(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Provenance (0004). Three different things, never interchangeable:
+    # source_verified = engineering checked publisher, URL and text;
+    # permitted_use/licence = what this prototype may do with it;
+    # clinical_review = a qualified reviewer's decision ("none" until then).
+    licence: Mapped[str | None] = mapped_column(String(300))
+    permitted_use: Mapped[str | None] = mapped_column(String(500))
+    retrieved_on: Mapped[date | None] = mapped_column(Date)
+    source_verified: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    clinical_review: Mapped[str] = mapped_column(String(200), server_default="none")
+    content_sha256: Mapped[str | None] = mapped_column(String(64))
 
 
 class KnowledgeChunk(Base):
     __tablename__ = "knowledge_chunks"
     __table_args__ = (
         UniqueConstraint("source_id", "chunk_index"),
+        UniqueConstraint("source_id", "content_sha256"),
         CheckConstraint("char_length(content) BETWEEN 1 AND 4000", name="content_length"),
         Index("ix_knowledge_chunks_search", "search_vector", postgresql_using="gin"),
     )
@@ -88,3 +105,5 @@ class KnowledgeChunk(Base):
     search_vector: Mapped[str] = mapped_column(
         TSVECTOR, Computed(SEARCH_VECTOR_SQL, persisted=True)
     )
+    section: Mapped[str | None] = mapped_column(String(200))  # the passage's heading
+    content_sha256: Mapped[str | None] = mapped_column(String(64))

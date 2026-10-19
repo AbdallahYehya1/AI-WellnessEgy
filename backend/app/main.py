@@ -106,11 +106,16 @@ def build_chat_runtime(settings: Settings) -> ChatRuntime | None:
         return None
     from app.ai.provider.base import ChatProvider
     from app.ai.provider.fake import FakeProvider
+    from app.conversations.demo import parse_allowlist
     from app.safety.assessor import SyntheticTestAssessor
     from app.safety.policy import get_policy
 
     policy = get_policy(settings.chat_safety_policy)
     if not policy.synthetic:  # no approved policy or real assessor exists yet (D-7)
+        return None
+    if settings.is_deployed and not settings.chat_demo_curated:
+        # No free-form chat on a deployed environment while the assessor isn't clinical.
+        logger.warning("chat_disabled", extra={"reason": "deployed_requires_curated_demo"})
         return None
     provider: ChatProvider = FakeProvider()
     if settings.chat_provider == "groq":
@@ -131,6 +136,8 @@ def build_chat_runtime(settings: Settings) -> ChatRuntime | None:
         provider=provider,
         signing_key=key,
         rate_limit_per_minute=settings.chat_rate_limit_per_minute,
+        demo_curated=settings.chat_demo_curated,
+        demo_allowed=parse_allowlist(settings.chat_demo_allowed_users),
     )
 
 

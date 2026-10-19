@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     chat_external_provider_approved: bool = False
     groq_api_key: SecretStr | None = None
     groq_model: str = "openai/gpt-oss-20b"
+    # Restricted educational demo (D-48): only predetermined questions, only for the
+    # listed accounts (comma-separated emails and/or Supabase user ids). Deployed
+    # environments run chat ONLY in this mode.
+    chat_demo_curated: bool = False
+    chat_demo_allowed_users: str = ""
 
     @field_validator("supabase_url")
     @classmethod

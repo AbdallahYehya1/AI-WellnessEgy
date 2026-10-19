@@ -367,3 +367,57 @@ def test_every_curated_source_is_draft_with_licence_and_no_clinical_review() -> 
         assert meta["clinical_review"] == "none", path.name
         assert meta["licence"] and meta["permitted_use"], path.name
         assert meta["source_ref"].startswith("https://"), path.name
+
+
+# --- Deterministic, provenance-aware ingestion (0004) -------------------------------
+
+
+def test_curated_import_stores_provenance_and_is_repeatable(db_engine: Engine) -> None:
+    from sqlalchemy import text
+
+    from app.knowledge.ingest import ingest_directory_report
+
+    with Session(db_engine) as session, session.begin():
+        first = ingest_directory_report(session, SOURCES)
+    with Session(db_engine) as session, session.begin():
+        second = ingest_directory_report(session, SOURCES)
+    assert {r.status for r in first} == {"new"}
+    assert {r.status for r in second} == {"unchanged"}  # same hashes: chunks untouched
+    assert [r.content_sha256 for r in first] == [r.content_sha256 for r in second]
+    with db_engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "select slug, source_verified, clinical_review, licence, retrieved_on "
+                "from app.knowledge_sources order by slug"
+            )
+        ).fetchall()
+        sections = [r[0] for r in conn.execute(text("select section from app.knowledge_chunks"))]
+        hashes = conn.execute(
+            text("select count(*), count(distinct content_sha256) from app.knowledge_chunks")
+        ).one()
+    assert len(rows) == 4
+    for slug, verified, clinical, licence, retrieved in rows:
+        assert verified is True and clinical == "none" and licence and retrieved, slug
+    assert all(sections), "every curated passage has its heading as section"
+    assert hashes[0] == hashes[1]
+
+
+def test_a_changed_document_is_rechunked_and_duplicates_are_stored_once(
+    db_engine: Engine,
+) -> None:
+    from app.knowledge.ingest import ingest_document_result
+
+    meta = (
+        "---\nslug: dup\ntitle: t\npublisher: p\nsource_ref: https://example.org\n"
+        "version_label: 1\ncontent_type: x\nlanguage: en\nage_bands: adult\n"
+        "review_status: synthetic\n---\n"
+    )
+    long = "Same long passage. " * 30  # ~570 chars: each paragraph becomes its own chunk
+    body = f"{long}\n\n{long}\n"
+    with Session(db_engine) as session, session.begin():
+        _, first = ingest_document_result(session, parse(meta + body))
+        _, again = ingest_document_result(session, parse(meta + body))
+        _, changed = ingest_document_result(session, parse(meta + "A new passage.\n"))
+    assert (first.status, first.chunks) == ("new", 1)  # two identical chunks, stored once
+    assert again.status == "unchanged"
+    assert (changed.status, changed.chunks) == ("updated", 1)
