@@ -98,7 +98,10 @@ class Settings(BaseSettings):
         # "not configured", never "configured with an empty value".
         if value is None or not value.get_secret_value().strip():
             return None
-        return value
+        # Values pasted into a dashboard often carry a trailing newline or spaces.
+        # Never meaningful in a URL or key, and fatal for DATABASE_URL: the database
+        # name became "postgres\n" and every connection failed (2026-10-19 outage).
+        return SecretStr(value.get_secret_value().strip())
 
     @field_validator("supabase_jwt_secret")
     @classmethod

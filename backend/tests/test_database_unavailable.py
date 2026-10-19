@@ -154,3 +154,19 @@ def test_staging_is_hardened_like_production() -> None:
         chat_signing_key=SecretStr("k" * 32),
     )
     assert staging_chat.chat_enabled  # test-only policy: staging only, never production
+
+
+@pytest.mark.parametrize("pasted", ["{url}\n", "  {url}  ", "{url}\r\n", "\t{url}"])
+def test_pasted_whitespace_around_database_url_is_removed(
+    pasted: str, test_database_url: str
+) -> None:
+    """2026-10-19 outage: a trailing newline made the database name "postgres\n"."""
+    from pydantic import SecretStr
+
+    from app.core.config import Settings
+
+    settings = Settings(database_url=SecretStr(pasted.format(url=test_database_url)))
+    assert settings.database_url is not None
+    assert settings.database_url.get_secret_value() == test_database_url
+    with api_client(auth_settings(database_url=pasted.format(url=test_database_url))) as client:
+        assert client.get("/me", headers=bearer()).status_code == 200

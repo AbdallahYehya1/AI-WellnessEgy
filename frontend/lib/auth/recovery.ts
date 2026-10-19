@@ -51,11 +51,13 @@ export function recoveryCookieOptions() {
  * The signing key, or null when it is missing or too weak (recovery then fails
  * closed). Expected: at least 32 random bytes, base64url-encoded, e.g.
  * `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`.
+ * Standard base64 (`openssl rand -base64 32`, with + / and = padding) is accepted
+ * too: rejecting it silently disabled password reset. The strength checks are the same.
  */
 export function recoverySecret(): Buffer | null {
   const raw = process.env.RECOVERY_MARKER_SECRET?.trim();
-  if (!raw || !/^[A-Za-z0-9_-]+$/.test(raw)) return null;
-  const key = Buffer.from(raw, "base64url");
+  if (!raw || !/^[A-Za-z0-9_\-+/]+={0,2}$/.test(raw)) return null;
+  const key = Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64");
   if (key.length < MIN_SECRET_BYTES) return null;
   // Reject obviously non-random keys (e.g. one repeated character).
   if (new Set(key).size < 8) return null;
