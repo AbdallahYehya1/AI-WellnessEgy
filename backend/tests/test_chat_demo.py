@@ -191,8 +191,9 @@ def test_production_runs_the_curated_demo_policy_with_its_own_assessor() -> None
 def test_production_refuses_every_unsafe_combination(
     overrides: dict[str, Any], message: str
 ) -> None:
-    with pytest.raises(ValueError, match=message):
-        _production(**overrides)
+    settings = _production(**overrides)  # the API still starts; chat stays off
+    assert any(message in p for p in settings.chat_config_problems())
+    assert build_chat_runtime(settings) is None
 
 
 def test_curated_assessor_never_rates_free_text_low() -> None:
@@ -258,8 +259,9 @@ def test_all_consented_adults_mode_needs_no_allowlist_and_admits_any_consented_u
 
 
 def test_an_empty_allowlist_is_never_treated_as_everyone() -> None:
-    with pytest.raises(ValueError, match="CHAT_DEMO_ALLOWED_USERS"):
-        _production(chat_demo_allowed_users="")  # default access mode: allowlist
+    settings = _production(chat_demo_allowed_users="")  # default access mode: allowlist
+    assert any("CHAT_DEMO_ALLOWED_USERS" in p for p in settings.chat_config_problems())
+    assert build_chat_runtime(settings) is None
 
 
 def test_all_adults_still_requires_consent(curated: None) -> None:
@@ -311,3 +313,23 @@ def test_the_shared_daily_cap_stops_model_calls(curated: None, db_engine: Engine
     assert statuses[:2] == ["reply", "reply"]
     assert set(statuses[2:]) == {"unavailable"}  # cap reached: no further model calls
     assert provider.calls == 2
+
+
+def test_a_broken_chat_configuration_never_takes_down_the_api() -> None:
+    """2026-10-20 outage: a startup ValueError made every route return 500."""
+    from tests.auth_helpers import api_client, auth_settings
+
+    production = _production(chat_demo_allowed_users="", chat_signing_key=None)
+    assert len(production.chat_config_problems()) == 2  # constructing it no longer raises
+    # The same broken chat settings on an app the local (non-TLS) test database can serve:
+    settings = auth_settings(
+        chat_enabled=True,
+        chat_safety_policy=CURATED_DEMO_POLICY_ID,
+        chat_demo_curated=True,  # but no allow-list
+    )
+    assert settings.chat_config_problems()
+    client = api_client(settings)
+    assert client.get("/health").status_code == 200
+    assert client.get("/me", headers=bearer()).status_code == 200
+    consent(client)
+    assert client.get("/chat/config", headers=bearer()).json()["enabled"] is False
