@@ -1,7 +1,7 @@
 # Real authentication test plan (Supabase, controlled testing)
 
-Status: **NOT RUN** (as of 2026-10-18: P4 Render, P5 migrations and P6 redirect URLs are still outstanding; see IMPLEMENTATION_STATUS §M8). Every check below needs the real Supabase project, the protected
-Vercel deployment, the Render backend and the founder (inbox owner). Automated tests use
+Status: **NOT RUN** (as of 2026-10-18: P4 the Vercel backend project and P6 redirect URLs are still outstanding; P5 migration 0002 done 2026-10-18; see IMPLEMENTATION_STATUS §M8). Every check below needs the real Supabase project, the protected
+Vercel deployment, the Vercel backend project and the founder (inbox owner). Automated tests use
 a mock auth server and do **not** count as these checks.
 
 Rules: synthetic names only; no real health information; never paste passwords, links,
@@ -15,7 +15,7 @@ account's password, and only during the recovery checks.
 | P1 | Vercel: All Deployments + Vercel Authentication (verified 2026-10-17 from outside: production and previews redirect to Vercel login) | done |
 | P2 | Vercel: production branch `main`; Supabase variables, `SITE_URL`, `API_BASE_URL`, `RECOVERY_MARKER_SECRET` scoped to the environment under test | founder |
 | P3 | PR #4 merged; Vercel production deployment of the merge commit, still protected (merged 2026-10-17 as `4cfa0b9`; production serves it; protection re-probed 2026-10-18) | done |
-| P4 | Render backend running (`render.yaml`), `ENVIRONMENT=production`, healthy | founder approval |
+| P4 | Vercel backend project running (DEPLOYMENT_RUNBOOK §2), `ENVIRONMENT=production`, healthy, as `app_backend` | founder |
 | P5 | Migrations `0001`–`0002` applied (`docs/SUPABASE_MIGRATION_RUNBOOK.md` §8) | founder approval |
 | P6 | Supabase Site URL / Redirect URLs include `<SITE_URL>/auth/confirm**` | founder approval |
 | P7 | Email delivery: until custom SMTP (Resend) is verified, only Supabase organization members receive email, about 2 per hour. Use an org-member address. | founder |
@@ -35,7 +35,7 @@ account's password, and only during the recovery checks.
 | A8 | Recovery edge cases | Reusing the same link → "invalid, expired or already used"; opening it in another browser → same; visiting `/reset-password` while normally signed in → refused |
 | A9 | Session revocation (real semantics) | After the reset, a second browser that was signed in loses access at its next token refresh; already-issued access tokens may keep working until they expire (Supabase behaviour, documented) |
 | A10 | Session expiry | After removing cookies (or waiting past expiry), protected pages send the tester to sign-in and back after signing in |
-| A11 | Logs | Vercel and Render logs contain no passwords, tokens, cookies, emails or message text |
+| A11 | Logs | Vercel (frontend and backend) logs contain no passwords, tokens, cookies, emails or message text |
 | A12 | Phone | A1, A4 and A7 repeated on a phone browser |
 
 ## Email dependency (until custom SMTP is verified)

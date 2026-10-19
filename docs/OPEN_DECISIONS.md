@@ -1,6 +1,6 @@
 # Open Decisions
 
-Last updated: 2026-10-18 (M8.1 Render preparation; D-44 to D-46).
+Last updated: 2026-10-19 (M9 zero-cost Vercel deployment and RAG prototype; D-45 to D-50).
 
 Engineering does not make the decisions below. Some are clinical, legal or
 crisis-procedure calls, and some belong to the founder. Until each one is
@@ -498,13 +498,13 @@ with no real-user access.
 - Rehearsed only on a local Supabase Postgres image (§8.8), so the real database's state
   is still **unknown**.
 
-### D-45. Render paid instance — OPEN (founder approval of the displayed price)
+### D-45. Render paid instance — CANCELLED 2026-10-19 (budget is strictly $0; the backend moves to a second Vercel Hobby project; `render.yaml` removed)
 - `0.5c-512mb` is listed at US$7/month, billed per second. The Hobby workspace is US$0,
   so expect about US$7/month plus any bandwidth beyond the allowance.
 - Don't create the service before D-44 is done: an unmigrated database makes `/me`
   fail.
 
-### D-46. Least-privilege database role for the internet-facing backend — PROPOSED (founder approval to create it on the real database)
+### D-46. Least-privilege database role for the internet-facing backend — PROPOSED (founder approval to create it on the real database; updated 2026-10-19 for Vercel and 0003)
 - **Problem:** the backend would otherwise connect as `postgres`, which owns every `app`
   object, has `CREATEROLE` and `BYPASSRLS`, and can read `auth.*` (emails, password
   hashes). A leaked Render `DATABASE_URL` or a backend compromise would expose the
@@ -538,3 +538,68 @@ with no real-user access.
   SECURITY DEFINER function. The pooler login for the role is still unverified until
   the role exists.
 - **Before migration 0003:** extend `GRANTS` for the chat tables and re-run `--apply`.
+- **2026-10-19 update:**
+  - The backend on Vercel connects through the **transaction pooler** (port 6543) with
+    TLS verify-full against the bundled Supabase root CA.
+  - Grants are revision-aware: `0002`, or `0003` with the chat tables (read-only
+    knowledge, append-only safety events, the self-pruning limiter).
+  - Rehearsed at `0003` on the Supabase image: `problems: []`.
+  - The chat journey runs as the role in tests.
+
+### D-47. External AI provider (Groq) for real-model chat — BLOCKED (founder privacy decision + D-48)
+- **Implemented, off by default:** `CHAT_PROVIDER=groq` also needs `GROQ_API_KEY` and
+  `CHAT_EXTERNAL_PROVIDER_APPROVED=true`. Without both, chat turns off; it never falls
+  back to another provider. Tested against a local stand-in, never the real API.
+- **Groq's published terms (2026-10-19):**
+  - Inputs and outputs may be logged for up to **30 days** unless **Zero Data Retention**
+    is enabled in Data Controls.
+  - Data is stored in the **US**.
+  - Rate limits (page labels them Developer-plan base limits): 30 requests/min,
+    1,000/day and 200K tokens/day for the GPT-OSS models. Exceeding them returns
+    HTTP 429, which the app reports as "unavailable".
+  - Upgrading is manual. The page doesn't say whether the free tier needs a card.
+- **Request minimisation:** the current message, the last 4 turns and the retrieved
+  passages; no user id, email or name. 600 output tokens, 8 s timeout, JSON-only, and
+  citations validated against the retrieved passages.
+- **Founder decisions needed:**
+  1. A recorded privacy decision that wellness messages may go to a US provider (consent
+     wording, residency).
+  2. Enable ZDR.
+  3. Confirm the free tier needs no card and the model is available to the account.
+  4. Store the key only in Vercel.
+- The model id defaults to `openai/gpt-oss-20b` and must be confirmed on the account.
+
+### D-48. Chat on the deployed test environment — BLOCKED (founder approval; clinical gate D-7 still open)
+- Production refuses the test-only safety policy by design. The test-only assessor
+  recognises explicit test markers and a small **engineering crisis screen** (English,
+  Arabic, Egyptian, Arabizi) that routes crisis language to the support response. **It
+  is not a clinical assessor, and misses are expected.**
+- **To demo chat on Vercel:** set the backend project to `ENVIRONMENT=staging` (hardened
+  like production: docs off, verified TLS, shared signing key), plus
+  `CHAT_ENABLED=true`, `CHAT_SAFETY_POLICY=synthetic-test-v0` and a 32+ character
+  `CHAT_SIGNING_KEY`.
+- That exposes the prototype to every signed-in account on the real project, so it needs
+  explicit approval, a tester-only audience (Vercel protection) and migration `0003`.
+
+### D-49. Auth email to arbitrary addresses at $0 — BLOCKED (no domain)
+- Resend's test domain delivers only to the account owner. Verified sending needs a
+  domain you own.
+- Brevo can't authenticate free-mail senders (third-party guides say it rewrites them to
+  its own domain).
+- Gmail SMTP with an app password is unverified for Supabase, and is meant for personal
+  sending.
+- Until a domain exists, Supabase's built-in email reaches only project-team addresses
+  (about 2 per hour). Real-auth checks use the founder's team address.
+
+### D-50. Curated knowledge sources — DRAFT (not clinically reviewed)
+- Four authentic public-health sources (`app/knowledge/sources/`, provenance in
+  `SOURCES.txt`):
+  - WHO, *Doing What Matters in Times of Stress* (English and the official Arabic
+    edition; CC BY-NC-SA 3.0 IGO, non-commercial excerpts, attributed, not endorsed by
+    WHO);
+  - two NIMH pages (public domain).
+- All are `review_status: draft`, `clinical_review: none`. They're retrievable only under
+  the test-only policy; production retrieval is `approved` only. Ingestion now requires
+  licence, permitted use, retrieval date and clinical-review state, and `approved` can't
+  carry `clinical_review: none`.
+- Becoming `approved` needs a qualified reviewer's recorded sign-off (D-7).
