@@ -61,6 +61,12 @@ export const backend = {
   fetchMoodHistory: vi.fn(),
   fetchChatConfig: vi.fn(),
   sendChatMessage: vi.fn(),
+  updateHistorySettings: vi.fn(),
+  listConversations: vi.fn(),
+  fetchConversation: vi.fn(),
+  renameConversation: vi.fn(),
+  deleteConversation: vi.fn(),
+  deleteAllConversations: vi.fn(),
 };
 
 export function moodCheckin(score: number, submittedAt: string, id = `c-${score}-${submittedAt}`) {

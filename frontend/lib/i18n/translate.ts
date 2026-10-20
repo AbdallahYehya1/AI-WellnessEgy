@@ -1,5 +1,5 @@
 import { PASSWORD_MIN_LENGTH } from "@/lib/auth/validation";
-import { MAX_MESSAGE_CHARS } from "@/lib/chat/limits";
+import { MAX_MESSAGE_CHARS, MAX_TITLE_CHARS } from "@/lib/chat/limits";
 import type { Locale } from "@/lib/i18n/config";
 import { DISPLAY_NAME_MAX_LENGTH } from "@/lib/onboarding/validation";
 
@@ -49,6 +49,16 @@ const AR: Record<string, string> = {
   "The assistant isn't available for your account.": "المساعد مش متاح لحسابك.",
   "You're sending messages quickly. Please wait a minute.": "بتبعت رسايل بسرعة. استنى دقيقة.",
   [`Messages can be up to ${MAX_MESSAGE_CHARS} characters.`]: `الرسالة ممكن تكون لحد ${MAX_MESSAGE_CHARS} حرف.`,
+  "This conversation couldn't be verified. Please start a new chat.": "مقدرناش نتأكد من المحادثة دي. ابدأ محادثة جديدة.",
+  "Saved chats are switched off, so this saved chat can't continue.": "حفظ المحادثات مقفول، فالمحادثة المحفوظة دي مينفعش تكمل.",
+  "You've reached the number of saved chats. Delete some older chats to save more.": "وصلت للحد الأقصى من المحادثات المحفوظة. امسح محادثات قديمة علشان تحفظ أكتر.",
+  "This chat no longer exists.": "المحادثة دي مبقتش موجودة.",
+  "Saved chats couldn't be loaded right now. Please try again.": "مقدرناش نحمّل المحادثات المحفوظة دلوقتي. حاول تاني.",
+  "The chat couldn't be renamed. Please try again.": "مقدرناش نغيّر اسم المحادثة. حاول تاني.",
+  "The chat couldn't be deleted. Please try again.": "مقدرناش نمسح المحادثة. حاول تاني.",
+  "Your saved chats couldn't be deleted. Please try again.": "مقدرناش نمسح محادثاتك المحفوظة. حاول تاني.",
+  "Your choice couldn't be saved. Please try again.": "مقدرناش نحفظ اختيارك. حاول تاني.",
+  [`Titles can be 1 to ${MAX_TITLE_CHARS} characters.`]: `العنوان ممكن يكون من 1 لـ ${MAX_TITLE_CHARS} حرف.`,
 };
 
 export function translateMessage(locale: Locale, message: string): string;

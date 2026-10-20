@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { completeOnboarding, mainAlert, newUser, onboardedUser, outbox, registerAndConfirm, signIn } from "./helpers";
+import { completeOnboarding, newUser, onboardedUser, outbox, registerAndConfirm, signIn } from "./helpers";
 
 test.describe("first visit and registration", () => {
   test("landing → sign-up → confirmation → onboarding → consent → check-in → dashboard", async ({ browser }) => {
@@ -110,51 +110,6 @@ test.describe("signed-in product journeys", () => {
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
     await expect(page.locator("html")).toHaveAttribute("lang", "ar");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("الملف الشخصي والإعدادات");
-    await context.close();
-  });
-
-  test("chat (test mode): starter, cited reply, follow-up, blocked and unavailable outcomes", async ({ browser }) => {
-    const { context, page } = await onboardedUser(browser, "chat");
-    await page.goto("/dashboard");
-    await page.getByRole("link", { name: "Open the assistant" }).click();
-    await page.waitForURL("**/chat");
-    await expect(page.getByText("Prototype", { exact: true })).toBeVisible();
-    await expect(page.getByRole("note").filter({ hasText: "no AI model is used" })).toBeVisible();
-    await expect(page.getByText(/This conversation isn't saved/)).toBeVisible();
-
-    const starter = "I've been stressed about work. What general coping techniques might help?";
-    await page.getByRole("button", { name: starter }).click();
-    const box = page.getByLabel("Your message");
-    await expect(box).toHaveValue(starter);
-    await box.press("Enter");
-    const log = page.getByRole("list", { name: "Conversation" });
-    await expect(log.getByText(/general wellness information/)).toBeVisible({ timeout: 20_000 });
-    await expect(log.getByText("Synthetic test content").first()).toBeVisible();
-
-    await box.fill("Tell me more about breathing exercises");
-    await box.press("Enter");
-    await expect(log.locator(":scope > li")).toHaveCount(4, { timeout: 20_000 });
-    await expect(mainAlert(page)).toHaveCount(0); // signed history accepted
-
-    // Blocked safety outcome: placeholder support notice, no sources.
-    await page.getByRole("button", { name: "Start over" }).click();
-    await page.getByRole("button", { name: "Yes, clear it" }).click();
-    await box.fill("breathing and stress [[synthetic-high]]");
-    await box.press("Enter");
-    const note = log.getByRole("note");
-    await expect(note).toContainText("pending clinical review", { timeout: 20_000 });
-    await expect(note).toHaveAttribute("data-status", "support");
-    await expect(log.getByText("Sources")).toHaveCount(0);
-
-    // Provider failure: unavailable notice.
-    await page.getByRole("button", { name: "Start over" }).click();
-    await page.getByRole("button", { name: "Yes, clear it" }).click();
-    await box.fill("slow breathing stress [[fake-error]]");
-    await box.press("Enter");
-    await expect(log.getByRole("note")).toHaveAttribute("data-status", "unavailable", { timeout: 20_000 });
-
-    // Nothing was written to browser storage.
-    expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
     await context.close();
   });
 

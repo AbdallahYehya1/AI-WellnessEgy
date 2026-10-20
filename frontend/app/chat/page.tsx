@@ -1,22 +1,49 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { redirect } from "next/navigation";
 
-import { ChatClient } from "@/components/chat/chat-client";
+import { type ChatActions, ChatWorkspace } from "@/components/chat/workspace";
 import { ServiceUnavailable } from "@/components/onboarding/service-unavailable";
 import { AppShell } from "@/components/shell/app-shell";
-import { Badge, ButtonLink, Notice } from "@/components/ui/primitives";
-import { fetchChatConfig, fetchMyConsent } from "@/lib/api/backend";
+import { ButtonLink } from "@/components/ui/primitives";
+import { type ConversationPage, fetchChatConfig, fetchMyConsent, listConversations } from "@/lib/api/backend";
 import { getVerifiedSession } from "@/lib/auth/session";
-import { sendChat } from "@/lib/chat/actions";
+import {
+  deleteAllChats,
+  deleteChat,
+  loadConversations,
+  openConversation,
+  renameChat,
+  sendChat,
+  setHistoryEnabled,
+} from "@/lib/chat/actions";
 import { CHAT_PATH } from "@/lib/chat/limits";
 import { getMessages } from "@/lib/i18n/server";
 import { requiredOnboardingStep } from "@/lib/onboarding/steps";
 
 export const metadata: Metadata = { title: "Assistant (prototype) · AI Wellness Egypt" };
 
+// The on-screen keyboard resizes the layout, so the composer stays visible above it.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+};
+
+const ACTIONS: ChatActions = {
+  send: sendChat,
+  loadConversations,
+  openConversation,
+  renameChat,
+  deleteChat,
+  deleteAllChats,
+  setHistoryEnabled,
+};
+
 /**
- * Adult-only prototype, disabled unless the server enables it. Every safety
- * decision is made by the backend; this page only presents its responses.
+ * Adult-only prototype, disabled unless the server enables it. Every safety decision
+ * is made by the backend. Returning users get only their conversation list here; a
+ * conversation's messages load when they open it.
  */
 export default async function ChatPage() {
   const { locale, t } = await getMessages();
@@ -37,50 +64,51 @@ export default async function ChatPage() {
     return <ServiceUnavailable t={t} />;
   }
   const c = t.chat;
-  const bandLabel = config.data.age_band === "adult" ? c.adult : config.data.age_band_label;
+  const data = config.data;
+
+  if (!data.enabled) {
+    return (
+      <AppShell current="chat" locale={locale} t={t} chatEnabled={false}>
+        <h1 className="text-xl font-bold">{c.title}</h1>
+        <p role="status" className="text-ink-muted">
+          {c.unavailableYet}
+        </p>
+        <ButtonLink href="/dashboard" variant="secondary">
+          {t.common.backToDashboard}
+        </ButtonLink>
+      </AppShell>
+    );
+  }
+
+  let initialConversations: ConversationPage | null = null;
+  if (data.history?.available) {
+    const list = await listConversations(session.accessToken);
+    initialConversations = list.ok ? list.data : null;
+  }
+
+  const modeNote =
+    data.generator === "model"
+      ? c.modelMode.replace("{model}", data.model ?? "AI")
+      : data.test_only_policy || data.generator
+        ? c.testMode
+        : null;
 
   return (
-    <AppShell current="chat" locale={locale} t={t} chatEnabled={config.data.enabled} fullHeight>
-      <header className="space-y-2 border-b border-line py-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-bold">{c.title}</h1>
-          <Badge tone="info">{bandLabel}</Badge>
-          <Badge tone="warning">{t.common.prototype}</Badge>
-        </div>
-        <p className="text-sm text-ink-muted">{c.scope}</p>
-        {config.data.enabled && (config.data.test_only_policy || config.data.generator) ? (
-          <Notice tone="warning" role="note" className="py-2">
-            {config.data.generator === "model"
-              ? c.modelMode.replace("{model}", config.data.model ?? "AI")
-              : c.testMode}
-          </Notice>
-        ) : null}
-        {config.data.enabled ? <p className="text-xs text-ink-muted">{c.notSaved}</p> : null}
-      </header>
-      {config.data.enabled ? (
-        <ChatClient
-          send={sendChat}
-          locale={locale}
-          demoPrompts={
-            config.data.demo_curated
-              ? (config.data.demo_prompts ?? []).map((p) => ({
-                  id: p.prompt_id,
-                  text: locale === "ar" ? p.ar : p.en,
-                  followUp: p.follow_up,
-                }))
-              : undefined
-          }
-        />
-      ) : (
-        <div className="space-y-4 py-6">
-          <p role="status" className="text-ink-muted">
-            {c.unavailableYet}
-          </p>
-          <ButtonLink href="/dashboard" variant="secondary">
-            {t.common.backToDashboard}
-          </ButtonLink>
-        </div>
-      )}
+    <AppShell current="chat" locale={locale} t={t} chatEnabled workspace>
+      <ChatWorkspace
+        actions={ACTIONS}
+        locale={locale}
+        suggestions={(data.demo_prompts ?? []).map((p) => ({
+          id: p.prompt_id,
+          text: locale === "ar" ? p.ar : p.en,
+          followUp: p.follow_up,
+        }))}
+        topics={data.supported_topics ?? []}
+        typedInput={data.typed_input ?? "topics"}
+        modeNote={modeNote}
+        history={data.history ?? null}
+        initialConversations={initialConversations}
+      />
     </AppShell>
   );
 }
