@@ -85,3 +85,28 @@ describe("SignUpForm", () => {
     expect(screen.getByText("You must be 18 or older to create an account.")).toBeTruthy();
   });
 });
+
+describe("password field", () => {
+  it.each(["en", "ar"] as const)("keeps the show/hide toggle beside the text, never over it (%s)", async (locale) => {
+    render(<SignInForm action={vi.fn()} next="/dashboard" locale={locale} />);
+    const input = document.getElementById("password") as HTMLInputElement;
+    const toggle = screen.getByRole("button", { name: locale === "ar" ? "إظهار كلمة السر" : "Show password" });
+    // One bordered row with the input and the toggle as siblings: no absolute overlay.
+    expect(toggle.parentElement).toBe(input.parentElement);
+    expect(toggle.className).not.toMatch(/absolute/);
+    expect(input.className).toContain("password-input"); // browser's own reveal icon hidden
+    expect(input.getAttribute("dir")).toBe("ltr");
+    await userEvent.click(toggle);
+    expect(input.type).toBe("text");
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("shows the error state on the bordered row", async () => {
+    const action = vi.fn(async (): Promise<AuthFormState> => ({ fieldErrors: { password: "Enter your password." } }));
+    render(<SignInForm action={action} next="/dashboard" />);
+    await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    const input = document.getElementById("password") as HTMLInputElement;
+    await waitFor(() => expect(input.getAttribute("aria-invalid")).toBe("true"));
+    expect(input.parentElement?.className).toContain("border-danger-ink");
+  });
+});

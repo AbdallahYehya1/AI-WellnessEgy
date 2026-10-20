@@ -154,3 +154,10 @@ body {
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* Password fields have their own show/hide button; hide the browser's built-in reveal
+   and clear icons (Edge) so the two never overlap. */
+.password-input::-ms-reveal,
+.password-input::-ms-clear {
+  display: none;
+}
