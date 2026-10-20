@@ -709,3 +709,35 @@ retention. Declining keeps the earlier browser-only behaviour (D-37).
   saving, 90-day idle retention (enforced when the list loads) and a 200-conversation cap.
 - **Open:** a legal and privacy review of storing wellness chat text (Egypt PDPL, Law 151/2020),
   a retention period confirmed by counsel, and a data-subject export.
+
+### D-55. Natural-language eligibility for typed questions — DECIDED (engineering), supersedes D-53's closed vocabulary
+
+**Why:** the closed vocabulary from D-53 refused ordinary questions ("I'm stressed about
+exams, what might help?"), so users had to guess the right wording.
+
+**Now** (`backend/app/conversations/intents.py`), every typed message passes, in order:
+
+1. **Crisis and distress screen:** crisis phrases, and signs such as hopelessness, abuse
+   or panic, go to the support response. Engineering keyword lists, not clinical.
+2. **Personal-details screen:** e-mail addresses, phone numbers, links and handles are
+   refused, with a request to remove them.
+3. **Clinical and sensitive screen:** diagnosis, medication, doses, physical symptoms,
+   substances, sexual content and violence are refused, with a pointer to a professional.
+4. **Topic recognition:** a bilingual lexicon with spelling normalisation, Arabic clitic
+   stripping and English inflections places the question in one reviewed topic.
+   **Unknown words are ignored instead of refused.** Two equally strong topics ask the
+   user to pick one.
+
+**What Groq receives:** an accepted message is re-expressed as a general question about
+its topic plus at most two allow-listed context labels, for example
+`What general techniques can help with stress? (Context: exams)`. Safety assessment and
+retrieval use the reviewed question. Groq never receives the user's sentence, so names
+and other personal details are dropped rather than forwarded.
+
+**Still not open conversation.** It answers general questions about seven topics.
+Limits:
+
+- keyword screens miss indirect phrasing;
+- Arabizi isn't recognised;
+- the support response is a placeholder (D-13);
+- unrestricted chat still needs everything in D-52.

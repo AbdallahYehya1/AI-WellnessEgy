@@ -366,3 +366,28 @@ keeps working browser-only.
 Generate a new key and set `CHAT_HISTORY_KEYS="k2:<new>,k1:<old>"`. New writes use `k2`, and both
 keys can decrypt. Remove `k1` only after every row encrypted with it has expired (90 days) or
 been deleted. Rows still encrypted with a removed key show as empty text.
+
+## 14. Public production access (no Vercel login for visitors)
+
+The app is meant to be public: anyone can open the homepage, register, sign in and reset a
+password. Personal data stays private through Supabase authentication, the consent gate
+and the backend's per-user ownership checks, not through Vercel's login wall.
+
+**Setting** (Vercel dashboard, frontend project `ai-wellness-egy` → Settings → Deployment
+Protection): set *Vercel Authentication* to **Standard Protection**. Production domains,
+including `ai-wellness-egy.vercel.app`, become public. Preview deployments and the
+generated per-deployment URLs stay behind Vercel login. Don't use "Only Production
+Deployments" or switch protection off. On Hobby this costs nothing. The backend project's
+API already answers publicly and authenticates every data endpoint itself.
+
+**Check before and after:**
+
+| Check | How |
+|---|---|
+| Public pages load without a Vercel account | Incognito: `/`, `/sign-up`, `/sign-in`, `/forgot-password` return 200, with no redirect to `vercel.com/sso-api` |
+| Signed-in pages stay protected | Incognito: `/dashboard`, `/chat`, `/history` redirect to `/sign-in` |
+| API data needs a valid token | `/me`, `/mood/history`, `/chat/*` return 401 without a token |
+| Other users' data | Backend tests `test_mood`, `test_profile`, `test_consent` and `test_chat_history` (cross-account cases): another account's data answers 404 or is never listed |
+| Abuse and cost limits | 10 chat messages per user per minute; `CHAT_PROVIDER_DAILY_LIMIT` (60) per day for everyone; Supabase Auth's built-in signup and e-mail rate limits; e-mail confirmation required |
+| No secrets in the browser | Built JavaScript contains only `NEXT_PUBLIC_SUPABASE_URL` and the publishable key |
+| Previews still protected | A preview deployment URL still redirects to Vercel login |
