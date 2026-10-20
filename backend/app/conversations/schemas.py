@@ -1,8 +1,13 @@
-"""Chat API schemas. The conversation is held by the browser; nothing here is
-persisted server-side (OPEN_DECISIONS D-37)."""
+"""Chat API schemas.
+
+By default the conversation is held by the browser and nothing is persisted (D-37).
+Users who explicitly opt in to saved history (D-54) send a ``conversation_id`` instead
+of history; the server then loads the context itself and never trusts browser history.
+"""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -10,6 +15,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 MAX_MESSAGE_CHARS = 2000
 MAX_HISTORY_TURNS = 6
+MAX_TITLE_CHARS = 80
+
+# Why a typed message was not answered (shown to the user in plain language).
+RefusalReason = Literal[
+    "unsupported_topic", "multiple_topics", "needs_context", "too_long", "personal_or_unclear"
+]
 
 ChatStatus = Literal[
     "reply", "support", "out_of_scope", "no_evidence", "unable_to_answer", "unavailable"
@@ -35,6 +46,10 @@ class ChatRequest(BaseModel):
 
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
     history: list[HistoryTurn] = Field(default_factory=list, max_length=MAX_HISTORY_TURNS)
+    # Saved history (opt-in): continue this conversation; the server loads its context.
+    conversation_id: UUID | None = None
+    # Lets a retried send return the saved answer instead of saving it twice.
+    client_message_id: UUID | None = None
 
     @field_validator("message")
     @classmethod
@@ -42,6 +57,12 @@ class ChatRequest(BaseModel):
         if not value.strip():
             raise ValueError("The message can't be empty.")
         return value
+
+    @model_validator(mode="after")
+    def _one_source_of_context(self) -> ChatRequest:
+        if self.conversation_id is not None and self.history:
+            raise ValueError("send either history or a conversation_id, not both")
+        return self
 
 
 class Citation(BaseModel):
@@ -60,6 +81,22 @@ class ChatReply(BaseModel):
     text: str
     signature: str
     citations: list[Citation]
+    model: str | None = None
+
+
+class TopicOut(BaseModel):
+    """The reviewed question a typed message was recognised as, and answered."""
+
+    prompt_id: str
+    question: str
+
+
+class ConversationSummary(BaseModel):
+    conversation_id: UUID
+    title: str
+    message_count: int
+    created_at: datetime
+    last_activity_at: datetime
 
 
 class ChatResponse(BaseModel):
@@ -67,6 +104,75 @@ class ChatResponse(BaseModel):
     reply: ChatReply | None = None
     notice: str | None = None
     prototype: bool = True
+    refusal_reason: RefusalReason | None = None
+    topic: TopicOut | None = None
+    # Set when the turn was saved (history opted in).
+    conversation: ConversationSummary | None = None
+    user_message_id: UUID | None = None
+    assistant_message_id: UUID | None = None
+    created_at: datetime | None = None
+
+
+class StoredMessageOut(BaseModel):
+    message_id: UUID
+    seq: int
+    role: Literal["user", "assistant"]
+    text: str
+    language: Literal["en", "ar"]
+    topic: TopicOut | None = None
+    citations: list[Citation]
+    model: str | None = None
+    # Assistant turns carry the server signature so the same thread can also be
+    # continued without saving (for example after history is switched off).
+    signature: str | None = None
+    created_at: datetime
+
+
+class ConversationPage(BaseModel):
+    conversations: list[ConversationSummary]
+    next_cursor: str | None = None
+
+
+class ConversationDetail(BaseModel):
+    conversation: ConversationSummary
+    messages: list[StoredMessageOut]
+    next_before: int | None = None
+
+
+class RenameRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=MAX_TITLE_CHARS)
+
+    @field_validator("title")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        if not "".join(ch for ch in value if ch.isprintable()).strip():
+            raise ValueError("The title can't be empty.")
+        return value
+
+
+class HistorySettings(BaseModel):
+    available: bool  # the server can store history (configured and migrated)
+    enabled: bool  # this user opted in
+    consent_version: str
+    consented_version: str | None = None
+    retention_days: int
+    max_conversations: int
+
+
+class HistorySettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    # Required to opt in: the version of the storage notice the user agreed to.
+    consent_version: str | None = Field(default=None, max_length=40)
+
+
+class SupportedTopic(BaseModel):
+    prompt_id: str
+    en: str
+    ar: str
 
 
 class DemoPromptOut(BaseModel):
@@ -89,3 +195,8 @@ class ChatConfig(BaseModel):
     # Restricted demo: the only questions the server accepts (empty otherwise).
     demo_curated: bool = False
     demo_prompts: list[DemoPromptOut] = []
+    # "topics": typed questions are accepted only when recognised as one of the
+    # supported topics (D-53); "free": test-only free text (never in production).
+    typed_input: Literal["topics", "free"] = "topics"
+    supported_topics: list[SupportedTopic] = []
+    history: HistorySettings | None = None

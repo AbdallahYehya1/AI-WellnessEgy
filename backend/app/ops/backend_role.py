@@ -8,7 +8,8 @@ Migrations keep running as the schema owner (`postgres`, DATABASE_URL in backend
 The backend on Render connects as `app_backend`, which:
 
 - can use schema `app` only, with exactly the table privileges its queries need;
-- has no DELETE, TRUNCATE or DDL anywhere, and no access to `auth`, `storage` or `public`;
+- has no TRUNCATE or DDL anywhere, DELETE only for the rate limiter and users' own saved
+  chat history (0005), and no access to `auth`, `storage` or `public`;
 - has BYPASSRLS. The `app` tables have RLS enabled with no policies, which denies every
   role that doesn't bypass it. RLS here guards against Supabase's Data API roles; the
   backend enforces ownership in code (tests/test_*_isolation). BYPASSRLS grants nothing
@@ -59,7 +60,20 @@ GRANTS_0003: dict[str, tuple[str, ...]] = {
     "chat_rate_events": ("SELECT", "INSERT", "DELETE"),
 }
 # 0004 only adds columns to the knowledge tables: same grants as 0003.
-GRANTS_BY_REVISION = {"0002": GRANTS_0002, "0003": GRANTS_0003, "0004": GRANTS_0003}
+# 0005 (opt-in chat history): users may delete their own saved conversations, so the
+# role can DELETE there (always filtered by the verified owner in code); messages are
+# append-only apart from deletion. No UPDATE on messages.
+GRANTS_0005: dict[str, tuple[str, ...]] = {
+    **GRANTS_0003,
+    "chat_conversations": ("SELECT", "INSERT", "UPDATE", "DELETE"),
+    "chat_messages": ("SELECT", "INSERT", "DELETE"),
+}
+GRANTS_BY_REVISION = {
+    "0002": GRANTS_0002,
+    "0003": GRANTS_0003,
+    "0004": GRANTS_0003,
+    "0005": GRANTS_0005,
+}
 GRANTS = GRANTS_0002
 SUPPORTED_REVISION = "0002"
 # Columns the ORM reads back (RETURNING) after an append, where it needs no full SELECT.
@@ -73,6 +87,7 @@ SEQUENCES_BY_REVISION: dict[str, tuple[str, ...]] = {
     "0002": (),
     "0003": ("chat_rate_events_id_seq",),
     "0004": ("chat_rate_events_id_seq",),
+    "0005": ("chat_rate_events_id_seq",),
 }
 ROLE_SETTINGS = {
     "statement_timeout": "5s",
@@ -292,7 +307,12 @@ def verify_role(conn: Connection) -> dict[str, Any]:
     finally:
         tx.rollback()
     # The catalog (readable by any role) tells which revision's tables exist.
-    revision = "0003" if "chat_rate_events" in tables else "0002"
+    if "chat_conversations" in tables:
+        revision = "0005"
+    elif "chat_rate_events" in tables:
+        revision = "0003"
+    else:
+        revision = "0002"
     grants = GRANTS_BY_REVISION[revision]
     report["grant_set"] = revision
     expected = {t: [p for p in PRIVILEGES if p in grants.get(t, ())] for t in tables}

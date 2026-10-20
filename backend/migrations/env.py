@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, pool, text
 import app.audit.models
 import app.common.ratelimit
 import app.consent.models
+import app.conversations.models
 import app.knowledge.models
 import app.mood.models
 import app.safety.models

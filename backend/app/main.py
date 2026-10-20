@@ -15,6 +15,7 @@ from app.auth.tokens import SupabaseTokenVerifier
 from app.common.errors import register_error_handlers
 from app.consent.catalog import DEFAULT_CATALOG, ConsentCatalog
 from app.consent.router import router as consent_router
+from app.conversations.crypto import HistoryCipher, HistoryKeyError
 from app.conversations.router import router as chat_router
 from app.conversations.service import ChatRuntime
 from app.core.config import Settings, get_settings
@@ -159,7 +160,21 @@ def build_chat_runtime(settings: Settings) -> ChatRuntime | None:
         demo_allowed=parse_allowlist(settings.chat_demo_allowed_users),
         demo_all_consented_adults=settings.chat_demo_access == "all_consented_adults",
         provider_daily_limit=settings.chat_provider_daily_limit,
+        history=_history_cipher(settings),
+        history_retention_days=settings.chat_history_retention_days,
     )
+
+
+def _history_cipher(settings: Settings) -> HistoryCipher | None:
+    """Saved history needs valid keys; without them chat stays browser-only (never an
+    unencrypted fallback). The reason is logged; the keys never are."""
+    if settings.chat_history_keys is None:
+        return None
+    try:
+        return HistoryCipher.from_env_value(settings.chat_history_keys.get_secret_value())
+    except HistoryKeyError:
+        logger.warning("chat_history_disabled", extra={"reason": "invalid_chat_history_keys"})
+        return None
 
 
 app = create_app()

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, DateTime, String, func
+from sqlalchemy import CheckConstraint, DateTime, String, false, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,3 +38,7 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Saved chat history is off until the user explicitly opts in (D-54).
+    chat_history_enabled: Mapped[bool] = mapped_column(default=False, server_default=false())
+    chat_history_consent_version: Mapped[str | None] = mapped_column(String(40))
+    chat_history_consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

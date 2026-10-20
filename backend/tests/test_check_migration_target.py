@@ -130,8 +130,8 @@ def test_connection_errors_are_redacted() -> None:
 def test_reports_head_revision_rls_and_counts(db_engine: Engine) -> None:
     report = inspect_target(db_engine)
     assert report["read_only_transaction"] is True
-    assert report["alembic_revision"] == "0004"
-    assert report["state"] == "at_revision_0004"
+    assert report["alembic_revision"] == "0005"
+    assert report["state"] == "at_revision_0005"
     assert report["app_schema_exists"] is True
     assert report["tables_match_revision"] is True
     assert report["public_alembic_version_exists"] is False
