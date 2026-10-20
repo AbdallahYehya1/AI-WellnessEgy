@@ -180,7 +180,10 @@ export type RefusalReason =
   | "multiple_topics"
   | "needs_context"
   | "too_long"
-  | "personal_or_unclear";
+  | "personal_or_unclear"
+  | "personal_details"
+  | "clinical"
+  | "sensitive";
 
 export type ChatCitation = {
   chunk_id: string;

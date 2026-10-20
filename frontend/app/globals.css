@@ -161,3 +161,10 @@ body {
 .password-input::-ms-clear {
   display: none;
 }
+
+/* Inputs that sit inside a bordered row show focus on the row (focus-within ring), so the
+   global focus outline would draw a second ring inside it. Unlayered to beat the rule above. */
+.password-input:focus-visible,
+#chat-message:focus-visible {
+  outline: none;
+}

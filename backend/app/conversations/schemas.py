@@ -19,7 +19,14 @@ MAX_TITLE_CHARS = 80
 
 # Why a typed message was not answered (shown to the user in plain language).
 RefusalReason = Literal[
-    "unsupported_topic", "multiple_topics", "needs_context", "too_long", "personal_or_unclear"
+    "unsupported_topic",
+    "multiple_topics",
+    "needs_context",
+    "too_long",
+    "personal_or_unclear",
+    "personal_details",
+    "clinical",
+    "sensitive",
 ]
 
 ChatStatus = Literal[
