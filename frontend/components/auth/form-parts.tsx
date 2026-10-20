@@ -76,32 +76,53 @@ export function Field({
       <label htmlFor={id} className="block text-sm font-semibold">
         {label}
       </label>
-      <div className="relative">
-        <input
-          id={id}
-          name={id}
-          type={isPassword && visible ? "text" : type}
-          autoComplete={autoComplete}
-          defaultValue={defaultValue}
-          required={required}
-          maxLength={maxLength}
-          dir={type === "email" || isPassword ? "ltr" : "auto"}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={describedBy || undefined}
-          className={`${inputClasses} ${isPassword ? "pe-24" : ""}`}
-        />
-        {isPassword ? (
+      {isPassword ? (
+        // Input and toggle sit side by side in one bordered row (follows the page direction),
+        // so the toggle can never cover the text in Arabic or English, whatever its width.
+        // The password itself stays left-to-right.
+        <div
+          className={`flex min-h-11 w-full items-stretch rounded-xl border bg-surface focus-within:ring-2 focus-within:ring-focus ${
+            error ? "border-danger-ink" : "border-line-strong"
+          }`}
+        >
+          <input
+            id={id}
+            name={id}
+            type={visible ? "text" : "password"}
+            autoComplete={autoComplete}
+            defaultValue={defaultValue}
+            required={required}
+            maxLength={maxLength}
+            dir="ltr"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy || undefined}
+            className="password-input min-w-0 flex-1 rounded-xl bg-transparent px-3 py-2 text-base text-ink outline-none placeholder:text-ink-muted focus-visible:outline-none"
+          />
           <button
             type="button"
             onClick={() => setVisible((v) => !v)}
             aria-pressed={visible}
             aria-controls={id}
-            className="absolute inset-y-0 end-1 my-1 rounded-lg px-3 text-xs font-semibold text-primary-strong hover:bg-surface-muted"
+            className="m-1 shrink-0 whitespace-nowrap rounded-lg px-3 text-xs font-semibold text-primary-strong hover:bg-surface-muted"
           >
             {visible ? t.forms.hidePassword : t.forms.showPassword}
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : (
+        <input
+          id={id}
+          name={id}
+          type={type}
+          autoComplete={autoComplete}
+          defaultValue={defaultValue}
+          required={required}
+          maxLength={maxLength}
+          dir={type === "email" ? "ltr" : "auto"}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy || undefined}
+          className={inputClasses}
+        />
+      )}
       {hint ? (
         <p id={`${id}-hint`} className="text-sm text-ink-muted">
           {hint}

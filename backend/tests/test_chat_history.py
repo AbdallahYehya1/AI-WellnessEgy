@@ -153,7 +153,7 @@ def test_a_typed_question_is_answered_from_its_reviewed_topic_and_saved_encrypte
     assert body["status"] == "reply"
     assert body["topic"] == {
         "prompt_id": "sleep",
-        "question": "What habits help with better sleep?",
+        "question": "What habits help with better sleep? (Context: evenings)",
     }
     assert body["reply"]["model"] == "openai/gpt-oss-20b"
     assert body["reply"]["citations"][0]["source_ref"].startswith("https://www.")
@@ -163,7 +163,7 @@ def test_a_typed_question_is_answered_from_its_reviewed_topic_and_saved_encrypte
 
     # Groq would receive only the reviewed question, never what the user typed.
     sent = provider(runtime).calls[0]
-    assert sent.message == "What habits help with better sleep?"
+    assert sent.message == "What habits help with better sleep? (Context: evenings)"
     assert TYPED not in repr(sent)
 
     with db_engine.connect() as conn:

@@ -310,7 +310,7 @@ describe("chat workspace", () => {
       .mockResolvedValueOnce({ kind: "response", response: reply("More.") });
     workspace(fakeActions({ send }));
     await typeAndSend("My boss shouts at me");
-    expect((await screen.findByRole("note")).textContent).toMatch(/can't respond to personal situations/);
+    expect((await screen.findByRole("note")).textContent).toMatch(/couldn't match that to one of the topics/);
     await typeAndSend("What is mindfulness?");
     await screen.findByText("Answer.");
     await typeAndSend("tell me more");
@@ -319,6 +319,16 @@ describe("chat workspace", () => {
       { role: "user", text: "What is mindfulness?" },
       { role: "assistant", text: "Answer.", signature: "sig-1" },
     ]);
+  });
+
+  it.each([
+    ["clinical", /can't help with diagnoses, medication or physical symptoms/],
+    ["personal_details", /remove personal details/],
+    ["sensitive", /outside what this wellness-education assistant covers/],
+  ] as const)("explains a %s refusal", async (reason, text) => {
+    workspace(fakeActions({ send: vi.fn().mockResolvedValue({ kind: "response", response: refusal(reason) }) }));
+    await typeAndSend("anything");
+    expect((await screen.findByRole("note")).textContent).toMatch(text);
   });
 
   it("shows follow-up suggestions only after an answer", async () => {

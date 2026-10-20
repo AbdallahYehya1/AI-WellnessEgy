@@ -1,61 +1,81 @@
-"""Fail-closed gate for typed chat messages (OPEN_DECISIONS D-53).
+"""Risk-aware eligibility for typed chat messages (OPEN_DECISIONS D-53, revised D-55).
 
-The chat accepts typed text, but only questions that can be reliably recognised as one
-of the reviewed, low-risk educational topics in `demo.DEMO_PROMPTS`. The gate is
-deterministic and deliberately narrow:
+Users can phrase questions naturally ("I'm stressed about exams, what might help?",
+"what can I do to relax after a difficult day?"). Each message goes through, in order:
 
-1. The engineering crisis screen runs first; a match is routed to the support
-   response, never to generation.
-2. The exact reviewed questions (the suggestions) are always recognised.
-3. Otherwise EVERY word must belong to a closed vocabulary of question words, neutral
-   wellness words and topic words, in English or Arabic (Egyptian or Modern Standard).
-   One unknown word (a name, a symptom, "I feel", "can't", a medication, a number,
-   Arabizi) and the message is refused. Personal disclosures almost always contain such
-   words, so they are refused rather than interpreted.
-4. The words must point to exactly one reviewed topic (or a follow-up of an earlier
-   recognised question).
+1. **Crisis and distress screen** (engineering keyword lists, NOT clinical): any match is
+   routed to the support response, never to generation.
+2. **Personal-details screen**: e-mail addresses, phone numbers, links and handles are
+   refused ("please remove personal details").
+3. **Clinical and sensitive screen**: diagnosis, medication and doses, physical symptoms,
+   substances, sexual content, violence and abuse are refused with a pointer to a
+   professional. These are out of scope for an education-only assistant.
+4. **Topic recognition**: a bilingual lexicon (English, Modern Standard and Egyptian
+   Arabic, with spelling normalisation and clitic stripping) must place the question in
+   exactly one reviewed topic (or a follow-up of an earlier recognised question). Words
+   it doesn't know are ignored rather than refused, so ordinary wording works.
 
-An accepted message is replaced by its canonical reviewed question. Only that
-canonical question, never the user's own words, is used for safety assessment,
-retrieval and the model request, so typed personal text never reaches Groq even if the
-gate were to accept something it shouldn't.
+An accepted message is **re-expressed** as a general question about its topic plus, at
+most, a few allow-listed context labels ("exams", "work", "evenings"). Only that
+re-expression, never the user's own sentence, reaches safety assessment, retrieval and
+Groq: personal details a user includes are dropped, not forwarded.
 
-This is an engineering control, NOT a clinical risk assessment, and it is not a
-general conversational assistant: it maps typed questions onto a fixed set of topics.
+Limits (stated plainly): this is an engineering control, not a clinical risk assessment.
+Keyword screens miss things, especially indirect phrasing and Arabizi; the support
+response is a placeholder pending clinical review (D-13). It answers general educational
+questions about seven topics, not open conversation.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from app.conversations.demo import DEMO_PROMPTS, DemoPrompt, normalize
 from app.knowledge.retrieval import normalize_arabic
 
-MAX_TYPED_CHARS = 300
-MAX_WORDS = 30
+MAX_TYPED_CHARS = 500
 
 GateOutcome = Literal[
-    "accept", "crisis", "unsupported", "multiple_topics", "needs_context", "too_long"
+    "accept",
+    "crisis",
+    "unsupported",
+    "multiple_topics",
+    "needs_context",
+    "too_long",
+    "personal_details",
+    "clinical",
+    "sensitive",
 ]
 Language = Literal["en", "ar"]
 
-# Engineering safety net shared with the test assessor. NOT clinical; it can only make
-# the gate more cautious (any match goes to the support response).
+# --- Screens (substring match on lower-cased, Arabic-normalised text) -----------------
+
+# Engineering safety net, NOT clinical. Any match goes to the support response.
 CRISIS_SCREEN: tuple[str, ...] = (
     "suicide",
     "suicidal",
     "kill myself",
+    "killing myself",
     "end my life",
+    "end it all",
     "want to die",
     "wanna die",
+    "better off dead",
+    "no reason to live",
+    "don't want to live",
+    "dont want to live",
+    "don't want to wake up",
+    "dont want to wake up",
     "self-harm",
     "self harm",
     "hurt myself",
     "harm myself",
     "cut myself",
+    "cutting myself",
+    "overdose",
     "انتحار",
     "انتحر",
     "أنتحر",
@@ -71,122 +91,288 @@ CRISIS_SCREEN: tuple[str, ...] = (
     "أذي نفسي",
     "إيذاء النفس",
     "ايذاء النفس",
+    "مش عايز اعيش",
+    "مش عاوز اعيش",
+    "مش عايز اصحى",
+    "اخلص من حياتي",
+    "اخلص من نفسي",
     "a2tel nafsy",
     "antehar",
+    "3ayez amoot",
 )
+# Signs of acute distress or harm: also routed to support, never answered generically.
+DISTRESS_SCREEN: tuple[str, ...] = (
+    "hopeless",
+    "worthless",
+    "no point in living",
+    "can't go on",
+    "cant go on",
+    "give up on life",
+    "hate myself",
+    "hate my life",
+    "nobody cares",
+    "no one cares",
+    "panic attack",
+    "abuse",
+    "abused",
+    "abusive",
+    "hits me",
+    "hit me",
+    "beats me",
+    "assault",
+    "raped",
+    "مفيش فايده",
+    "مفيش امل",
+    "يأس",
+    "بكره نفسي",
+    "بكره حياتي",
+    "مليش لازمه",
+    "محدش بيهتم",
+    "بيضربني",
+    "بتضربني",
+    "بيضربوني",
+    "اعتداء",
+    "تحرش",
+)
+# Diagnosis, medication, physical symptoms: a professional's job, never answered here.
+CLINICAL_SCREEN: tuple[str, ...] = (
+    "diagnose",
+    "diagnosis",
+    "do i have",
+    "disorder",
+    "depression",
+    "depressed",
+    "bipolar",
+    "schizophren",
+    "psychosis",
+    "adhd",
+    " ocd",
+    "ptsd",
+    "autism",
+    "medication",
+    "medicine",
+    " meds",
+    " pill",
+    "tablet",
+    " dose",
+    "dosage",
+    "antidepress",
+    "ssri",
+    "xanax",
+    "valium",
+    "prozac",
+    "zoloft",
+    "melatonin",
+    "prescri",
+    " pain",
+    "chest",
+    "heart",
+    "blood pressure",
+    "fever",
+    "tumor",
+    "tumour",
+    "cancer",
+    "seizure",
+    "diabet",
+    "pregnan",
+    "تشخيص",
+    "شخصني",
+    "اكتئاب",
+    "اضطراب",
+    "ثنائي القطب",
+    "فصام",
+    " دوا",
+    "دواء",
+    "ادويه",
+    "حبوب",
+    "حبايه",
+    "جرعه",
+    "مهدئ",
+    "منوم",
+    "روشته",
+    "وجع",
+    " الم ",
+    "صداع",
+    "قلبي",
+    "ضغط الدم",
+    " سكر",
+    "حامل",
+)
+# Out of scope for a wellness-education assistant.
+SENSITIVE_SCREEN: tuple[str, ...] = (
+    " sex",
+    "porn",
+    "alcohol",
+    "drunk",
+    " drugs",
+    " weed",
+    "cocaine",
+    "hashish",
+    "gambl",
+    "weapon",
+    " gun",
+    "knife",
+    "revenge",
+    " kill ",
+    "مخدرات",
+    "حشيش",
+    "خمور",
+    "سلاح",
+    "انتقام",
+    "جنس",
+)
+_PERSONAL_DETAILS = re.compile(
+    r"[\w.+-]+@[\w-]+\.[\w.]+"  # e-mail
+    r"|https?://|www\.|\.com\b|\.net\b|\.org\b|\.eg\b"  # links
+    r"|(?:\+?\d[\s-]?){7,}"  # phone-like digit runs
+    r"|(?<![\w@])@\w{2,}"  # handles
+)
+
+# --- Topics -------------------------------------------------------------------------------
 
 _BY_ID: dict[str, DemoPrompt] = {p.prompt_id: p for p in DEMO_PROMPTS}
 
-# --- English ---------------------------------------------------------------------------
-
-_EN_NEUTRAL = frozenset(
-    """
-    what s how why which is are can could would will should do does you your me i my we our
-    us people a an the some any of for to with and or about in on at during before after it
-    its this that these those there please thanks thank explain describe define tell give
-    share show suggest recommend list teach learn know understand mean means meaning
-    definition help helps helping helpful improve improving support supports supporting
-    build practice practise practices try use get make start more most better best good
-    healthy healthier simple easy quick basic short brief general everyday daily common few
-    tips tip ways way steps step ideas advice guide guidance techniques technique strategies
-    strategy methods method benefits benefit effect effects work works role important matter
-    matters overall mental wellbeing well being wellness health mind body emotional routine
-    routines habits habit lifestyle example examples beginner beginners cope coping manage
-    managing deal dealing handle handling reduce reducing difficult hard negative positive
-    exercise exercises activity activities kind kinds type types something things thing
-    really actually again also just like night nights evening morning day days
-    """.split()
-)
-
-# Strong topic words: any one of them selects the topic.
-_EN_TOPICS: dict[str, frozenset[str]] = {
-    "stress": frozenset(
-        "stress stressed stressful tension pressure relax relaxing relaxation calm calming"
-        " unwind".split()
-    ),
-    "grounding": frozenset("grounding ground".split()),
-    "habits": frozenset("wellbeing wellness selfcare".split()),
-    "thoughts": frozenset(
-        "thoughts thought feelings emotions emotion worry worries worrying overthinking"
-        " rumination".split()
-    ),
-    "sleep": frozenset("sleep sleeping bedtime bed nap naps rest resting".split()),
-    "activity": frozenset(
-        "physical physically walking walk sport sports fitness workout active movement"
-        " running".split()
-    ),
-    "mindfulness": frozenset(
-        "mindfulness mindful meditation meditate meditating breathing breath".split()
+# A typed question is re-expressed as a general question about its topic. Only "stress"
+# needs its own wording (the suggestion mentions work); the others reuse the suggestion.
+_GENERAL_QUESTION: dict[str, tuple[str, str]] = {
+    "stress": (
+        "What general techniques can help with stress?",
+        "إيه الطرق العامة اللي بتساعد في التعامل مع التوتر؟",
     ),
 }
-# Weak words select a topic only when no strong word is present ("grounding exercise"
-# is grounding; "how does exercise help" is physical activity).
+
+_EN_TOPICS: dict[str, frozenset[str]] = {
+    "stress": frozenset(
+        "stress stressed stressful tension tense pressure pressured relax relaxing relaxation"
+        " calm calming calmer unwind overwhelmed overwhelm burnout nervous anxious anxiety"
+        " cope coping".split()
+    ),
+    "grounding": frozenset("grounding ground grounded senses".split()),
+    "habits": frozenset(
+        "wellbeing wellness selfcare routine routines habits habit lifestyle balance"
+        " productive productivity energy motivation motivated".split()
+    ),
+    "thoughts": frozenset(
+        "thoughts thought feelings emotions emotion emotional worry worries worrying"
+        " overthinking overthink rumination ruminating sad sadness angry anger frustrated"
+        " frustration lonely loneliness negative".split()
+    ),
+    "sleep": frozenset(
+        "sleep sleeping slept asleep insomnia bedtime bed nap naps rest resting tired".split()
+    ),
+    "activity": frozenset(
+        "physical physically walking walk walks running run sport sports fitness workout"
+        " workouts active movement move gym stretching steps".split()
+    ),
+    "mindfulness": frozenset(
+        "mindfulness mindful meditation meditate meditating breathing breath breathe".split()
+    ),
+}
+# Weak words decide only when no strong word is present ("grounding exercise" is grounding;
+# "how does exercise help" is physical activity).
 _EN_WEAK: dict[str, str] = {
     "exercise": "activity",
     "exercises": "activity",
     "activity": "activity",
     "activities": "activity",
-    "habits": "habits",
-    "habit": "habits",
-    "routine": "habits",
-    "routines": "habits",
-    "lifestyle": "habits",
 }
-# Generic words select "everyday habits that support wellbeing" only when nothing more
-# specific is present ("how does exercise help mental health" is physical activity).
-_EN_GENERIC = frozenset("mental health well being".split())
-
-_EN_FOLLOW_UPS: dict[str, frozenset[str]] = {
-    "in-arabic": frozenset("arabic egyptian colloquial dialect translate translation".split()),
-    "continue": frozenset("continue more further elaborate expand detail details go on".split()),
-    "summary": frozenset("summary summarize summarise summarized sum up recap".split()),
-}
-
-# --- Arabic (normalised spelling: alef forms, alef maqsura and teh marbuta unified) ------
-
-_AR_NEUTRAL = frozenset(
-    """
-    ايه اي ازاي كيف ليه لماذا ما ماذا هي هو هل ممكن يمكن تقدر تشرح تشرحلي اشرح اشرحلي
-    تقول تقولي قولي تديني اديني تعطيني اعطني عايز عاوز حابب اعرف افهم اتعلم عن في من على
-    علي الى الي مع او اللي الذي التي لي ليا يعني معني تعريف فايده فوايد فوائد نصايح نصائح
-    نصيحه طرق طريقه خطوات بسيط بسيطه سهل سهله سريع سريعه يومي يوميه عامه عام احسن افضل
-    كويس كويسه صحي صحيه الصحه صحه النفسيه نفسيه العقليه الجسم الجسديه بيساعد بتساعد تساعد
-    يساعد يحسن تحسين اتعامل التعامل ادير اداره بتفيد تفيد يفيد مفيد اهميه مهم دور تاثير دي
-    ده دا هذه هذا شويه حاجه حاجات امثله مثال للمبتدئين شرح عادات عاده روتين تمرين تمارين
-    الصعبه صعبه السلبيه سلبيه بشكل اعمل نعمل اقلل تقليل بالليل الليل ليل الصبح يوم
-    """.split()
+# Generic wellbeing words select "everyday habits" only when nothing more specific is
+# present ("how does exercise help mental health" is physical activity).
+_EN_GENERIC: dict[str, str] = dict.fromkeys(
+    "mood mental health healthy happier happy daily wellbeing".split(), "habits"
 )
+
 _AR_TOPICS: dict[str, frozenset[str]] = {
-    "stress": frozenset("توتر متوتر ضغط ضغوط اجهاد استرخاء اهدي هدوء".split()),
+    "stress": frozenset(
+        "توتر متوتر متوتره ضغط ضغوط مضغوط اجهاد استرخاء ارتاح اهدي هدوء عصبي عصبيه".split()
+    ),
     "grounding": frozenset("ارتكاز تاريض".split()),
-    "habits": frozenset("عافيه رفاهيه".split()),
-    "thoughts": frozenset("افكار مشاعر احاسيس عواطف قلق".split()),
-    "sleep": frozenset("نوم انام سهر".split()),
-    "activity": frozenset("رياضه نشاط البدني بدني مشي حركه".split()),
+    "habits": frozenset("عافيه رفاهيه روتين عادات عاده طاقه".split()),
+    "thoughts": frozenset("افكار تفكير مشاعر احاسيس عواطف زعل حزن حزين غضب قلق قلقان".split()),
+    "sleep": frozenset("نوم انام نايم سهر ارق".split()),
+    "activity": frozenset("رياضه نشاط البدني بدني مشي جري حركه جيم".split()),
     "mindfulness": frozenset("يقظه الذهنيه ذهنيه تامل تنفس".split()),
 }
 _AR_WEAK: dict[str, str] = {
     "تمرين": "activity",
     "تمارين": "activity",
-    "عادات": "habits",
-    "عاده": "habits",
-    "روتين": "habits",
 }
-_AR_GENERIC = frozenset("النفسيه نفسيه الصحه صحه".split())
-_AR_FOLLOW_UPS: dict[str, frozenset[str]] = {
-    "in-arabic": frozenset("عاميه بالعاميه المصريه مصري بالمصري عربي بالعربي ترجم ترجمه".split()),
-    "continue": frozenset("كمل نكمل اكتر اكثر تفاصيل وضح وضحلي زياده".split()),
-    "summary": frozenset("ملخص لخص لخصلي باختصار اختصار".split()),
-}
-_AR_PREFIXES = ("وبال", "وال", "بال", "لل", "فال", "كال", "ال", "و", "ب", "ل", "ف")
-_AR_SUFFIXES = ("هالي", "لي", "ني", "ها", "هم", "ه", "ك")
-_LATIN_IN_ARABIC = frozenset({"mindfulness"})  # written in Latin inside Arabic questions
+_AR_GENERIC: dict[str, str] = dict.fromkeys("نفسيه صحه مزاج يومي".split(), "habits")
 
+_EN_FOLLOW_UPS: dict[str, tuple[str, ...]] = {
+    "in-arabic": ("arabic", "egyptian", "colloquial", "dialect", "translate"),
+    "continue": (
+        "tell me more",
+        "more detail",
+        "continue",
+        "elaborate",
+        "go on",
+        "expand",
+        "explain more",
+        "more about",
+    ),
+    "summary": ("summary", "summarize", "summarise", "sum up", "recap", "in short", "briefly"),
+}
+_AR_FOLLOW_UPS: dict[str, tuple[str, ...]] = {
+    "in-arabic": ("بالعاميه", "عاميه", "بالمصري", "بالعربي", "ترجم"),
+    "continue": ("كمل", "نكمل", "اكتر", "اكثر", "تفاصيل", "وضح"),
+    "summary": ("ملخص", "لخص", "باختصار"),
+}
+
+# Context the re-expressed question may carry: allow-listed, never free text.
+_EN_CONTEXT: dict[str, str] = {
+    "exam": "exams",
+    "exams": "exams",
+    "test": "exams",
+    "tests": "exams",
+    "study": "studying",
+    "studying": "studying",
+    "university": "studying",
+    "college": "studying",
+    "school": "studying",
+    "work": "work",
+    "job": "work",
+    "office": "work",
+    "day": "everyday life",
+    "days": "everyday life",
+    "evening": "evenings",
+    "evenings": "evenings",
+    "night": "evenings",
+    "nights": "evenings",
+    "morning": "mornings",
+    "mornings": "mornings",
+    "weekend": "weekends",
+    "beginner": "beginners",
+    "beginners": "beginners",
+    "simply": "simple language",
+    "simple": "simple language",
+}
+_AR_CONTEXT: dict[str, str] = {
+    "امتحان": "الامتحانات",
+    "امتحانات": "الامتحانات",
+    "مذاكره": "الدراسة",
+    "دراسه": "الدراسة",
+    "جامعه": "الدراسة",
+    "كليه": "الدراسة",
+    "مدرسه": "الدراسة",
+    "شغل": "الشغل",
+    "عمل": "الشغل",
+    "وظيفه": "الشغل",
+    "يوم": "الحياة اليومية",
+    "ليل": "بالليل",
+    "صبح": "الصبح",
+    "مبتدئين": "المبتدئين",
+    "ببساطه": "بلغة بسيطة",
+    "بسيط": "بلغة بسيطة",
+}
+MAX_CONTEXT_LABELS = 2
+
+_AR_PREFIXES = ("وبال", "وال", "بال", "لل", "فال", "كال", "ال", "و", "ب", "ل", "ف")
+_AR_SUFFIXES = ("هالي", "لي", "ني", "ها", "هم", "ه", "ك", "ات", "ي")
 _ARABIC_CHAR = re.compile("[؀-ۿ]")
 _ARABIC_WORD = re.compile("[ء-يٱ-ۓ]+")
-_TATWEEL = "ـ"
 _LATIN_WORD = re.compile(r"[a-z]+")
-_DIGIT = re.compile("[0-9٠-٩۰-۹]")
+_TATWEEL = "ـ"
 _RIGHT_QUOTE = "’"
 
 
@@ -195,19 +381,35 @@ class GateResult:
     outcome: GateOutcome
     prompt: DemoPrompt | None = None
     language: Language = "en"
+    context: tuple[str, ...] = field(default=())
+    exact: bool = False  # the message was one of the reviewed questions, word for word
 
     @property
     def canonical(self) -> str:
-        """The reviewed question used downstream instead of the user's own words."""
+        """The reviewed question: used for safety assessment and retrieval."""
         if self.prompt is None:
             raise ValueError("only accepted messages have a canonical question")
         return self.prompt.ar if self.language == "ar" else self.prompt.en
 
+    @property
+    def query(self) -> str:
+        """What the model is asked: a general question about the topic plus allow-listed
+        context labels. Never the user's own sentence."""
+        if self.prompt is None:
+            raise ValueError("only accepted messages have a query")
+        base = self.canonical
+        general = _GENERAL_QUESTION.get(self.prompt.prompt_id)
+        if general and not self.exact:
+            base = general[1] if self.language == "ar" else general[0]
+        if not self.context:
+            return base
+        if self.language == "ar":
+            return f"{base} (السياق: {'، '.join(self.context)})"
+        return f"{base} (Context: {', '.join(self.context)})"
 
-def _crisis(text: str) -> bool:
-    lowered = text.casefold()
-    folded = normalize_arabic(lowered)
-    return any(term in lowered or normalize_arabic(term) in folded for term in CRISIS_SCREEN)
+
+def _contains(text: str, terms: tuple[str, ...]) -> bool:
+    return any(term in text or normalize_arabic(term) in text for term in terms)
 
 
 def _arabic_forms(word: str) -> list[str]:
@@ -222,59 +424,77 @@ def _arabic_forms(word: str) -> list[str]:
     return forms
 
 
-def _classify_words(
+def _english_forms(word: str) -> list[str]:
+    """The word and a few regular inflections removed (stresses, relaxed, sleeping)."""
+    forms = [word]
+    for suffix in ("ing", "ed", "es", "s"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            forms.append(word[: -len(suffix)])
+    return forms
+
+
+def _scan(
     words: list[str],
-    neutral: frozenset[str],
     topics: dict[str, frozenset[str]],
     weak: dict[str, str],
-    generic: frozenset[str],
-    follow_ups: dict[str, frozenset[str]],
-    forms: Callable[[str], list[str]] | None,
-) -> tuple[bool, list[set[str]], set[str]]:
-    """(all words known, [strong, weak, generic] topics, follow-up intents)."""
-    strong: set[str] = set()
-    weak_hits: set[str] = set()
-    generic_hits: set[str] = set()
-    follow: set[str] = set()
+    context: dict[str, str],
+    forms: Callable[[str], list[str]],
+) -> tuple[dict[str, int], dict[str, int], list[str]]:
+    """Topic scores (strong, weak) and context labels; unknown words are simply ignored."""
+    strong: dict[str, int] = {}
+    weak_hits: dict[str, int] = {}
+    labels: list[str] = []
     for word in words:
-        candidates = forms(word) if forms is not None else [word]
-        known = False
-        for form in candidates:
-            for topic, vocabulary in topics.items():
-                if form in vocabulary:
-                    strong.add(topic)
-                    known = True
-            for intent, vocabulary in follow_ups.items():
-                if form in vocabulary:
-                    follow.add(intent)
-                    known = True
-            if form in weak:
-                weak_hits.add(weak[form])
-                known = True
-            if form in generic:
-                generic_hits.add("habits")
-                known = True
-            if form in neutral:
-                known = True
-        if not known:
-            return False, [], set()
-    return True, [strong, weak_hits, generic_hits], follow
+        candidates = forms(word)
+        matched = {t for t, vocab in topics.items() if any(f in vocab for f in candidates)}
+        for topic in matched:
+            strong[topic] = strong.get(topic, 0) + 1
+        if not matched:
+            for f in candidates:
+                if f in weak:
+                    weak_hits[weak[f]] = weak_hits.get(weak[f], 0) + 1
+                    break
+        for f in candidates:
+            label = context.get(f)
+            if label and label not in labels:
+                labels.append(label)
+                break
+    return strong, weak_hits, labels
+
+
+def _pick(scores: dict[str, int]) -> str | None:
+    """The single highest-scoring topic, "tie" if two lead, None if nothing scored."""
+    if not scores:
+        return None
+    best = max(scores.values())
+    leaders = [t for t, n in scores.items() if n == best]
+    return leaders[0] if len(leaders) == 1 else "tie"
+
+
+def _merge(a: dict[str, int], b: dict[str, int]) -> dict[str, int]:
+    return {t: a.get(t, 0) + b.get(t, 0) for t in {*a, *b}}
 
 
 def classify(message: str, earlier_intents: list[str]) -> GateResult:
-    """Decide whether a typed message is a supported educational question.
-
-    ``earlier_intents`` are the prompt ids of earlier recognised questions in the same
-    conversation (a follow-up needs one). Fail-closed: anything not positively
-    recognised is refused.
-    """
+    """Decide whether a typed message is a supported educational question (fail-closed:
+    anything not positively placed in one topic is refused)."""
     text = " ".join(message.split())
     if len(text) > MAX_TYPED_CHARS:
         return GateResult("too_long")
     is_arabic = bool(_ARABIC_CHAR.search(text))
     language: Language = "ar" if is_arabic else "en"
-    if _crisis(text):
+    lowered = text.casefold().replace(_RIGHT_QUOTE, "'")
+    folded = normalize_arabic(lowered.replace(_TATWEEL, ""))
+    padded = f" {re.sub(r'[^\w\s\'@.+-]', ' ', folded)} "
+
+    if _contains(padded, CRISIS_SCREEN) or _contains(padded, DISTRESS_SCREEN):
         return GateResult("crisis", language=language)
+    if _PERSONAL_DETAILS.search(lowered):
+        return GateResult("personal_details", language=language)
+    if _contains(padded, CLINICAL_SCREEN):
+        return GateResult("clinical", language=language)
+    if _contains(padded, SENSITIVE_SCREEN):
+        return GateResult("sensitive", language=language)
 
     # The reviewed questions themselves (the suggestions), in either language.
     for prompt in DEMO_PROMPTS:
@@ -282,46 +502,38 @@ def classify(message: str, earlier_intents: list[str]) -> GateResult:
             if normalize(candidate) == normalize(text):
                 if prompt.follow_up and not earlier_intents:
                     return GateResult("needs_context", language=language)
-                return GateResult("accept", prompt, "ar" if lang == "ar" else "en")
+                chosen: Language = "ar" if lang == "ar" else "en"
+                return GateResult("accept", prompt, chosen, exact=True)
 
-    if _DIGIT.search(text):  # ages, dates, phone numbers, doses: never interpreted
-        return GateResult("unsupported", language=language)
+    latin = _LATIN_WORD.findall(lowered.replace("-", ""))
+    arabic = _ARABIC_WORD.findall(folded)
+    en_strong, en_weak, en_ctx = _scan(latin, _EN_TOPICS, _EN_WEAK, _EN_CONTEXT, _english_forms)
+    ar_strong, ar_weak, ar_ctx = _scan(arabic, _AR_TOPICS, _AR_WEAK, _AR_CONTEXT, _arabic_forms)
+    _, en_generic, _ = _scan(latin, {}, _EN_GENERIC, {}, _english_forms)
+    _, ar_generic, _ = _scan(arabic, {}, _AR_GENERIC, {}, _arabic_forms)
+    labels = tuple((ar_ctx if is_arabic else en_ctx)[:MAX_CONTEXT_LABELS])
 
-    lowered = text.casefold().replace(_RIGHT_QUOTE, "'").replace("-", " ")
-    latin = _LATIN_WORD.findall(lowered)
-    if is_arabic:
-        arabic = [normalize_arabic(w.replace(_TATWEEL, "")) for w in _ARABIC_WORD.findall(lowered)]
-        if any(w not in _LATIN_IN_ARABIC for w in latin):
-            return GateResult("unsupported", language=language)
-        if not arabic or len(arabic) + len(latin) > MAX_WORDS:
-            return GateResult("unsupported", language=language)
-        ok, tiers, follow = _classify_words(
-            arabic, _AR_NEUTRAL, _AR_TOPICS, _AR_WEAK, _AR_GENERIC, _AR_FOLLOW_UPS, _arabic_forms
-        )
-        if ok and latin:
-            tiers[0].add("mindfulness")
-    else:
-        if not latin or len(latin) > MAX_WORDS:
-            return GateResult("unsupported", language=language)
-        ok, tiers, follow = _classify_words(
-            latin, _EN_NEUTRAL, _EN_TOPICS, _EN_WEAK, _EN_GENERIC, _EN_FOLLOW_UPS, None
-        )
-    if not ok:
-        return GateResult("unsupported", language=language)
-
-    topics = next((tier for tier in tiers if tier), set())
+    follow = [
+        intent
+        for intent, phrases in (_AR_FOLLOW_UPS if is_arabic else _EN_FOLLOW_UPS).items()
+        if _contains(padded, phrases)
+    ]
     if "in-arabic" in follow and not is_arabic:
         language = "ar"
-    if len(topics) > 1:
+
+    topic = (
+        _pick(_merge(en_strong, ar_strong))
+        or _pick(_merge(en_weak, ar_weak))
+        or _pick(_merge(en_generic, ar_generic))
+    )
+    if topic == "tie":
         return GateResult("multiple_topics", language=language)
-    if len(topics) == 1:
-        return GateResult("accept", _BY_ID[topics.pop()], language)
-    if len(follow) == 1:
+    if topic is not None:
+        return GateResult("accept", _BY_ID[topic], language, context=labels)
+    if follow:
         if not earlier_intents:
             return GateResult("needs_context", language=language)
-        intent = follow.pop()
-        # "Explain that in Egyptian Arabic" answers in Arabic; the others keep the
-        # language the user wrote in.
+        intent = follow[0]
         return GateResult("accept", _BY_ID[intent], "ar" if intent == "in-arabic" else language)
     return GateResult("unsupported", language=language)
 

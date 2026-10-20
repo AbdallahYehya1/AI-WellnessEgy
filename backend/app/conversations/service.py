@@ -182,12 +182,27 @@ REFUSAL_NOTICES: dict[str, str] = {
         "Arabic, continue, or give a short summary."
     ),
     "too_long": "That message is too long for this version. Please ask a short, general question.",
+    "personal_details": (
+        "Please remove personal details such as phone numbers, e-mail addresses or links, "
+        "and ask a general question."
+    ),
+    "clinical": (
+        "I can't help with diagnoses, medication or physical symptoms. A doctor or another "
+        "qualified health professional can. I can share general wellbeing information."
+    ),
+    "sensitive": (
+        "That's outside what this wellness-education assistant covers. If something is "
+        "affecting you, a qualified professional or someone you trust can help."
+    ),
 }
 _GATE_REFUSALS: dict[str, RefusalReason] = {
     "unsupported": "unsupported_topic",
     "multiple_topics": "multiple_topics",
     "needs_context": "needs_context",
     "too_long": "too_long",
+    "personal_details": "personal_details",
+    "clinical": "clinical",
+    "sensitive": "sensitive",
 }
 
 
@@ -293,6 +308,7 @@ def _saved_response(
     conversation: ChatConversation,
     question: StoredTurn,
     answer: StoredTurn,
+    topic: TopicOut | None = None,
 ) -> ChatResponse:
     assert runtime.history is not None  # noqa: S101 - only called with history active
     return ChatResponse(
@@ -303,7 +319,7 @@ def _saved_response(
             citations=[_citation_out(c) for c in answer.citations],
             model=answer.model,
         ),
-        topic=_topic(question.intent_id, question.language),
+        topic=topic or _topic(question.intent_id, question.language),
         conversation=conversation_summary(runtime.history, conversation),
         user_message_id=question.message_id,
         assistant_message_id=answer.message_id,
@@ -368,7 +384,9 @@ def handle_message(
     request_id = uuid.uuid4()
     language = "ar" if _ARABIC.search(payload.message) else "en"
     intent_id: str | None = None
-    message = payload.message
+    message = payload.message  # assessed and searched
+    model_question = payload.message  # what the model is asked
+    topic_question: str | None = None
     if runtime.demo_curated:
         gate = classify(payload.message, context.intents)
         if gate.outcome == "crisis" or context.crisis:
@@ -384,6 +402,9 @@ def handle_message(
             logger.info("chat_input_refused", extra={"reason": gate.outcome})
             return _refuse(_GATE_REFUSALS.get(gate.outcome, "unsupported_topic"))
         intent_id, language, message = gate.prompt.prompt_id, gate.language, gate.canonical
+        # The model gets a general re-expression of the question (topic + allow-listed
+        # context), never the user's own sentence.
+        model_question = topic_question = gate.query
 
     if (
         saving
@@ -451,9 +472,9 @@ def handle_message(
         _record(session, user, request_id, band.value, decision, "no_evidence")
         return _respond("no_evidence")
 
-    permit = runtime.gate.authorize(decision, str(request_id), message)
+    permit = runtime.gate.authorize(decision, str(request_id), model_question)
     generation = GenerationRequest(
-        message=message,
+        message=model_question,
         history=context.model_history[-history_store.CONTEXT_TURNS * 2 :],
         passages=[Passage(chunk_id=str(c.chunk_id), text=c.content) for c in chunks],
         instructions=band_config.instructions,
@@ -465,7 +486,7 @@ def handle_message(
         runtime.provider,
         permit,
         str(request_id),
-        message,
+        model_question,
         generation,
     )
     try:
@@ -504,7 +525,9 @@ def handle_message(
             citations=citations,
             model=model_name,
         ),
-        topic=_topic(intent_id, language),
+        topic=TopicOut(prompt_id=intent_id, question=topic_question)
+        if intent_id and topic_question
+        else _topic(intent_id, language),
     )
     if not saving or cipher is None:
         return response
@@ -528,4 +551,4 @@ def handle_message(
         model=model_name,
         client_message_id=payload.client_message_id,
     )
-    return _saved_response(runtime, user, conversation, question, answer)
+    return _saved_response(runtime, user, conversation, question, answer, topic=response.topic)

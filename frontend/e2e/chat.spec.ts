@@ -50,7 +50,7 @@ test.describe("chat workspace", () => {
 
     // Unsupported and personal text is refused with an explanation.
     await ask(page, "My boss shouts at me every day, what should I do?");
-    await expect(log(page).getByRole("note").last()).toContainText("can't respond to personal situations");
+    await expect(log(page).getByRole("note").last()).toContainText("couldn't match that to one of the topics");
 
     // Opt in, with the storage notice.
     await sidebar(page).getByRole("button", { name: "Turn on saved chats" }).click();
@@ -116,6 +116,24 @@ test.describe("chat workspace", () => {
     await sidebar(page).getByRole("button", { name: "Delete all" }).click();
     await expect(sidebar(page).getByRole("button", { name: /^إيه العادات/ })).toHaveCount(0);
     expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
+    await context.close();
+  });
+
+  test("natural wording works; clinical, personal and crisis messages are not answered", async ({ browser }) => {
+    const { context, page } = await onboardedUser(browser, "chatnatural");
+    await page.goto("/chat");
+    await ask(page, "I'm stressed about exams. What general coping techniques might help?");
+    await expect(log(page).getByText(/Answered as:/).last()).toContainText("(Context: exams)");
+    await expect(log(page).getByText(/^Sources \(\d\)$/).last()).toBeVisible();
+    await ask(page, "What can I do to relax after a difficult day?");
+    await ask(page, "Can you explain mindfulness simply?");
+    await expect(log(page).getByRole("note")).toHaveCount(0); // all three answered
+    await ask(page, "What medication helps with sleep?");
+    await expect(log(page).getByRole("note").last()).toContainText("can't help with diagnoses, medication");
+    await ask(page, "my number is 01012345678, any sleep tips?");
+    await expect(log(page).getByRole("note").last()).toContainText("remove personal details");
+    await ask(page, "I feel hopeless");
+    await expect(log(page).getByRole("note").last()).toHaveAttribute("data-status", "support");
     await context.close();
   });
 
