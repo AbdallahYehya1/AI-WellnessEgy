@@ -34,6 +34,12 @@ REQUEST_TIMEOUT_SECONDS = 8.0  # inside PROVIDER_TIMEOUT_SECONDS
 MAX_OUTPUT_TOKENS = 1024
 MAX_HISTORY_TURNS = 4
 _PASSAGE_ID = re.compile(r"^P[1-9]$")
+# Passage ids belong in "citations", not in the reply text ("... anxiety (P2, P4).").
+_INLINE_PASSAGE_REFS = re.compile(r"\s*[(\[]\s*P[1-9](?:\s*[,،]\s*P[1-9])*\s*[)\]]")
+_REPLY_LANGUAGE = {
+    "en": "Write the whole reply in English.",
+    "ar": "Write the whole reply in Egyptian Arabic, in Arabic script.",
+}
 
 SYSTEM_RULES = """You are a general wellness information assistant in a test prototype.
 Rules you must follow:
@@ -74,6 +80,8 @@ class GroqProvider:
             + "\n"
             + request.instructions
         )
+        if request.reply_language in _REPLY_LANGUAGE:
+            system += "\n" + _REPLY_LANGUAGE[request.reply_language]
         messages: list[dict[str, str]] = [
             {"role": "system", "content": system},
             {"role": "system", "content": f"Passages:\n{passages}"},
@@ -137,4 +145,5 @@ class GroqProvider:
             ids.get(c, str(c)) if isinstance(c, str) and _PASSAGE_ID.match(c) else str(c)
             for c in cited
         ]
-        return GenerationResult(text=reply.strip(), cited_chunk_ids=chunk_ids)
+        text = _INLINE_PASSAGE_REFS.sub("", reply).strip()
+        return GenerationResult(text=text, cited_chunk_ids=chunk_ids)

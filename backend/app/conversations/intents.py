@@ -344,8 +344,8 @@ _EN_CONTEXT: dict[str, str] = {
     "weekend": "weekends",
     "beginner": "beginners",
     "beginners": "beginners",
-    "simply": "simple language",
-    "simple": "simple language",
+    "simply": "explained simply",
+    "simple": "explained simply",
 }
 _AR_CONTEXT: dict[str, str] = {
     "امتحان": "الامتحانات",
@@ -362,8 +362,8 @@ _AR_CONTEXT: dict[str, str] = {
     "ليل": "بالليل",
     "صبح": "الصبح",
     "مبتدئين": "المبتدئين",
-    "ببساطه": "بلغة بسيطة",
-    "بسيط": "بلغة بسيطة",
+    "ببساطه": "شرح بسيط",
+    "بسيط": "شرح بسيط",
 }
 MAX_CONTEXT_LABELS = 2
 

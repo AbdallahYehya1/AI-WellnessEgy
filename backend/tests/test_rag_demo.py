@@ -461,3 +461,27 @@ def test_a_changed_document_is_rechunked_and_duplicates_are_stored_once(
     assert (first.status, first.chunks) == ("new", 1)  # two identical chunks, stored once
     assert again.status == "unchanged"
     assert (changed.status, changed.chunks) == ("updated", 1)
+
+
+@pytest.mark.parametrize(
+    ("language", "rule"),
+    [("en", "Write the whole reply in English."), ("ar", "Egyptian Arabic, in Arabic script")],
+)
+def test_the_server_decides_the_reply_language(groq_url: str, language: str, rule: str) -> None:
+    """2026-10-20: an English question was answered in Arabic when the model had to guess."""
+    from dataclasses import replace
+
+    FakeGroq.reply = {"reply": "ok", "citations": ["P1"]}
+    request = replace(_request(), reply_language=language)
+    GroqProvider("k", "m", url=groq_url).generate(_permit(GenerationGate()), request)
+    assert rule in FakeGroq.requests[0]["messages"][0]["content"]
+
+
+def test_passage_ids_are_removed_from_the_reply_text(groq_url: str) -> None:
+    FakeGroq.reply = {
+        "reply": "Walking can lift mood (P1, P2). Sleep matters too [P2].",
+        "citations": ["P1", "P2"],
+    }
+    result = GroqProvider("k", "m", url=groq_url).generate(_permit(GenerationGate()), _request())
+    assert result.text == "Walking can lift mood. Sleep matters too."
+    assert result.cited_chunk_ids == ["chunk-a", "chunk-b"]

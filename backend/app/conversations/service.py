@@ -479,6 +479,7 @@ def handle_message(
         passages=[Passage(chunk_id=str(c.chunk_id), text=c.content) for c in chunks],
         instructions=band_config.instructions,
         max_chars=band_config.max_reply_chars,
+        reply_language=language,
     )
     future = _PROVIDER_EXECUTOR.submit(
         generate_with_permit,
