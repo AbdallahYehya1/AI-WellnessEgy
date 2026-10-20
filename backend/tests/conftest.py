@@ -73,7 +73,8 @@ def clean_database(test_database_url: str) -> Iterator[None]:
     with engine_for(test_database_url).begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE app.audit_events, app.mood_checkins, app.consents, app.safety_events, "
+                "TRUNCATE app.chat_messages, app.chat_conversations, "
+                "app.audit_events, app.mood_checkins, app.consents, app.safety_events, "
                 "app.chat_rate_events, app.knowledge_chunks, app.knowledge_sources, app.users"
             )
         )

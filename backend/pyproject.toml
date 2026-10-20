@@ -12,6 +12,7 @@ dependencies = [
     "sqlalchemy>=2.0.40,<2.2",
     "alembic>=1.16,<2",
     "psycopg[binary]>=3.2,<4",
+    "cryptography>=44,<51", # AES-GCM for saved chat history (D-54)
 ]
 
 [project.optional-dependencies]
@@ -55,6 +56,9 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"] # assert is how pytest works
+# The typed-input gate is an Arabic/English vocabulary: Arabic letters are intended, and
+# whitespace-separated word lists keep it reviewable.
+"app/conversations/intents.py" = ["RUF001", "RUF003", "SIM905"]
 
 [tool.mypy]
 python_version = "3.12"

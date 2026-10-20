@@ -73,7 +73,7 @@ async function request<T>(
   path: string,
   options: {
     token?: string;
-    method?: "GET" | "POST" | "PATCH";
+    method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
     body?: unknown;
     timeoutMs?: number;
   } = {},
@@ -165,7 +165,7 @@ export function fetchMoodHistory(token: string, limit: number) {
   });
 }
 
-// --- Chat prototype (adult only, fake provider, synthetic knowledge) ---
+// --- Chat (adult only). Typed questions are limited to supported topics (D-53). ---
 
 export type ChatStatus =
   | "reply"
@@ -174,6 +174,13 @@ export type ChatStatus =
   | "no_evidence"
   | "unable_to_answer"
   | "unavailable";
+
+export type RefusalReason =
+  | "unsupported_topic"
+  | "multiple_topics"
+  | "needs_context"
+  | "too_long"
+  | "personal_or_unclear";
 
 export type ChatCitation = {
   chunk_id: string;
@@ -186,12 +193,42 @@ export type ChatCitation = {
   review_status?: string;
 };
 
+/** The reviewed question a typed message was recognised as. */
+export type ChatTopic = { prompt_id: string; question: string };
+
+export type ConversationSummary = {
+  conversation_id: string;
+  title: string;
+  message_count: number;
+  created_at: string;
+  last_activity_at: string;
+};
+
 export type ChatResponse = {
   status: ChatStatus;
-  reply: { text: string; signature: string; citations: ChatCitation[] } | null;
+  reply: { text: string; signature: string; citations: ChatCitation[]; model?: string | null } | null;
   notice: string | null;
   prototype: boolean;
+  refusal_reason?: RefusalReason | null;
+  topic?: ChatTopic | null;
+  conversation?: ConversationSummary | null;
+  user_message_id?: string | null;
+  assistant_message_id?: string | null;
+  created_at?: string | null;
 };
+
+export type HistorySettings = {
+  /** The server can store history (configured and migrated). */
+  available: boolean;
+  /** This user opted in. */
+  enabled: boolean;
+  consent_version: string;
+  consented_version: string | null;
+  retention_days: number;
+  max_conversations: number;
+};
+
+export type SupportedTopic = { prompt_id: string; en: string; ar: string };
 
 export type ChatConfig = {
   enabled: boolean;
@@ -202,13 +239,44 @@ export type ChatConfig = {
   /** "scripted": a test generator quotes passages; "model": an AI model writes replies. */
   generator?: "scripted" | "model" | null;
   model?: string | null;
-  /** Restricted demo: only these questions are accepted. */
   demo_curated?: boolean;
   demo_prompts?: { prompt_id: string; en: string; ar: string; follow_up: boolean }[];
+  /** "topics": typed questions only within the supported topics; "free": test-only. */
+  typed_input?: "topics" | "free";
+  supported_topics?: SupportedTopic[];
+  history?: HistorySettings | null;
+};
+
+export type StoredMessage = {
+  message_id: string;
+  seq: number;
+  role: "user" | "assistant";
+  text: string;
+  language: "en" | "ar";
+  topic: ChatTopic | null;
+  citations: ChatCitation[];
+  model: string | null;
+  signature: string | null;
+  created_at: string;
+};
+
+export type ConversationPage = { conversations: ConversationSummary[]; next_cursor: string | null };
+
+export type ConversationDetail = {
+  conversation: ConversationSummary;
+  messages: StoredMessage[];
+  next_before: number | null;
 };
 
 /** A turn sent back to the server. Assistant turns carry the server signature. */
 export type ChatTurn = { role: "user" | "assistant"; text: string; signature?: string };
+
+export type SendChatBody = {
+  message: string;
+  history?: ChatTurn[];
+  conversation_id?: string;
+  client_message_id?: string;
+};
 
 // Safety assessment (2s) plus generation (10s) can exceed the default timeout.
 const CHAT_TIMEOUT_MS = 15000;
@@ -217,11 +285,50 @@ export function fetchChatConfig(token: string) {
   return request<ChatConfig>("/chat/config", { token });
 }
 
-export function sendChatMessage(token: string, message: string, history: ChatTurn[]) {
+export function sendChatMessage(token: string, body: SendChatBody) {
   return request<ChatResponse>("/chat/messages", {
     token,
     method: "POST",
-    body: { message, history },
+    body: { history: [], ...body },
     timeoutMs: CHAT_TIMEOUT_MS,
   });
+}
+
+export function updateHistorySettings(token: string, enabled: boolean, consentVersion?: string) {
+  return request<HistorySettings>("/chat/history", {
+    token,
+    method: "PUT",
+    body: enabled ? { enabled, consent_version: consentVersion } : { enabled },
+  });
+}
+
+export function listConversations(token: string, options: { cursor?: string; q?: string; limit?: number } = {}) {
+  const params = new URLSearchParams({ limit: String(options.limit ?? 30) });
+  if (options.cursor) params.set("cursor", options.cursor);
+  if (options.q) params.set("q", options.q);
+  return request<ConversationPage>(`/chat/conversations?${params.toString()}`, { token });
+}
+
+export function fetchConversation(token: string, id: string, options: { before?: number; limit?: number } = {}) {
+  const params = new URLSearchParams({ limit: String(options.limit ?? 50) });
+  if (options.before) params.set("before", String(options.before));
+  return request<ConversationDetail>(`/chat/conversations/${encodeURIComponent(id)}?${params.toString()}`, {
+    token,
+  });
+}
+
+export function renameConversation(token: string, id: string, title: string) {
+  return request<ConversationSummary>(`/chat/conversations/${encodeURIComponent(id)}`, {
+    token,
+    method: "PATCH",
+    body: { title },
+  });
+}
+
+export function deleteConversation(token: string, id: string) {
+  return request<null>(`/chat/conversations/${encodeURIComponent(id)}`, { token, method: "DELETE" });
+}
+
+export function deleteAllConversations(token: string) {
+  return request<null>("/chat/conversations", { token, method: "DELETE" });
 }

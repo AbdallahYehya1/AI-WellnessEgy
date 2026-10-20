@@ -657,45 +657,55 @@ Groq. Free-text conversations would need at least:
    - A held-out conversational test set, including adversarial and crisis cases, with
      clinical review of the answers. Engineering tests don't establish clinical safety.
 
-### D-53. Topic-restricted free-text questions — OPEN (composer shown, disabled in production)
+### D-53. Typed questions within supported topics — DECIDED (engineering), free text still OPEN
 
-**Status (2026-10-20):** the chat page shows a "your own question" box, **disabled**, under
-the listed questions. The backend still refuses anything that isn't a listed question
-before assessment, retrieval or any Groq call. The working composer exists, with length
-limits, trimming, Enter/Shift+Enter, IME safety and no browser storage. It runs only
-under the test-only policy outside production.
+**Status (2026-10-20):** the chat composer accepts typed text. A deterministic, fail-closed gate
+(`backend/app/conversations/intents.py`) admits a message only when:
 
-**Why it is not enabled for "educational topics only":** the current checks cannot
-reliably sort free text into "low-risk educational question" versus "personal disclosure or
-crisis":
+- the engineering crisis screen doesn't match (a match goes to the support response);
+- every word belongs to a closed English/Arabic vocabulary of question words, neutral
+  wellness words and topic words;
+- the words select exactly one reviewed topic (stress, grounding, everyday habits,
+  difficult thoughts and feelings, sleep, physical activity, mindfulness), or a follow-up
+  (explain in Egyptian Arabic, continue, summarise) after an earlier recognised question.
 
-- The crisis screen is a keyword list. Its sensitivity has never been measured, in
-  particular for Egyptian Arabic, Arabizi, indirect phrasing and crisis language inside an
-  on-topic question (for example "how can I sleep when I don't want to wake up").
-- The topic lexicon used for retrieval matches *subjects*. It was built for ranking, not
-  safety, so a personal disclosure that mentions sleep or stress would pass as "on topic".
-- No reviewed crisis response with verified Egyptian resources exists (D-13).
-- Every free-text message would send personal text to Groq (US), which D-52 does not yet
-  cover.
+Anything else is refused before limits, retrieval or any model call, and the user is told
+why. An admitted message is **replaced by its reviewed question**, and only that question,
+never the user's words, reaches safety assessment, retrieval and Groq. Names, symptoms,
+medication, negations ("can't"), numbers, first-person states ("I'm…"), Arabizi and unknown
+words all cause a refusal. The UI shows "Answered as: <reviewed question>", so the matching
+isn't presented as open conversation.
 
-**Work required before enabling it in production:**
+**This is not general free-text chat.** It is topic matching with a closed vocabulary.
+Unrestricted conversation still needs everything in D-52, plus:
 
-1. **Topic classifier:**
-   - An allow-list classifier for the supported topics, with an explicit
-     "personal / other" class.
-   - Evaluated on a held-out English, Arabic and Egyptian Arabic set with a published
-     false-accept rate.
-2. **Validated risk screen:**
-   - Clinically designed test cases, including crisis language embedded in on-topic
-     questions.
-   - A measured false-negative rate signed off by a clinician (D-7).
-3. **Order of checks:** risk screen and topic check both run before retrieval and before any
-   provider call, and a refusal never reaches Groq. This already holds for the listed
-   questions.
-4. **Privacy and consent:** consent wording and a lawful basis for sending typed text to Groq,
-   ZDR confirmed and a DPA in place (D-52).
-5. **Abuse controls:**
-   - Prompt-injection and jailbreak tests.
-   - Per-user and global quotas (the global daily cap already exists).
-   - Monitoring that logs only categories, never text.
-6. **Release:** staged release behind a server flag, starting with the allowlist mode.
+1. a clinically validated risk assessor with measured sensitivity, including crisis language
+   inside on-topic questions, in Egyptian Arabic and Arabizi (D-7);
+2. reviewed crisis responses with verified Egyptian resources (D-13);
+3. consent and a lawful basis for sending personal text to Groq (US), with ZDR and a DPA confirmed;
+4. prompt-injection, jailbreak and moderation testing, with category-only monitoring;
+5. a held-out conversational evaluation with clinical review.
+
+### D-54. Saved chat history — DECIDED (engineering), production migration pending approval
+
+**Opt-in only.** Every user starts with saving off. Turning it on needs the "chat-history-v1"
+notice, which explains what is stored, the encryption (not end-to-end), deletion and the 90-day
+retention. Declining keeps the earlier browser-only behaviour (D-37).
+
+- **Stored:** typed questions that were answered, the validated replies, citation metadata
+  (public titles and URLs), the recognised topic and the model name. **Never stored:** refused
+  messages, support-routed messages, retrieved passages, prompts, raw provider responses and
+  safety diagnostics.
+- **Encryption:** AES-256-GCM in the backend (`CHAT_HISTORY_KEYS`, a rotatable key ring). Each
+  ciphertext is bound to its row and owner. The database and backups hold ciphertext only.
+  The backend can decrypt; this is not end-to-end encryption. Losing every key loses the history.
+- **Ownership:** the backend role bypasses RLS, so every query filters on the verified user.
+  Another account's conversation answers 404, exactly like a missing one. Tests cover guessed
+  ids, rename, delete, continue and ciphertext moved between accounts.
+- **Context:** continuing loads the last 4 turns server-side. In topic mode user turns are sent
+  as their reviewed questions. Browser history and a conversation id can't be mixed, and sources
+  are retrieved afresh for every message.
+- **Controls:** rename, delete one, delete all (no current consent needed to delete), stop
+  saving, 90-day idle retention (enforced when the list loads) and a 200-conversation cap.
+- **Open:** a legal and privacy review of storing wellness chat text (Egypt PDPL, Law 151/2020),
+  a retention period confirmed by counsel, and a data-subject export.

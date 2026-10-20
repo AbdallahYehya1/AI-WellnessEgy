@@ -319,3 +319,50 @@ Backend project → Environment Variables (Production). Keep `ENVIRONMENT=produc
 
 Any missing or unsafe combination turns chat off and logs the reason (`chat_disabled`).
 The rest of the API keeps working.
+
+## 13. Saved chat history (migration 0005) — needs founder approval
+
+Nothing here runs until the founder approves the migration and the role grants.
+Until then the code runs with history **unavailable** (no `CHAT_HISTORY_KEYS`), and chat
+keeps working browser-only.
+
+### What changes
+
+| Change | Detail |
+|---|---|
+| Migration `0005` | Adds `app.chat_conversations` and `app.chat_messages` (RLS on, `anon`/`authenticated` revoked), and three columns on `app.users` (`chat_history_enabled` default `false`). Additive: no existing row changes. |
+| Role grants (`app_backend`) | `chat_conversations`: SELECT, INSERT, UPDATE, DELETE. `chat_messages`: SELECT, INSERT, DELETE. Everything else unchanged. |
+| Backend env | `CHAT_HISTORY_KEYS` = contents of `~/aiwe-secrets/chat_history_keys` (Sensitive). Optional `CHAT_HISTORY_RETENTION_DAYS` (default 90). |
+
+### Steps (owner connection in `backend/.env`, from `backend/`)
+
+1. **Backup.** Supabase Dashboard → Database → Backups: confirm today's daily backup exists.
+   The free plan has daily backups only, with no point-in-time recovery. Also take a schema-only
+   dump if `pg_dump` is available: `pg_dump --schema-only --schema=app "$DATABASE_URL" > app-schema-before-0005.sql`.
+2. **Check the target**, read-only: `python -m app.ops.check_migration_target`. Expect
+   `at_revision_0004`, RLS on and no Data API access.
+3. **Migrate:** `alembic upgrade head`. Then rerun step 2 and expect `at_revision_0005` and
+   `tables_match_revision: true`.
+4. **Grants:** `python -m app.ops.backend_role --print-sql` (review), then
+   `python -m app.ops.backend_role --grants-only`. This keeps the existing password,
+   so the deployed backend keeps working.
+5. **Verify as the role:** `python -m app.ops.backend_role --verify`. Expect `grant_set: 0005`
+   and `problems: []`.
+6. **Key:** add `CHAT_HISTORY_KEYS` to the backend project (Production, Sensitive) and
+   redeploy. Keep a second copy of the key in a password manager. **Losing every key makes
+   saved chats unreadable; there is no recovery.**
+7. **Check:** `/chat/config` reports `history.available: true` for a signed-in test account.
+
+### Rollback
+
+- **Turn history off without touching data:** remove `CHAT_HISTORY_KEYS` and redeploy.
+  Chat continues browser-only. Saved rows stay encrypted and unreadable until the key returns.
+- **Remove the feature:** `alembic downgrade 0004` drops both tables and the three user columns,
+  which **deletes all saved chats**. Then `python -m app.ops.backend_role --grants-only`
+  re-applies the 0004 grant set.
+
+### Key rotation
+
+Generate a new key and set `CHAT_HISTORY_KEYS="k2:<new>,k1:<old>"`. New writes use `k2`, and both
+keys can decrypt. Remove `k1` only after every row encrypted with it has expired (90 days) or
+been deleted. Rows still encrypted with a removed key show as empty text.

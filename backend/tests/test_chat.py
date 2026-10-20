@@ -416,7 +416,26 @@ def test_config_reports_the_adult_prototype(client: TestClient) -> None:
         "model": None,
         "demo_curated": False,  # local test runtime: not the restricted demo
         "demo_prompts": [],
+        "typed_input": "free",  # test-only policy outside production
+        "supported_topics": body["supported_topics"],
+        "history": {
+            "available": False,  # no CHAT_HISTORY_KEYS
+            "enabled": False,
+            "consent_version": "chat-history-v1",
+            "consented_version": None,
+            "retention_days": 90,
+            "max_conversations": 200,
+        },
     }
+    assert [t["prompt_id"] for t in body["supported_topics"]] == [
+        "stress",
+        "grounding",
+        "habits",
+        "thoughts",
+        "sleep",
+        "activity",
+        "mindfulness",
+    ]
 
 
 def test_chat_is_disabled_by_default() -> None:

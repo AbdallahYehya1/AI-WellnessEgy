@@ -123,6 +123,8 @@ def test_tables_live_in_app_schema_with_rls_enabled(db_engine: Engine) -> None:
         ).scalar_one()
     assert [(name, rls) for name, rls in found if name != "alembic_version"] == [
         ("audit_events", True),
+        ("chat_conversations", True),
+        ("chat_messages", True),
         ("chat_rate_events", True),
         ("consents", True),
         ("knowledge_chunks", True),
@@ -173,6 +175,8 @@ SUPABASE_GUARDED_TABLES = (
     "app.knowledge_chunks",
     "app.safety_events",
     "app.chat_rate_events",
+    "app.chat_conversations",
+    "app.chat_messages",
 )
 
 
@@ -204,6 +208,15 @@ def test_supabase_data_api_roles_get_no_access(test_database_url: str, db_engine
 EXPECTED_CONSTRAINTS = {
     ("audit_events", "fk_audit_events_actor_user_id_users"),
     ("audit_events", "pk_audit_events"),
+    ("chat_conversations", "fk_chat_conversations_user_id_users"),  # 0005
+    ("chat_conversations", "pk_chat_conversations"),
+    ("chat_messages", "ck_chat_messages_language_valid"),
+    ("chat_messages", "ck_chat_messages_role_valid"),
+    ("chat_messages", "fk_chat_messages_conversation_id_chat_conversations"),
+    ("chat_messages", "fk_chat_messages_user_id_users"),
+    ("chat_messages", "pk_chat_messages"),
+    ("chat_messages", "uq_chat_messages_conversation_id_client_message_id_role"),
+    ("chat_messages", "uq_chat_messages_conversation_id_seq"),
     ("chat_rate_events", "fk_chat_rate_events_user_id_users"),
     ("chat_rate_events", "pk_chat_rate_events"),
     ("consents", "ck_consents_consent_type_valid"),
@@ -266,3 +279,30 @@ def test_downgrade_to_0001_restores_its_names_and_reupgrade_works(
     assert "mood_checkins" not in sa.inspect(db_engine).get_table_names(schema=SCHEMA)
     command.upgrade(config, "head")
     assert _constraint_names(db_engine) == EXPECTED_CONSTRAINTS
+
+
+def test_0005_keeps_existing_users_and_starts_everyone_with_history_off(
+    test_database_url: str, db_engine: Engine
+) -> None:
+    config = alembic_config(test_database_url)
+    command.downgrade(config, "0004")
+    try:
+        assert "chat_conversations" not in sa.inspect(db_engine).get_table_names(schema=SCHEMA)
+        with db_engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO app.users (id, supabase_user_id, display_name) VALUES "
+                    "(gen_random_uuid(), gen_random_uuid(), 'Existing person')"
+                )
+            )
+        command.upgrade(config, "head")
+        with db_engine.connect() as connection:
+            row = connection.execute(
+                text(
+                    "SELECT display_name, chat_history_enabled, chat_history_consent_version "
+                    "FROM app.users"
+                )
+            ).one()
+        assert tuple(row) == ("Existing person", False, None)
+    finally:
+        command.upgrade(config, "head")

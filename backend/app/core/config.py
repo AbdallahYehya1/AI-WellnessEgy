@@ -36,6 +36,8 @@ CHAT_FIELDS = frozenset(
         "chat_demo_allowed_users",
         "chat_demo_access",
         "chat_provider_daily_limit",
+        "chat_history_keys",
+        "chat_history_retention_days",
     }
 )
 _LOWERCASE_FIELDS = frozenset({"environment", "chat_provider", "chat_demo_access"})
@@ -102,6 +104,12 @@ class Settings(BaseSettings):
     # Ceiling on chat requests across ALL users per 24 hours while a real model is
     # the provider, protecting a shared free quota. Over it, chat answers "unavailable".
     chat_provider_daily_limit: int = Field(default=300, gt=0, le=100_000)
+    # Opt-in saved chat history (D-54). Encryption keys for message bodies and titles:
+    # "<id>:<base64 32-byte key>[,<older id>:<older key>]" (first encrypts, all decrypt).
+    # Unset: history is unavailable and chat stays browser-only.
+    chat_history_keys: SecretStr | None = None
+    # Saved conversations idle for longer than this are deleted.
+    chat_history_retention_days: int = Field(default=90, gt=0, le=365)
 
     # Chat variables whose value was invalid; chat stays off (names only, never values).
     _invalid_chat_settings: list[str] = PrivateAttr(default_factory=list)
@@ -119,6 +127,7 @@ class Settings(BaseSettings):
         "chat_demo_allowed_users",
         "chat_demo_access",
         "chat_provider_daily_limit",
+        "chat_history_retention_days",
         mode="before",
     )
     @classmethod
@@ -159,6 +168,7 @@ class Settings(BaseSettings):
         "supabase_service_role_key",
         "chat_signing_key",
         "groq_api_key",
+        "chat_history_keys",
     )
     @classmethod
     def _blank_secret_is_unset(cls, value: SecretStr | None) -> SecretStr | None:

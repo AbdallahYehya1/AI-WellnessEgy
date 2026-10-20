@@ -16,8 +16,10 @@ type Props = {
   /** Show the Assistant entry only when the server reports chat as enabled. */
   chatEnabled: boolean;
   children: ReactNode;
-  /** Full-height layouts (chat) manage their own scrolling. */
+  /** Full-height layouts manage their own scrolling. */
   fullHeight?: boolean;
+  /** Full-width, full-height workspace (chat): no page padding, only inner areas scroll. */
+  workspace?: boolean;
 };
 
 /**
@@ -25,7 +27,7 @@ type Props = {
  * sign-out) and a bottom tab bar on phones and tablets (below 1024px). Logical properties
  * (ms/me/ps/pe, start/end) keep it correct in both RTL and LTR.
  */
-export function AppShell({ current, locale, t, chatEnabled, children, fullHeight = false }: Props) {
+export function AppShell({ current, locale, t, chatEnabled, children, fullHeight = false, workspace = false }: Props) {
   const items: { section: Section; href: string; label: string; icon: ReactNode }[] = [
     { section: "home", href: "/dashboard", label: t.nav.home, icon: <HomeIcon /> },
     { section: "check-in", href: "/check-in", label: t.nav.checkIn, icon: <HeartIcon /> },
@@ -37,7 +39,7 @@ export function AppShell({ current, locale, t, chatEnabled, children, fullHeight
   ];
 
   return (
-    <div className={`flex flex-col ${fullHeight ? "h-dvh" : "min-h-dvh"}`}>
+    <div className={`flex flex-col ${fullHeight || workspace ? "h-dvh overflow-hidden" : "min-h-dvh"}`}>
       <a
         href="#main"
         className="sr-only z-50 rounded-xl bg-primary px-4 py-3 font-semibold text-on-primary focus:not-sr-only focus:fixed focus:start-4 focus:top-4"
@@ -46,7 +48,7 @@ export function AppShell({ current, locale, t, chatEnabled, children, fullHeight
       </a>
 
       <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-5xl items-center gap-4 px-4">
+        <div className={`mx-auto flex h-16 items-center gap-4 px-4 ${workspace ? "max-w-none" : "max-w-5xl"}`}>
           <Link href="/dashboard" className="flex min-h-11 shrink-0 items-center gap-2 font-bold">
             <LogoMark />
             <span lang="en" dir="ltr" className="whitespace-nowrap">
@@ -86,10 +88,13 @@ export function AppShell({ current, locale, t, chatEnabled, children, fullHeight
       <main
         id="main"
         tabIndex={-1}
+        data-chat-main={workspace ? "" : undefined}
         className={
-          fullHeight
-            ? "mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4 pb-20 lg:pb-4"
-            : "mx-auto w-full max-w-3xl flex-1 space-y-6 px-4 py-8 pb-28 lg:pb-12"
+          workspace
+            ? "flex min-h-0 w-full flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0"
+            : fullHeight
+              ? "mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4 pb-20 lg:pb-4"
+              : "mx-auto w-full max-w-3xl flex-1 space-y-6 px-4 py-8 pb-28 lg:pb-12"
         }
       >
         {children}
@@ -97,7 +102,8 @@ export function AppShell({ current, locale, t, chatEnabled, children, fullHeight
 
       <nav
         aria-label={t.nav.label}
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden"
+        data-bottom-tabs=""
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
       >
         <ul className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
           {items.map((item) => (

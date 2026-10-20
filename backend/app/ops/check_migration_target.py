@@ -44,6 +44,9 @@ EXPECTED_BY_REVISION: dict[str | None, list[str]] = {
     ],
 }
 EXPECTED_BY_REVISION["0004"] = EXPECTED_BY_REVISION["0003"]  # 0004 only adds columns
+EXPECTED_BY_REVISION["0005"] = sorted(
+    [*EXPECTED_BY_REVISION["0004"], "chat_conversations", "chat_messages"]
+)
 DATA_API_ROLES = ("anon", "authenticated")
 POOLER_HOST_SUFFIX = ".pooler.supabase.com"
 SESSION_POOLER_PORT = 5432

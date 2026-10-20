@@ -131,3 +131,26 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Chat: new messages fade in briefly (disabled by the reduced-motion rule above). */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Chat on phones: while the composer has focus, hide the bottom tab bar so the
+   composer sits directly above the on-screen keyboard. */
+@media (max-width: 1023px) {
+  html[data-chat-composing] [data-bottom-tabs] {
+    display: none;
+  }
+  html[data-chat-composing] [data-chat-main] {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

@@ -31,6 +31,9 @@ x-api-environment: &api-environment
   CHAT_DEMO_ALLOWED_USERS: ${CHAT_DEMO_ALLOWED_USERS:-}
   CHAT_DEMO_ACCESS: ${CHAT_DEMO_ACCESS:-allowlist}
   CHAT_PROVIDER_DAILY_LIMIT: ${CHAT_PROVIDER_DAILY_LIMIT:-300}
+  # Opt-in saved chat history (D-54): unset keys = history unavailable (browser-only chat).
+  CHAT_HISTORY_KEYS: ${CHAT_HISTORY_KEYS:-}
+  CHAT_HISTORY_RETENTION_DAYS: ${CHAT_HISTORY_RETENTION_DAYS:-90}
 
 services:
   db:
