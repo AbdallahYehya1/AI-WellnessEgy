@@ -29,6 +29,9 @@ class GenerationRequest:
     passages: list[Passage]  # approved, age-applicable evidence only
     instructions: str
     max_chars: int
+    # "en" or "ar": the language the reply must be written in, decided by the server
+    # (the model is not left to guess it from a re-expressed question).
+    reply_language: str | None = None
 
 
 @dataclass(frozen=True)
