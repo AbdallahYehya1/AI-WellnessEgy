@@ -344,7 +344,7 @@ keeps working browser-only.
 3. **Migrate:** `alembic upgrade head`. Then rerun step 2 and expect `at_revision_0005` and
    `tables_match_revision: true`.
 4. **Grants:** `python -m app.ops.backend_role --print-sql` (review), then
-   `python -m app.ops.backend_role --apply --grants-only`. This keeps the existing password,
+   `python -m app.ops.backend_role --grants-only`. This keeps the existing password,
    so the deployed backend keeps working.
 5. **Verify as the role:** `python -m app.ops.backend_role --verify`. Expect `grant_set: 0005`
    and `problems: []`.
@@ -358,7 +358,7 @@ keeps working browser-only.
 - **Turn history off without touching data:** remove `CHAT_HISTORY_KEYS` and redeploy.
   Chat continues browser-only. Saved rows stay encrypted and unreadable until the key returns.
 - **Remove the feature:** `alembic downgrade 0004` drops both tables and the three user columns,
-  which **deletes all saved chats**. Then `python -m app.ops.backend_role --apply --grants-only`
+  which **deletes all saved chats**. Then `python -m app.ops.backend_role --grants-only`
   re-applies the 0004 grant set.
 
 ### Key rotation
