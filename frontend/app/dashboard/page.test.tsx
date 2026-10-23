@@ -125,14 +125,14 @@ describe("DashboardPage", () => {
   it("links to the assistant only when the server reports it as enabled", async () => {
     render(await DashboardPage(props()));
     expect(screen.queryByRole("link", { name: "Open the assistant" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "Assistant" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Assistants" })).toBeNull();
     expect(screen.getByText("The assistant isn't available yet. It's still being tested privately.")).toBeTruthy();
 
     backend.fetchChatConfig.mockResolvedValue(
       ok({ enabled: true, age_band: "adult", age_band_label: "Adult", test_only_policy: true, prototype: true }),
     );
     render(await DashboardPage(props()));
-    expect(screen.getByRole("link", { name: "Open the assistant" }).getAttribute("href")).toBe("/chat");
-    expect(screen.getAllByRole("link", { name: "Assistant" })[0]?.getAttribute("href")).toBe("/chat");
+    expect(screen.getByRole("link", { name: "Open the assistant" }).getAttribute("href")).toBe("/assistants");
+    expect(screen.getAllByRole("link", { name: "Assistants" })[0]?.getAttribute("href")).toBe("/assistants");
   });
 });

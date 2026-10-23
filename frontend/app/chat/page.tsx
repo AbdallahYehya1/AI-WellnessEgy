@@ -45,7 +45,11 @@ const ACTIONS: ChatActions = {
  * is made by the backend. Returning users get only their conversation list here; a
  * conversation's messages load when they open it.
  */
-export default async function ChatPage() {
+type Props = { searchParams?: Promise<Record<string, string | string[] | undefined>> };
+
+const DEFAULT_ASSISTANT = "emotional";
+
+export default async function ChatPage({ searchParams }: Props = {}) {
   const { locale, t } = await getMessages();
   const session = await getVerifiedSession();
   if (!session) redirect(`/sign-in?next=${CHAT_PATH}`);
@@ -80,11 +84,32 @@ export default async function ChatPage() {
     );
   }
 
+  const params = (await searchParams) ?? {};
+  const requested = typeof params.assistant === "string" ? params.assistant : DEFAULT_ASSISTANT;
+  const assistants = data.assistants ?? [];
+  const ready = assistants.filter((a) => a.status === "ready");
+  // An unknown or not-yet-ready assistant falls back to the default (never a broken page).
+  const current = ready.find((a) => a.assistant_id === requested) ?? ready.find((a) => a.assistant_id === DEFAULT_ASSISTANT);
+  const assistantId = current?.assistant_id ?? DEFAULT_ASSISTANT;
+
   let initialConversations: ConversationPage | null = null;
   if (data.history?.available) {
-    const list = await listConversations(session.accessToken);
+    const list = await listConversations(session.accessToken, { assistant: current ? assistantId : undefined });
     initialConversations = list.ok ? list.data : null;
   }
+  const isDefault = assistantId === DEFAULT_ASSISTANT;
+  const followUps = (data.demo_prompts ?? []).filter((p) => p.follow_up);
+  const suggestions = isDefault || !current
+    ? (data.demo_prompts ?? [])
+    : [
+        ...(locale === "ar" ? current.starters_ar : current.starters_en).map((text, i) => ({
+          prompt_id: `${assistantId}-${i}`,
+          en: text,
+          ar: text,
+          follow_up: false,
+        })),
+        ...followUps,
+      ];
 
   const modeNote =
     data.generator === "model"
@@ -98,7 +123,22 @@ export default async function ChatPage() {
       <ChatWorkspace
         actions={ACTIONS}
         locale={locale}
-        suggestions={(data.demo_prompts ?? []).map((p) => ({
+        key={assistantId}
+        assistant={
+          current
+            ? {
+                id: current.assistant_id,
+                name: locale === "ar" ? current.name_ar : current.name_en,
+                description: locale === "ar" ? current.description_ar : current.description_en,
+                icon: current.icon,
+              }
+            : null
+        }
+        assistantNames={Object.fromEntries(
+          ready.map((a) => [a.assistant_id, locale === "ar" ? a.name_ar : a.name_en]),
+        )}
+        showTopics={isDefault}
+        suggestions={suggestions.map((p) => ({
           id: p.prompt_id,
           text: locale === "ar" ? p.ar : p.en,
           followUp: p.follow_up,

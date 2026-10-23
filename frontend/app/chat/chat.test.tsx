@@ -459,7 +459,7 @@ describe("chat workspace", () => {
     const loadConversations = vi.fn().mockResolvedValue({ ok: true, data: { conversations: [summary(OTHER_ID, "What is mindfulness?")], next_cursor: null } });
     workspace(fakeActions({ loadConversations }), { history: HISTORY_ON, initialConversations: { conversations: [summary()], next_cursor: null } });
     await userEvent.setup().type(screen.getAllByLabelText("Search saved chats")[0]!, "mind");
-    await waitFor(() => expect(loadConversations).toHaveBeenCalledWith(undefined, "mind"));
+    await waitFor(() => expect(loadConversations).toHaveBeenCalledWith(undefined, "mind", undefined));
     const nav = screen.getAllByRole("navigation", { name: "Chats" })[0]!;
     expect(await within(nav).findByText("What is mindfulness?")).toBeTruthy();
     expect(within(nav).queryByText("What habits help with better sleep?")).toBeNull();
