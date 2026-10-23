@@ -26,8 +26,15 @@ class MoodCheckin(Base):
     __tablename__ = "mood_checkins"
     __table_args__ = (
         CheckConstraint(
-            f"mood_score BETWEEN {MOOD_SCORE_MIN} AND {MOOD_SCORE_MAX}", name="mood_score_range"
+            f"mood_score IS NULL OR mood_score BETWEEN {MOOD_SCORE_MIN} AND {MOOD_SCORE_MAX}",
+            name="mood_score_range",
         ),
+        CheckConstraint(
+            "(entry_version = 1 AND mood_score IS NOT NULL) OR "
+            "(entry_version = 2 AND mood_score IS NULL AND cardinality(emotions) BETWEEN 1 AND 9)",
+            name="entry_valid",
+        ),
+        CheckConstraint("cardinality(factors) <= 11", name="factors_count"),
         CheckConstraint(f"cardinality(tags) <= {MAX_TAGS}", name="tags_count"),
         CheckConstraint(
             f"note IS NULL OR char_length(note) BETWEEN 1 AND {NOTE_MAX_LENGTH}",
@@ -40,7 +47,13 @@ class MoodCheckin(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
     )
-    mood_score: Mapped[int] = mapped_column(SmallInteger)
+    # Version 1 (legacy check-in): a 1-5 score. Version 2 (Daily Reflection): emotions and
+    # optional factors, no score. Old scores are never reinterpreted as emotions.
+    mood_score: Mapped[int | None] = mapped_column(SmallInteger)
+    emotions: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
+    factors: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
+    note_enc: Mapped[str | None] = mapped_column(Text)  # private note, encrypted by the backend
+    entry_version: Mapped[int] = mapped_column(SmallInteger, default=1, server_default="1")
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
     note: Mapped[str | None] = mapped_column(Text)
     # Set by the database, never by the client.

@@ -7,6 +7,7 @@ version_label: 0.1-synthetic
 content_type: wellness-education
 language: en
 age_bands: adult
+domains: emotional
 review_status: synthetic
 ---
 SYNTHETIC TEST CONTENT, not clinical guidance. Some people find that slowing their breathing for a minute helps them feel calmer when they are stressed. One simple pattern is to breathe in gently, pause briefly, and breathe out a little more slowly.

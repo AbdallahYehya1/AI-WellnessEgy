@@ -33,6 +33,12 @@ class ChatConversation(Base):
     __tablename__ = "chat_conversations"
     __table_args__ = (
         Index("ix_chat_conversations_user_activity", "user_id", "last_activity_at", "id"),
+        Index(
+            "ix_chat_conversations_user_assistant_activity",
+            "user_id",
+            "assistant_id",
+            "last_activity_at",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -40,6 +46,8 @@ class ChatConversation(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
     )
     title_enc: Mapped[str] = mapped_column(Text)
+    # Which assistant this conversation belongs to (D-56); older chats are "emotional".
+    assistant_id: Mapped[str] = mapped_column(String(40), server_default="emotional")
     message_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp()
@@ -78,6 +86,8 @@ class ChatMessage(Base):
     seq: Mapped[int] = mapped_column(Integer)
     role: Mapped[str] = mapped_column(String(10))
     content_enc: Mapped[str] = mapped_column(Text)
+    # Encrypted re-expressed question the model was asked (user turns, assistant mode).
+    query_enc: Mapped[str | None] = mapped_column(Text)
     intent_id: Mapped[str | None] = mapped_column(String(40))  # recognised topic (user turns)
     language: Mapped[str] = mapped_column(String(2))
     citations: Mapped[list[dict[str, Any]]] = mapped_column(

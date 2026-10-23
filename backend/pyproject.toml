@@ -59,6 +59,7 @@ select = [
 # The typed-input gate is an Arabic/English vocabulary: Arabic letters are intended, and
 # whitespace-separated word lists keep it reviewable.
 "app/conversations/intents.py" = ["RUF001", "RUF003", "SIM905"]
+"app/assistants/*.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 python_version = "3.12"

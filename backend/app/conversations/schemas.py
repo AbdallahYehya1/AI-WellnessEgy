@@ -27,7 +27,11 @@ RefusalReason = Literal[
     "personal_details",
     "clinical",
     "sensitive",
+    "regulated",  # investment, tax or legal advice (assistants)
+    "needs_detail",  # nothing specific recognised for this assistant yet
+    "daily_limit",  # this account's fair-use allowance for today is used up
 ]
+SupportKind = Literal["crisis", "relationship_safety"]
 
 ChatStatus = Literal[
     "reply", "support", "out_of_scope", "no_evidence", "unable_to_answer", "unavailable"
@@ -57,6 +61,8 @@ class ChatRequest(BaseModel):
     conversation_id: UUID | None = None
     # Lets a retried send return the saved answer instead of saving it twice.
     client_message_id: UUID | None = None
+    # Which specialised assistant to talk to (D-56); a saved conversation keeps its own.
+    assistant_id: str | None = Field(default=None, max_length=40, pattern=r"^[a-z]+$")
 
     @field_validator("message")
     @classmethod
@@ -100,6 +106,7 @@ class TopicOut(BaseModel):
 
 class ConversationSummary(BaseModel):
     conversation_id: UUID
+    assistant_id: str = "emotional"
     title: str
     message_count: int
     created_at: datetime
@@ -118,6 +125,10 @@ class ChatResponse(BaseModel):
     user_message_id: UUID | None = None
     assistant_message_id: UUID | None = None
     created_at: datetime | None = None
+    assistant_id: str | None = None
+    # A better-suited assistant for this message, suggested only; nothing is shared.
+    handoff: str | None = None
+    support_kind: SupportKind | None = None
 
 
 class StoredMessageOut(BaseModel):
@@ -176,6 +187,18 @@ class HistorySettingsUpdate(BaseModel):
     consent_version: str | None = Field(default=None, max_length=40)
 
 
+class AssistantOut(BaseModel):
+    assistant_id: str
+    status: Literal["ready", "preview"]
+    icon: str
+    name_en: str
+    name_ar: str
+    description_en: str
+    description_ar: str
+    starters_en: list[str]
+    starters_ar: list[str]
+
+
 class SupportedTopic(BaseModel):
     prompt_id: str
     en: str
@@ -207,3 +230,4 @@ class ChatConfig(BaseModel):
     typed_input: Literal["topics", "free"] = "topics"
     supported_topics: list[SupportedTopic] = []
     history: HistorySettings | None = None
+    assistants: list[AssistantOut] = []

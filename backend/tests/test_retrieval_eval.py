@@ -12,11 +12,12 @@ from app.knowledge.evaluation import HELD_OUT, HELD_OUT_V2, HELD_OUT_V3, HELD_OU
 from app.knowledge.ingest import ingest_directory
 
 SOURCES = Path(__file__).resolve().parents[1] / "app" / "knowledge" / "sources"
+SOURCE_COUNT = len(list(SOURCES.glob("*.md")))
 
 
 def test_report_retrieval_quality(db_engine: Engine) -> None:
     with Session(db_engine) as session, session.begin():
-        assert ingest_directory(session, SOURCES) == 10
+        assert ingest_directory(session, SOURCES) == SOURCE_COUNT
         report = evaluate(session)
         held_out = evaluate(session, cases=HELD_OUT)
         held_out_v2 = evaluate(session, cases=HELD_OUT_V2)

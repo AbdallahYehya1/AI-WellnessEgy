@@ -152,7 +152,7 @@ def test_verify_report_matches_the_design(role_url_for_tests: str) -> None:
     assert report["settings"]["statement_timeout"] == "5s"
     assert report["table_privileges"]["audit_events"] == ["INSERT"]
     # The test database is at head (0005), so the chat-history grant set applies.
-    assert report["grant_set"] == "0005"
+    assert report["grant_set"] == "0005"  # 0006 adds columns only: same grants
     assert report["table_privileges"]["chat_rate_events"] == ["SELECT", "INSERT", "DELETE"]
     assert report["table_privileges"]["chat_conversations"] == [
         "SELECT",
@@ -182,7 +182,7 @@ def test_apply_is_idempotent_and_removes_drift(role_url_for_tests: str, db_engin
 def test_apply_refuses_an_unexpected_revision(db_engine: Engine) -> None:
     with (
         db_engine.begin() as conn,
-        pytest.raises(RuntimeError, match="revision '0005'; expected 0002"),
+        pytest.raises(RuntimeError, match="revision '0006'; expected 0002"),
     ):
         apply_role(conn, PASSWORD, expected_revision="0002")  # the test database is at head
     with db_engine.connect() as conn:

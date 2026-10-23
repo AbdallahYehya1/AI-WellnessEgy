@@ -73,6 +73,7 @@ GRANTS_BY_REVISION = {
     "0003": GRANTS_0003,
     "0004": GRANTS_0003,
     "0005": GRANTS_0005,
+    "0006": GRANTS_0005,  # 0006 only adds columns: same grants
 }
 GRANTS = GRANTS_0002
 SUPPORTED_REVISION = "0002"
@@ -88,6 +89,7 @@ SEQUENCES_BY_REVISION: dict[str, tuple[str, ...]] = {
     "0003": ("chat_rate_events_id_seq",),
     "0004": ("chat_rate_events_id_seq",),
     "0005": ("chat_rate_events_id_seq",),
+    "0006": ("chat_rate_events_id_seq",),
 }
 ROLE_SETTINGS = {
     "statement_timeout": "5s",
@@ -308,7 +310,7 @@ def verify_role(conn: Connection) -> dict[str, Any]:
         tx.rollback()
     # The catalog (readable by any role) tells which revision's tables exist.
     if "chat_conversations" in tables:
-        revision = "0005"
+        revision = "0005"  # 0006 adds columns only; same grant set
     elif "chat_rate_events" in tables:
         revision = "0003"
     else:

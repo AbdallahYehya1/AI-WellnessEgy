@@ -276,7 +276,8 @@ _SQL = text(
     """
     WITH matches AS (
       SELECT c.id, c.content, s.title, s.publisher, s.source_ref, s.version_label,
-             s.review_status, s.language,
+             s.review_status, s.language, s.domains,
+             (s.domains && CAST(:primary AS text[])) AS in_primary,
              ts_rank_cd(c.search_vector, q.topic) AS topic_rank,
              ts_rank_cd(c.search_vector, q.query) AS query_rank
       FROM app.knowledge_chunks c
@@ -293,12 +294,15 @@ _SQL = text(
         AND CAST(:band AS text) = ANY (s.age_bands)
         AND s.review_status IN :statuses
         AND (s.expires_at IS NULL OR s.expires_at > now())
+        -- Assistant domains (D-56): enforced here, never left to the model.
+        AND (CAST(:any_domain AS boolean) OR s.domains && CAST(:domains AS text[]))
     )
-    SELECT id, content, title, publisher, source_ref, version_label, review_status
+    SELECT id, content, title, publisher, source_ref, version_label, review_status, domains
     FROM matches
     -- The user's language wins only for passages that actually match the topic, so an
     -- unrelated passage in the user's language never outranks a relevant one.
-    ORDER BY (language = :lang AND topic_rank > 0) DESC, topic_rank DESC, query_rank DESC, id
+    ORDER BY in_primary DESC, (language = :lang AND topic_rank > 0) DESC, topic_rank DESC,
+             query_rank DESC, id
     LIMIT :limit
     """
 ).bindparams(bindparam("statuses", expanding=True))
@@ -314,6 +318,7 @@ class RetrievedChunk:
     version_label: str
     synthetic: bool
     review_status: str = "approved"
+    domains: tuple[str, ...] = ()
 
 
 _SIMPLE_STOPWORDS = frozenset(
@@ -426,22 +431,89 @@ def retrieve(
     statuses: tuple[str, ...],
     *,
     context: list[str] | None = None,
+    domains: tuple[str, ...] | None = None,
 ) -> list[RetrievedChunk]:
+    """Wellbeing retrieval (lexicon-gated). ``domains`` restricts it to those assistant
+    domains; None searches every domain (the pre-assistant behaviour)."""
     plan = plan_search(message, context)
     if plan is None:
         return []
+    return _run(
+        session,
+        english=plan.english,
+        arabic=plan.arabic,
+        english_topic=plan.english_topic,
+        arabic_topic=plan.arabic_topic,
+        simple=plan.simple,
+        language=plan.language,
+        age_band=age_band,
+        statuses=statuses,
+        domains=domains,
+        primary=domains[:1] if domains else (),
+    )
+
+
+def retrieve_terms(
+    session: Session,
+    *,
+    english: str,
+    arabic: str,
+    language: str,
+    age_band: str,
+    statuses: tuple[str, ...],
+    domains: tuple[str, ...],
+    limit: int = MAX_PASSAGES,
+) -> list[RetrievedChunk]:
+    """Assistant retrieval (D-56): search terms come from the recognised subtopics, and
+    only sources tagged with ``domains`` can match; the first domain ranks first."""
+    if not (english.strip() or arabic.strip()) or not domains:
+        return []
+    return _run(
+        session,
+        english=english,
+        arabic=arabic,
+        english_topic=english,
+        arabic_topic=arabic,
+        simple="",
+        language=language,
+        age_band=age_band,
+        statuses=statuses,
+        domains=domains,
+        primary=domains[:1],
+        limit=limit,
+    )
+
+
+def _run(
+    session: Session,
+    *,
+    english: str,
+    arabic: str,
+    english_topic: str,
+    arabic_topic: str,
+    simple: str,
+    language: str,
+    age_band: str,
+    statuses: tuple[str, ...],
+    domains: tuple[str, ...] | None,
+    primary: tuple[str, ...],
+    limit: int = MAX_PASSAGES,
+) -> list[RetrievedChunk]:
     rows = session.execute(
         _SQL,
         {
-            "en_q": plan.english,
-            "ar_q": plan.arabic,
-            "en_topic": plan.english_topic,
-            "ar_topic": plan.arabic_topic,
-            "simple_q": plan.simple,
+            "en_q": english,
+            "ar_q": arabic,
+            "en_topic": english_topic,
+            "ar_topic": arabic_topic,
+            "simple_q": simple,
             "band": age_band,
             "statuses": list(statuses),
-            "lang": plan.language,
-            "limit": MAX_PASSAGES,
+            "lang": language,
+            "limit": limit,
+            "any_domain": domains is None,
+            "domains": list(domains or ()),
+            "primary": list(primary),
         },
     ).all()
     return [
@@ -454,6 +526,7 @@ def retrieve(
             version_label=row.version_label,
             synthetic=row.review_status == "synthetic",
             review_status=row.review_status,
+            domains=tuple(row.domains or ()),
         )
         for row in rows
     ]

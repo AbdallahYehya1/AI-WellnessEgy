@@ -32,6 +32,8 @@ class GenerationRequest:
     # "en" or "ar": the language the reply must be written in, decided by the server
     # (the model is not left to guess it from a re-expressed question).
     reply_language: str | None = None
+    # Assistant mode (D-56): evidence-grounded guidance plus clearly general coaching.
+    coaching: bool = False
 
 
 @dataclass(frozen=True)
