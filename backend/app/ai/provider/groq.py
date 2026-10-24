@@ -33,7 +33,7 @@ GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 USER_AGENT = "ai-wellness-egypt-backend/0.1"
 REQUEST_TIMEOUT_SECONDS = 8.0  # inside PROVIDER_TIMEOUT_SECONDS
 # Room for a short reply plus the low-effort reasoning gpt-oss models spend first.
-MAX_OUTPUT_TOKENS = 1024
+MAX_OUTPUT_TOKENS = 1400
 MAX_HISTORY_TURNS = 4
 _RISKS = frozenset({"none", "self_harm", "abuse", "medical_emergency", "danger"})
 _PASSAGE_ID = re.compile(r"^P[1-9]$")
@@ -82,6 +82,36 @@ Rules you must follow:
 - Respond with a JSON object only:
   {"reply": "<text>", "citations": ["P1", ...], "risk": "none"} listing the passage ids
   you used (an empty list if none). Keep the reply under {max_chars} characters."""
+
+
+_REPLY_START = re.compile(r'"reply"\s*:\s*"')
+
+
+def _salvage_reply(content: str) -> str | None:
+    """The reply string from truncated JSON, decoded, cut back to its last full sentence."""
+    m = _REPLY_START.search(content)
+    if not m:
+        return None
+    raw, i, escaped = [], m.end(), False
+    while i < len(content):
+        ch = content[i]
+        if escaped:
+            raw.append("\\" + ch)
+            escaped = False
+        elif ch == "\\":
+            escaped = True
+        elif ch == '"':
+            break
+        else:
+            raw.append(ch)
+        i += 1
+    try:
+        text = json.loads('"' + "".join(raw) + '"', strict=False)
+    except ValueError:
+        return None
+    ends = [j for j, ch in enumerate(text) if ch in ".!?؟\n"]
+    text = text[: ends[-1] + 1] if ends else text
+    return text.strip() if len(text.strip()) >= 80 else None
 
 
 def _json_object(content: str) -> str:
@@ -180,11 +210,20 @@ class GroqProvider:
     def _parse(body: Any, ids: dict[str, str]) -> GenerationResult:
         try:
             content = body["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError):
+            raise ProviderError("malformed") from None
+        try:
             data = json.loads(_json_object(content))
             reply = data["reply"]
             cited = data["citations"]
-        except (KeyError, IndexError, TypeError, ValueError):
-            raise ProviderError("malformed") from None
+        except (KeyError, TypeError, ValueError):
+            # A reply cut off at the token limit leaves unterminated JSON. Keep the text
+            # that arrived (no citations, so it is shown as general guidance).
+            salvaged = _salvage_reply(content) if isinstance(content, str) else None
+            if not salvaged:
+                raise ProviderError("malformed") from None
+            logger.info("chat_provider_reply_salvaged")
+            reply, cited, data = salvaged, [], {}
         if not isinstance(reply, str) or not isinstance(cited, list):
             raise ProviderError("malformed")
         # Map passage ids back to chunk ids; anything else stays as-is so output
