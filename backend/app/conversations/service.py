@@ -135,8 +135,8 @@ NOTICES: dict[str, str] = {
 }
 ASSISTANT_REPLY_CHARS = 1600
 STRUCTURED_FOLLOW_UP = (
-    "(A follow-up from the same person about this situation: go further with more "
-    "specific, practical next steps, without repeating the earlier answer.)"
+    "(A follow-up from the same person about this situation: add a few more specific, "
+    "practical next steps without repeating the earlier answer. Keep it brief.)"
 )
 _SENTENCE_END = re.compile(r"[.!?؟]\s")
 

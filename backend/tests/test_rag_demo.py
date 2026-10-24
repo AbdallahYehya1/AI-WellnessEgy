@@ -236,7 +236,7 @@ def test_groq_reply_maps_passage_ids_to_chunk_ids(groq_url: str) -> None:
     assert result.cited_chunk_ids == ["chunk-a"]
     sent = FakeGroq.requests[0]
     assert sent["model"] == "openai/gpt-oss-20b"
-    assert sent["max_completion_tokens"] == 1024
+    assert sent["max_completion_tokens"] == 1400
     assert sent["response_format"] == {"type": "json_object"}
     # gpt-oss is a reasoning model: little reasoning, and never returned to us.
     assert sent["reasoning_effort"] == "low" and sent["include_reasoning"] is False
@@ -500,3 +500,17 @@ def test_passage_ids_are_removed_from_the_reply_text(groq_url: str) -> None:
     result = GroqProvider("k", "m", url=groq_url).generate(_permit(GenerationGate()), _request())
     assert result.text == "Walking can lift mood. Sleep matters too."
     assert result.cited_chunk_ids == ["chunk-a", "chunk-b"]
+
+
+def test_a_reply_cut_off_at_the_token_limit_is_kept_as_general_guidance(
+    groq_url: str, curated: None
+) -> None:
+    from app.ai.provider.groq import GroqProvider as Real
+
+    truncated = (
+        '{"reply": "Try one small, regular step. Agree a weekly time to talk about how the '
+        "week went. Keep it short and calm, and end with one thing you appreciated. Then pl"
+    )
+    body = {"choices": [{"message": {"content": truncated}}]}
+    result = Real._parse(body, {"P1": "chunk-1"})
+    assert result.text.endswith("appreciated.") and result.cited_chunk_ids == []
