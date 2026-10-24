@@ -114,6 +114,23 @@ def _salvage_reply(content: str) -> str | None:
     return text.strip() if len(text.strip()) >= 80 else None
 
 
+class _BadRequestError(Exception):
+    """HTTP 400 from the provider (retried once)."""
+
+
+_ERROR_CODE = re.compile(r"^[a-z_]{1,40}$")
+
+
+def _error_code(exc: urllib.error.HTTPError) -> str | None:
+    """The provider's error code (e.g. "json_validate_failed"), validated to a short
+    identifier so nothing echoed from the request can reach the logs."""
+    try:
+        code = json.loads(exc.read(4096) or b"{}").get("error", {}).get("code")
+    except (ValueError, AttributeError, OSError):
+        return None
+    return code if isinstance(code, str) and _ERROR_CODE.match(code) else None
+
+
 def _json_object(content: str) -> str:
     """The JSON object in the reply, tolerating stray text or code fences around it."""
     start, end = content.find("{"), content.rfind("}")
@@ -161,6 +178,10 @@ class GroqProvider:
             {"role": "system", "content": f"Passages:\n{passages or '(none matched)'}"},
         ]
         for role, text in request.history[-MAX_HISTORY_TURNS:]:
+            if role == "assistant":
+                # Earlier replies in the same JSON shape the model must answer in: plain-text
+                # turns made JSON mode fail on follow-ups (production, 2026-10-25).
+                text = json.dumps({"reply": text, "citations": [], "risk": "none"})
             messages.append(
                 {"role": "assistant" if role == "assistant" else "user", "content": text}
             )
@@ -180,6 +201,21 @@ class GroqProvider:
 
     def generate(self, permit: GenerationPermit, request: GenerationRequest) -> GenerationResult:
         payload, ids = self.build_payload(request)
+        try:
+            body = self._post(payload)
+        except _BadRequestError:
+            # JSON mode rejects an answer that isn't valid JSON (HTTP 400); one retry.
+            try:
+                body = self._post(payload)
+            except _BadRequestError:
+                raise ProviderError("http_400") from None
+        _log_usage(body)
+        result = self._parse(body, ids)
+        usage = body.get("usage") if isinstance(body, dict) else None
+        total = usage.get("total_tokens") if isinstance(usage, dict) else None
+        return replace(result, total_tokens=total if isinstance(total, int) else None)
+
+    def _post(self, payload: dict[str, Any]) -> Any:
         http_request = urllib.request.Request(  # noqa: S310 - fixed https endpoint
             self._url,
             data=json.dumps(payload).encode(),
@@ -193,18 +229,16 @@ class GroqProvider:
         )
         try:
             with urllib.request.urlopen(http_request, timeout=REQUEST_TIMEOUT_SECONDS) as response:  # noqa: S310
-                body = json.loads(response.read())
+                return json.loads(response.read())
         except urllib.error.HTTPError as exc:
-            exc.close()  # release the connection; the body is never read
-            # Never include the response body or headers: they may echo the request.
+            code = _error_code(exc)  # Groq's error code only; never the message or body
+            exc.close()
+            logger.warning("chat_provider_http_error", extra={"status": exc.code, "code": code})
+            if exc.code == 400:
+                raise _BadRequestError from None
             raise ProviderError("quota" if exc.code == 429 else f"http_{exc.code}") from None
         except (urllib.error.URLError, TimeoutError, ValueError, OSError):
             raise ProviderError("unreachable") from None
-        _log_usage(body)
-        result = self._parse(body, ids)
-        usage = body.get("usage") if isinstance(body, dict) else None
-        total = usage.get("total_tokens") if isinstance(usage, dict) else None
-        return replace(result, total_tokens=total if isinstance(total, int) else None)
 
     @staticmethod
     def _parse(body: Any, ids: dict[str, str]) -> GenerationResult:

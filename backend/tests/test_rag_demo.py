@@ -514,3 +514,26 @@ def test_a_reply_cut_off_at_the_token_limit_is_kept_as_general_guidance(
     body = {"choices": [{"message": {"content": truncated}}]}
     result = Real._parse(body, {"P1": "chunk-1"})
     assert result.text.endswith("appreciated.") and result.cited_chunk_ids == []
+
+
+def test_earlier_replies_are_sent_in_the_json_shape_and_a_400_is_retried_once(
+    groq_url: str,
+) -> None:
+    provider = GroqProvider("test-key", "openai/gpt-oss-20b", url=groq_url)
+    request = _request()
+    request = type(request)(
+        **{**request.__dict__, "history": [("user", "Q"), ("assistant", "Earlier answer.")]}
+    )
+    FakeGroq.reply = {"reply": "Next steps.", "citations": ["P1"]}
+    FakeGroq.requests.clear()
+    provider.generate(_permit(GenerationGate()), request)
+    sent = FakeGroq.requests[-1]["messages"]
+    assert json.loads(sent[-2]["content"])["reply"] == "Earlier answer."
+    FakeGroq.status = 400
+    try:
+        FakeGroq.requests.clear()
+        with pytest.raises(ProviderError):
+            provider.generate(_permit(GenerationGate()), request)
+        assert len(FakeGroq.requests) == 2  # one retry
+    finally:
+        FakeGroq.status = 200
