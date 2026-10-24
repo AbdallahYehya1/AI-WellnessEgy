@@ -38,6 +38,7 @@ from app.ai.provider.base import (
     PROVIDER_TIMEOUT_SECONDS,
     ChatProvider,
     GenerationRequest,
+    GenerationResult,
     Passage,
     ProviderError,
 )
@@ -133,6 +134,21 @@ NOTICES: dict[str, str] = {
     ),
 }
 ASSISTANT_REPLY_CHARS = 1600
+STRUCTURED_FOLLOW_UP = (
+    "(A follow-up from the same person about this situation: go further with more "
+    "specific, practical next steps, without repeating the earlier answer.)"
+)
+_SENTENCE_END = re.compile(r"[.!?؟]\s")
+
+
+def _fit(text_: str, max_chars: int) -> str:
+    """A reply over the limit is cut at the last sentence that fits (not rejected)."""
+    if len(text_) <= max_chars:
+        return text_
+    cut = text_[: max_chars - 1]
+    ends = [m.end() for m in _SENTENCE_END.finditer(cut)]
+    return (cut[: ends[-1]].rstrip() if ends else cut.rsplit(" ", 1)[0]) + " …"
+
 
 _PROVIDER_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="llm")
 _ARABIC = re.compile("[؀-ۿ]")
@@ -425,6 +441,17 @@ def _safety_resources(
     ]
 
 
+def _rejection_reason(result: object, max_chars: int) -> str:
+    """Which validation rule failed (a category only; never the text)."""
+    if not isinstance(result, GenerationResult):
+        return "malformed"
+    if not result.text.strip():
+        return "empty"
+    if len(result.text) > max_chars:
+        return "too_long"
+    return "citation_or_prohibited"
+
+
 def _citation_out(raw: dict[str, Any]) -> Citation:
     return Citation.model_validate(raw)
 
@@ -621,7 +648,13 @@ def handle_message(
                 if kind == "relationship_safety"
                 else [],
             )
-        contextual = (
+        # A follow-up with no topic words of its own continues the same situation. In
+        # structured mode it is re-expressed from the previous composed question, so the
+        # user's words still never reach the provider.
+        structured_follow_up = (
+            mode == "structured" and u.outcome in _CONTEXTUAL_OK and bool(context.model_history)
+        )
+        contextual = structured_follow_up or (
             mode != "structured"
             and u.outcome in _CONTEXTUAL_OK
             and (
@@ -648,7 +681,12 @@ def handle_message(
         # Retrieval is local, so the (redacted) words always help find evidence (D-61);
         # what reaches the provider still depends on the mode.
         free_text = redact(payload.message).text
-        if mode == "structured":
+        if structured_follow_up:
+            previous_question = next(t for r, t in reversed(context.model_history) if r == "user")
+            message = model_question = topic_question = (
+                f"{previous_question} {STRUCTURED_FOLLOW_UP}"
+            )
+        elif mode == "structured":
             topic_question = u.question
         else:
             provider_context = free_text if mode == "minimized" else payload.message
@@ -840,8 +878,25 @@ def handle_message(
 
     retrieved = {str(c.chunk_id): c for c in chunks}
     max_chars = ASSISTANT_REPLY_CHARS if assistant_mode else band_config.max_reply_chars
+    if assistant_mode and isinstance(result, GenerationResult):
+        # Coaching replies: trim instead of discarding, and never show a citation of a
+        # passage that wasn't retrieved (the reply is then labelled general guidance).
+        unknown = [c for c in result.cited_chunk_ids if c not in retrieved]
+        if unknown or len(result.text) > max_chars:
+            logger.info(
+                "chat_output_adjusted",
+                extra={"unknown_citations": len(unknown), "trimmed": len(result.text) > max_chars},
+            )
+            result = GenerationResult(
+                text=_fit(result.text, max_chars),
+                cited_chunk_ids=[c for c in result.cited_chunk_ids if c in retrieved],
+                risk=result.risk,
+                total_tokens=result.total_tokens,
+            )
     if not validate_output(result, set(retrieved), max_chars, allow_uncited=assistant_mode):
-        logger.warning("chat_output_rejected")  # e.g. a citation of an unretrieved passage
+        logger.warning(
+            "chat_output_rejected", extra={"reason": _rejection_reason(result, max_chars)}
+        )
         _record(session, user, request_id, band.value, decision, "unable_to_answer")
         return _respond("unable_to_answer")
 

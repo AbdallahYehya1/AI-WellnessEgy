@@ -238,3 +238,38 @@ def test_per_user_limit_is_configurable(curated: None) -> None:  # noqa: F811
 def test_context_choice_needs_a_signed_in_consented_user(curated: None, enabled: bool) -> None:  # noqa: F811
     c, _, _ = make("minimized")
     assert c.put("/chat/context", json={"enabled": enabled}).status_code == 401
+
+
+def test_structured_follow_ups_continue_without_the_users_words(curated: None) -> None:  # noqa: F811
+    c, _, provider = make("structured")
+    first = ask(c, "My wife and I keep arguing about my working hours.").json()
+    history = [
+        {"role": "user", "text": "My wife and I keep arguing about my working hours."},
+        {
+            "role": "assistant",
+            "text": first["reply"]["text"],
+            "signature": first["reply"]["signature"],
+        },
+    ]
+    second = ask(c, "And what if that does not work for us?", history=history).json()
+    assert second["status"] == "reply"
+    sent = provider.calls[-1].message
+    assert "follow-up" in sent and "does not work for us" not in sent
+
+
+class LongProvider(SituationProvider):
+    def generate(self, permit: GenerationPermit, request: GenerationRequest) -> GenerationResult:
+        self.calls.append(request)
+        return GenerationResult(
+            text="A practical step to try. " * 120,
+            cited_chunk_ids=[request.passages[0].chunk_id, "P9-not-retrieved"],
+        )
+
+
+def test_overlong_replies_are_trimmed_and_unknown_citations_dropped(curated: None) -> None:  # noqa: F811
+    c, _, _ = make("structured", provider=LongProvider())
+    body = ask(c, WORK_LATE).json()
+    assert body["status"] == "reply"
+    assert len(body["reply"]["text"]) <= 1600 and body["reply"]["text"].endswith("…")
+    assert all(cit["chunk_id"] != "P9-not-retrieved" for cit in body["reply"]["citations"])
+    assert len(body["reply"]["citations"]) == 1
