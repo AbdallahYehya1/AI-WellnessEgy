@@ -159,6 +159,22 @@ def test_risky_and_unclear_messages_never_reach_generation(
     assert understand(BY_ID[assistant], message, has_history=False).outcome == outcome
 
 
+@pytest.mark.parametrize(
+    ("assistant", "message", "subtopic"),
+    [
+        ("relationships", "مراتي بتقول إني مش بسمعها، أعمل إيه؟", "communication"),
+        ("relationships", "جوزي مبيسمعنيش لما بتكلم", "communication"),
+        ("career", "مديري بينتقد شغلي قدام الناس، أتعامل إزاي؟", "manager"),
+    ],
+)
+def test_everyday_egyptian_arabic_is_understood(
+    assistant: str, message: str, subtopic: str
+) -> None:
+    u = understand(BY_ID[assistant], message, has_history=False)
+    assert u.outcome == "accept" and u.language == "ar"
+    assert subtopic in {s.key for s in u.subtopics}
+
+
 def test_a_message_for_another_assistant_suggests_a_handoff() -> None:
     u = understand(BY_ID["relationships"], "I feel stuck in my career and want a promotion", False)
     assert u.outcome == "needs_detail" and u.handoff == "career"

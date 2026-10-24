@@ -4,42 +4,42 @@
       "all": {
         "cases": 22,
         "baseline": {
-          "hit_at_4": 0.045,
+          "hit_at_4": 0.091,
           "top1": 0.0,
-          "precision": 0.011,
-          "leakage": 0.261
+          "precision": 0.023,
+          "leakage": 0.25
         },
         "monolithic": {
           "hit_at_4": 0.636,
-          "top1": 0.545,
+          "top1": 0.455,
           "precision": 0.5,
-          "leakage": 0.227
+          "leakage": 0.284
         },
         "domain": {
           "hit_at_4": 1.0,
-          "top1": 0.955,
-          "precision": 0.83,
+          "top1": 0.864,
+          "precision": 0.841,
           "leakage": 0.0
         }
       },
       "career": {
         "cases": 11,
         "baseline": {
-          "hit_at_4": 0.0,
+          "hit_at_4": 0.091,
           "top1": 0.0,
-          "precision": 0.0,
-          "leakage": 0.182
+          "precision": 0.023,
+          "leakage": 0.159
         },
         "monolithic": {
           "hit_at_4": 0.273,
           "top1": 0.182,
           "precision": 0.205,
-          "leakage": 0.455
+          "leakage": 0.568
         },
         "domain": {
           "hit_at_4": 1.0,
           "top1": 1.0,
-          "precision": 0.864,
+          "precision": 0.886,
           "leakage": 0.0
         }
       },
@@ -76,7 +76,7 @@
           "hit_at_4": 0.0,
           "top1": 0.0,
           "precision": 0.0,
-          "leakage": 0.583
+          "leakage": 0.667
         },
         "domain": {
           "hit_at_4": 1.0,
@@ -97,22 +97,22 @@
           "hit_at_4": 0.333,
           "top1": 0.167,
           "precision": 0.208,
-          "leakage": 0.458
+          "leakage": 0.625
         },
         "domain": {
           "hit_at_4": 1.0,
           "top1": 1.0,
-          "precision": 0.792,
+          "precision": 0.833,
           "leakage": 0.0
         }
       },
       "career/mixed": {
         "cases": 1,
         "baseline": {
-          "hit_at_4": 0.0,
+          "hit_at_4": 1.0,
           "top1": 0.0,
-          "precision": 0.0,
-          "leakage": 1.0
+          "precision": 0.25,
+          "leakage": 0.75
         },
         "monolithic": {
           "hit_at_4": 0.0,
@@ -137,13 +137,13 @@
         },
         "monolithic": {
           "hit_at_4": 1.0,
-          "top1": 0.909,
+          "top1": 0.727,
           "precision": 0.795,
           "leakage": 0.0
         },
         "domain": {
           "hit_at_4": 1.0,
-          "top1": 0.909,
+          "top1": 0.727,
           "precision": 0.795,
           "leakage": 0.0
         }
@@ -200,13 +200,13 @@
         },
         "monolithic": {
           "hit_at_4": 1.0,
-          "top1": 0.833,
+          "top1": 0.667,
           "precision": 0.792,
           "leakage": 0.0
         },
         "domain": {
           "hit_at_4": 1.0,
-          "top1": 0.833,
+          "top1": 0.667,
           "precision": 0.792,
           "leakage": 0.0
         }
@@ -221,13 +221,13 @@
         },
         "monolithic": {
           "hit_at_4": 1.0,
-          "top1": 1.0,
+          "top1": 0.0,
           "precision": 0.5,
           "leakage": 0.0
         },
         "domain": {
           "hit_at_4": 1.0,
-          "top1": 1.0,
+          "top1": 0.0,
           "precision": 0.5,
           "leakage": 0.0
         }
@@ -254,9 +254,9 @@
           "leakage": 0.0,
           "found": [
             "nhs-healthy-relationships-en",
-            "cdc-healthy-communication-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en"
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
           ]
         },
         "domain": {
@@ -266,9 +266,9 @@
           "leakage": 0.0,
           "found": [
             "nhs-healthy-relationships-en",
-            "cdc-healthy-communication-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en"
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
           ]
         }
       },
@@ -406,26 +406,26 @@
         },
         "monolithic": {
           "hit": true,
-          "top1": true,
+          "top1": false,
           "precision": 0.5,
           "leakage": 0.0,
           "found": [
-            "nhs-problem-solving-en",
             "cfpb-emergency-fund-en",
             "nhs-problem-solving-en",
-            "cfpb-emergency-fund-en"
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en"
           ]
         },
         "domain": {
           "hit": true,
-          "top1": true,
+          "top1": false,
           "precision": 0.5,
           "leakage": 0.0,
           "found": [
-            "nhs-problem-solving-en",
             "cfpb-emergency-fund-en",
             "nhs-problem-solving-en",
-            "cfpb-emergency-fund-en"
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en"
           ]
         }
       },
@@ -530,9 +530,9 @@
           "leakage": 0.0,
           "found": [
             "nhs-healthy-relationships-en",
-            "cdc-healthy-communication-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en"
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
           ]
         },
         "domain": {
@@ -542,9 +542,9 @@
           "leakage": 0.0,
           "found": [
             "nhs-healthy-relationships-en",
-            "cdc-healthy-communication-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en"
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
           ]
         }
       },
@@ -601,7 +601,7 @@
             "who-doing-what-matters-ar",
             "who-doing-what-matters-en",
             "nimh-generalized-anxiety-disorder-en",
-            "nimh-caring-for-your-mental-health-en"
+            "nhs-work-related-stress-en"
           ]
         },
         "monolithic": {
@@ -644,31 +644,31 @@
             "who-doing-what-matters-ar",
             "who-doing-what-matters-en",
             "nimh-generalized-anxiety-disorder-en",
-            "nimh-caring-for-your-mental-health-en"
+            "nhs-work-related-stress-en"
           ]
         },
         "monolithic": {
           "hit": true,
-          "top1": true,
+          "top1": false,
           "precision": 0.5,
           "leakage": 0.0,
           "found": [
-            "nhs-problem-solving-en",
             "cfpb-emergency-fund-en",
             "nhs-problem-solving-en",
-            "cfpb-emergency-fund-en"
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en"
           ]
         },
         "domain": {
           "hit": true,
-          "top1": true,
+          "top1": false,
           "precision": 0.5,
           "leakage": 0.0,
           "found": [
-            "nhs-problem-solving-en",
             "cfpb-emergency-fund-en",
             "nhs-problem-solving-en",
-            "cfpb-emergency-fund-en"
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en"
           ]
         }
       },
@@ -724,20 +724,20 @@
           "found": [
             "who-doing-what-matters-en",
             "who-doing-what-matters-en",
-            "cfpb-emergency-fund-en",
-            "nhs-healthy-relationships-en"
+            "nhs-healthy-relationships-en",
+            "cfpb-emergency-fund-en"
           ]
         },
         "monolithic": {
           "hit": false,
           "top1": false,
           "precision": 0.0,
-          "leakage": 0.75,
+          "leakage": 1.0,
           "found": [
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
-            "nhs-problem-solving-en"
+            "nhs-healthy-relationships-en"
           ]
         },
         "domain": {
@@ -786,8 +786,8 @@
           "found": [
             "opm-individual-development-planning-en",
             "opm-individual-development-planning-en",
-            "nhs-problem-solving-en",
-            "opm-individual-development-planning-en"
+            "opm-individual-development-planning-en",
+            "nhs-problem-solving-en"
           ]
         }
       },
@@ -825,7 +825,7 @@
             "niosh-stress-at-work-en",
             "nhs-work-related-stress-en",
             "nhs-work-related-stress-en",
-            "niosh-stress-at-work-en"
+            "nhs-work-related-stress-en"
           ]
         }
       },
@@ -846,24 +846,24 @@
           "hit": false,
           "top1": false,
           "precision": 0.0,
-          "leakage": 0.5,
+          "leakage": 1.0,
           "found": [
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
-            "nhs-problem-solving-en",
-            "nhs-problem-solving-en"
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en"
           ]
         },
         "domain": {
           "hit": true,
           "top1": true,
-          "precision": 0.5,
+          "precision": 0.75,
           "leakage": 0.0,
           "found": [
             "nhs-work-related-stress-en",
             "niosh-stress-at-work-en",
             "nhs-to-do-list-en",
-            "nhs-problem-solving-en"
+            "nhs-work-related-stress-en"
           ]
         }
       },
@@ -884,12 +884,12 @@
           "hit": true,
           "top1": false,
           "precision": 0.25,
-          "leakage": 0.25,
+          "leakage": 0.5,
           "found": [
             "nhs-problem-solving-en",
             "nhs-to-do-list-en",
             "nimh-generalized-anxiety-disorder-en",
-            "niosh-stress-at-work-en"
+            "nimh-depression-en"
           ]
         },
         "domain": {
@@ -899,8 +899,8 @@
           "leakage": 0.0,
           "found": [
             "nhs-to-do-list-en",
-            "nhs-problem-solving-en",
             "niosh-stress-at-work-en",
+            "nhs-problem-solving-en",
             "nhs-to-do-list-en"
           ]
         }
@@ -960,12 +960,12 @@
           "hit": false,
           "top1": false,
           "precision": 0.0,
-          "leakage": 0.75,
+          "leakage": 1.0,
           "found": [
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
-            "nhs-problem-solving-en"
+            "nhs-healthy-relationships-en"
           ]
         },
         "domain": {
@@ -1020,7 +1020,7 @@
             "niosh-stress-at-work-en",
             "nhs-work-related-stress-en",
             "nhs-work-related-stress-en",
-            "niosh-stress-at-work-en"
+            "nhs-work-related-stress-en"
           ]
         }
       },
@@ -1057,8 +1057,8 @@
           "found": [
             "opm-individual-development-planning-en",
             "opm-individual-development-planning-en",
-            "nhs-problem-solving-en",
-            "opm-individual-development-planning-en"
+            "opm-individual-development-planning-en",
+            "nhs-problem-solving-en"
           ]
         }
       },
@@ -1069,15 +1069,15 @@
         "understood": "accept",
         "subtopics": "manager,workload,productivity",
         "baseline": {
-          "hit": false,
+          "hit": true,
           "top1": false,
-          "precision": 0.0,
-          "leakage": 1.0,
+          "precision": 0.25,
+          "leakage": 0.75,
           "found": [
             "who-doing-what-matters-ar",
             "who-doing-what-matters-en",
             "nimh-generalized-anxiety-disorder-en",
-            "nimh-caring-for-your-mental-health-en"
+            "nhs-work-related-stress-en"
           ]
         },
         "monolithic": {
@@ -1086,10 +1086,10 @@
           "precision": 0.0,
           "leakage": 0.5,
           "found": [
+            "nhs-healthy-relationships-en",
             "nhs-problem-solving-en",
-            "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en",
-            "nhs-problem-solving-en"
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en"
           ]
         },
         "domain": {
@@ -1120,13 +1120,13 @@
         "monolithic": {
           "hit_at_4": 0.667,
           "top1": 0.5,
-          "precision": 0.5,
-          "leakage": 0.229
+          "precision": 0.479,
+          "leakage": 0.292
         },
         "domain": {
           "hit_at_4": 1.0,
           "top1": 0.917,
-          "precision": 0.771,
+          "precision": 0.75,
           "leakage": 0.0
         }
       },
@@ -1142,7 +1142,7 @@
           "hit_at_4": 0.333,
           "top1": 0.167,
           "precision": 0.208,
-          "leakage": 0.458
+          "leakage": 0.583
         },
         "domain": {
           "hit_at_4": 1.0,
@@ -1163,7 +1163,7 @@
           "hit_at_4": 1.0,
           "top1": 0.5,
           "precision": 0.625,
-          "leakage": 0.125
+          "leakage": 0.25
         },
         "domain": {
           "hit_at_4": 1.0,
@@ -1184,7 +1184,7 @@
           "hit_at_4": 0.0,
           "top1": 0.0,
           "precision": 0.0,
-          "leakage": 0.625
+          "leakage": 0.75
         },
         "domain": {
           "hit_at_4": 1.0,
@@ -1204,13 +1204,13 @@
         "monolithic": {
           "hit_at_4": 1.0,
           "top1": 0.833,
-          "precision": 0.792,
+          "precision": 0.75,
           "leakage": 0.0
         },
         "domain": {
           "hit_at_4": 1.0,
           "top1": 0.833,
-          "precision": 0.792,
+          "precision": 0.75,
           "leakage": 0.0
         }
       },
@@ -1246,13 +1246,13 @@
         "monolithic": {
           "hit_at_4": 1.0,
           "top1": 0.75,
-          "precision": 0.875,
+          "precision": 0.812,
           "leakage": 0.0
         },
         "domain": {
           "hit_at_4": 1.0,
           "top1": 0.75,
-          "precision": 0.875,
+          "precision": 0.812,
           "leakage": 0.0
         }
       }
@@ -1353,10 +1353,10 @@
           "precision": 1.0,
           "leakage": 0.0,
           "found": [
-            "nhs-problem-solving-en",
             "cfpb-emergency-fund-en",
             "nhs-problem-solving-en",
-            "cfpb-emergency-fund-en"
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en"
           ]
         },
         "domain": {
@@ -1365,10 +1365,10 @@
           "precision": 1.0,
           "leakage": 0.0,
           "found": [
-            "nhs-problem-solving-en",
             "cfpb-emergency-fund-en",
             "nhs-problem-solving-en",
-            "cfpb-emergency-fund-en"
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en"
           ]
         }
       },
@@ -1388,25 +1388,25 @@
         "monolithic": {
           "hit": true,
           "top1": true,
-          "precision": 1.0,
+          "precision": 0.75,
           "leakage": 0.0,
           "found": [
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
             "cdc-healthy-communication-en",
-            "cdc-healthy-communication-en"
+            "nhs-problem-solving-en"
           ]
         },
         "domain": {
           "hit": true,
           "top1": true,
-          "precision": 1.0,
+          "precision": 0.75,
           "leakage": 0.0,
           "found": [
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
             "cdc-healthy-communication-en",
-            "cdc-healthy-communication-en"
+            "nhs-problem-solving-en"
           ]
         }
       },
@@ -1430,9 +1430,9 @@
           "leakage": 0.0,
           "found": [
             "cdc-healthy-communication-en",
-            "nhs-problem-solving-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en"
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en"
           ]
         },
         "domain": {
@@ -1442,9 +1442,9 @@
           "leakage": 0.0,
           "found": [
             "cdc-healthy-communication-en",
-            "nhs-problem-solving-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en"
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en"
           ]
         }
       },
@@ -1503,12 +1503,12 @@
           "hit": false,
           "top1": false,
           "precision": 0.0,
-          "leakage": 0.75,
+          "leakage": 1.0,
           "found": [
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
-            "nhs-problem-solving-en"
+            "nhs-healthy-relationships-en"
           ]
         },
         "domain": {
@@ -1558,7 +1558,7 @@
             "niosh-stress-at-work-en",
             "nhs-work-related-stress-en",
             "nhs-work-related-stress-en",
-            "niosh-stress-at-work-en"
+            "nhs-work-related-stress-en"
           ]
         }
       },
@@ -1579,11 +1579,11 @@
           "hit": false,
           "top1": false,
           "precision": 0.0,
-          "leakage": 0.75,
+          "leakage": 1.0,
           "found": [
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
-            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en"
           ]
         },
@@ -1595,8 +1595,8 @@
           "found": [
             "nhs-work-related-stress-en",
             "niosh-stress-at-work-en",
-            "nhs-problem-solving-en",
-            "nhs-work-related-stress-en"
+            "nhs-work-related-stress-en",
+            "nhs-problem-solving-en"
           ]
         }
       },
@@ -1676,8 +1676,8 @@
           "found": [
             "opm-individual-development-planning-en",
             "opm-individual-development-planning-en",
-            "nhs-problem-solving-en",
-            "opm-individual-development-planning-en"
+            "opm-individual-development-planning-en",
+            "nhs-problem-solving-en"
           ]
         }
       },
@@ -1698,12 +1698,12 @@
           "hit": true,
           "top1": false,
           "precision": 0.25,
-          "leakage": 0.25,
+          "leakage": 0.5,
           "found": [
             "nhs-problem-solving-en",
             "nhs-to-do-list-en",
             "nimh-generalized-anxiety-disorder-en",
-            "niosh-stress-at-work-en"
+            "nimh-depression-en"
           ]
         },
         "domain": {
@@ -1713,8 +1713,8 @@
           "leakage": 0.0,
           "found": [
             "nhs-to-do-list-en",
-            "nhs-problem-solving-en",
             "niosh-stress-at-work-en",
+            "nhs-problem-solving-en",
             "nhs-to-do-list-en"
           ]
         }
