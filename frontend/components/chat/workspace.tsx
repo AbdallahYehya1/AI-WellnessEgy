@@ -534,7 +534,7 @@ export function ChatWorkspace({
                 ) : (
                   <p className="text-center text-xs text-ink-muted">{t.cannotDo}</p>
                 )}
-                <p className="text-xs leading-5 text-ink-muted">{t.scope}</p>
+                <p className="text-xs leading-5 text-ink-muted">{assistant && !showTopics ? at.scope : t.scope}</p>
                 {modeNote ? <p className="text-xs leading-5 text-ink-muted">{modeNote}</p> : null}
               </div>
             ) : (
@@ -638,6 +638,7 @@ export function ChatWorkspace({
               pending={pending}
               maxLength={maxLength}
               hint={typedInput === "topics" ? t.inputHint : t.freeInputHint}
+              placeholder={assistant && !showTopics ? at.placeholder : undefined}
               inputRef={inputRef}
             />
           </div>

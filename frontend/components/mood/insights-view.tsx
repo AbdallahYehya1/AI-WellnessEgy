@@ -17,6 +17,8 @@ export function InsightsView({ insights, locale = "en" }: { insights: MoodInsigh
   const r = messages[locale].reflection;
   const emotionLabel = (e: string) => (isEmotion(e) ? r.emotions[e] : e);
   const factorLabel = (f: string) => (isFactor(f) ? r.factors[f] : f);
+  const plural = new Intl.PluralRules(locale === "ar" ? "ar-EG" : "en-GB");
+  const days = (n: number) => t.days[plural.select(n)].replace("{n}", String(n));
   const max = Math.max(1, ...insights.emotions.map((e) => e.count));
   const dayFormat = new Intl.DateTimeFormat(locale === "ar" ? "ar-EG" : "en-GB", {
     weekday: "short",
@@ -49,7 +51,7 @@ export function InsightsView({ insights, locale = "en" }: { insights: MoodInsigh
               <span aria-hidden className="h-2.5 rounded-full bg-surface-muted">
                 <span className="block h-2.5 rounded-full bg-primary" style={{ width: `${(e.count / max) * 100}%` }} />
               </span>
-              <span className="text-ink-muted">{t.days.replace("{n}", String(e.count))}</span>
+              <span className="text-ink-muted">{days(e.count)}</span>
             </li>
           ))}
         </ul>
@@ -63,7 +65,7 @@ export function InsightsView({ insights, locale = "en" }: { insights: MoodInsigh
           <ul className="flex flex-wrap gap-2 text-sm">
             {insights.factors.map((f) => (
               <li key={f.label} className="rounded-full bg-surface-muted px-3 py-1">
-                {factorLabel(f.label)} · {t.days.replace("{n}", String(f.count))}
+                {factorLabel(f.label)} · {days(f.count)}
               </li>
             ))}
           </ul>

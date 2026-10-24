@@ -14,6 +14,8 @@ type Props = {
   pending: boolean;
   maxLength: number;
   hint: string;
+  /** Overrides the default wellbeing placeholder (specialised assistants). */
+  placeholder?: string;
   inputRef: RefObject<HTMLTextAreaElement | null>;
 };
 
@@ -22,7 +24,7 @@ type Props = {
  * interrupted, and the box grows with its content up to a maximum. While it has focus
  * on a phone the bottom tab bar is hidden, so the box stays directly above the keyboard.
  */
-export function Composer({ t, value, onChange, onSend, pending, maxLength, hint, inputRef }: Props) {
+export function Composer({ t, value, onChange, onSend, pending, maxLength, hint, placeholder, inputRef }: Props) {
   const remaining = maxLength - value.length;
   const empty = !value.trim();
 
@@ -64,7 +66,7 @@ export function Composer({ t, value, onChange, onSend, pending, maxLength, hint,
           rows={1}
           maxLength={maxLength}
           value={value}
-          placeholder={t.inputPlaceholder}
+          placeholder={placeholder ?? t.inputPlaceholder}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
           onFocus={() => setComposing(true)}

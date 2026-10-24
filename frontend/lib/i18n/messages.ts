@@ -339,7 +339,8 @@ const en = {
     linksTitle: "Things that came up together",
     link: "You chose {emotion} on {days} days when {factor} was marked.",
     calendarTitle: "Days you reflected",
-    days: "{n} days",
+    // Plural forms by Intl.PluralRules category.
+    days: { zero: "{n} days", one: "{n} day", two: "{n} days", few: "{n} days", many: "{n} days", other: "{n} days" },
     entriesTitle: "All entries",
     unavailable: "We can't load your reflections right now.",
     empty: "No reflections yet.",
@@ -357,6 +358,8 @@ const en = {
     switchLabel: "Switch assistant",
     handoff: "This also relates to {assistant}. You could start a new chat there; nothing from this chat is shared.",
     handoffAction: "Open {assistant}",
+    placeholder: "Describe what's going on, in your own words…",
+    scope: "General guidance from public sources listed under each answer (for example NIOSH, NHS, CDC, CFPB), not clinically or professionally reviewed for this app. It isn't a therapist, doctor, lawyer or financial adviser.",
   },
   errors: {
     notFoundTitle: "Page not found",
@@ -716,7 +719,7 @@ const ar: Messages = {
     linksTitle: "حاجات ظهرت مع بعض",
     link: "اخترت {emotion} في {days} أيام كان فيها {factor} متعلّم عليه.",
     calendarTitle: "الأيام اللي سجلت فيها",
-    days: "{n} يوم",
+    days: { zero: "{n} يوم", one: "يوم واحد", two: "يومين", few: "{n} أيام", many: "{n} يوم", other: "{n} يوم" },
     entriesTitle: "كل التسجيلات",
     unavailable: "مقدرناش نحمّل تأملاتك دلوقتي.",
     empty: "لسه مفيش تأملات.",
@@ -734,6 +737,8 @@ const ar: Messages = {
     switchLabel: "غيّر المساعد",
     handoff: "ده كمان ليه علاقة بـ {assistant}. ممكن تبدأ محادثة جديدة هناك؛ مفيش أي حاجة من المحادثة دي بتتشارك.",
     handoffAction: "افتح {assistant}",
+    placeholder: "احكي اللي بيحصل بكلامك…",
+    scope: "إرشادات عامة من مصادر عامة مذكورة تحت كل رد (زي NIOSH وNHS وCDC وCFPB)، لسه ماتراجعتش إكلينيكيًا ولا مهنيًا للتطبيق ده. المساعد مش معالج ولا دكتور ولا محامي ولا مستشار مالي.",
   },
   errors: {
     notFoundTitle: "الصفحة مش موجودة",

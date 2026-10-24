@@ -34,7 +34,10 @@ export default async function AssistantsPage() {
   }
   const a = t.assistants;
   const enabled = config.data.enabled;
-  const assistants = enabled ? (config.data.assistants ?? []) : [];
+  // Ready assistants first so the ones that can be opened aren't buried on a phone.
+  const assistants = enabled
+    ? [...(config.data.assistants ?? [])].sort((a, b) => Number(b.status === "ready") - Number(a.status === "ready"))
+    : [];
 
   return (
     <AppShell current="chat" locale={locale} t={t} chatEnabled={enabled}>
@@ -88,7 +91,7 @@ export default async function AssistantsPage() {
               </>
             );
             return (
-              <li key={assistant.assistant_id}>
+              <li key={assistant.assistant_id} className="min-w-0">
                 {ready ? (
                   <Link
                     href={`/chat?assistant=${assistant.assistant_id}`}

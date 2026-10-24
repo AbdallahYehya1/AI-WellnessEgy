@@ -99,6 +99,8 @@ describe("assistants directory", () => {
     const finance = screen.getByRole("heading", { name: "Financial Wellbeing" }).closest("li")!;
     expect(within(finance).queryByRole("link")).toBeNull();
     expect(finance.textContent).toContain("Coming soon");
+    const order = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(order.at(-1)).toBe("Financial Wellbeing"); // ready ones first
   });
 
   it("shows Arabic names and starters to Arabic visitors", async () => {
