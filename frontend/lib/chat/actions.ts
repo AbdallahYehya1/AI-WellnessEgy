@@ -7,6 +7,7 @@ import {
   type ChatTurn,
   type ConversationDetail,
   type ConversationPage,
+  type ContextSettings,
   type ConversationSummary,
   type HistorySettings,
   deleteAllConversations,
@@ -15,6 +16,7 @@ import {
   listConversations,
   renameConversation,
   sendChatMessage,
+  updateContextSettings,
   updateHistorySettings,
 } from "@/lib/api/backend";
 import { getVerifiedSession } from "@/lib/auth/session";
@@ -190,6 +192,16 @@ export async function setHistoryEnabled(enabled: boolean, consentVersion?: strin
   const accessToken = await token();
   const version = typeof consentVersion === "string" ? consentVersion.slice(0, 40) : undefined;
   const result = await updateHistorySettings(accessToken, enabled === true, version);
+  if (result.ok) return { ok: true, data: result.data };
+  handleAuth(result.status, result.error);
+  return { ok: false, message: "Your choice couldn't be saved. Please try again.", code: "failed" };
+}
+
+/** Opt in to (or out of) sharing the situation, minus identifiers, with the AI provider (D-59). */
+export async function setContextEnabled(enabled: boolean, consentVersion?: string): Promise<ActionResult<ContextSettings>> {
+  const accessToken = await token();
+  const version = typeof consentVersion === "string" ? consentVersion.slice(0, 40) : undefined;
+  const result = await updateContextSettings(accessToken, enabled === true, version);
   if (result.ok) return { ok: true, data: result.data };
   handleAuth(result.status, result.error);
   return { ok: false, message: "Your choice couldn't be saved. Please try again.", code: "failed" };

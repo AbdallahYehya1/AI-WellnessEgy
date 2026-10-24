@@ -14,6 +14,7 @@ import {
   openConversation,
   renameChat,
   sendChat,
+  setContextEnabled,
   setHistoryEnabled,
 } from "@/lib/chat/actions";
 import { CHAT_PATH } from "@/lib/chat/limits";
@@ -38,6 +39,7 @@ const ACTIONS: ChatActions = {
   deleteChat,
   deleteAllChats,
   setHistoryEnabled,
+  setContextEnabled,
 };
 
 /**
@@ -97,9 +99,10 @@ export default async function ChatPage({ searchParams }: Props = {}) {
     const list = await listConversations(session.accessToken, { assistant: current ? assistantId : undefined });
     initialConversations = list.ok ? list.data : null;
   }
-  const isDefault = assistantId === DEFAULT_ASSISTANT;
+  // Every assistant (Emotional Wellbeing included) takes natural questions; the
+  // seven-topic list remains only for servers without assistants.
   const followUps = (data.demo_prompts ?? []).filter((p) => p.follow_up);
-  const suggestions = isDefault || !current
+  const suggestions = !current
     ? (data.demo_prompts ?? [])
     : [
         ...(locale === "ar" ? current.starters_ar : current.starters_en).map((text, i) => ({
@@ -117,6 +120,7 @@ export default async function ChatPage({ searchParams }: Props = {}) {
       : data.test_only_policy || data.generator
         ? c.testMode
         : null;
+  const modeNoteShared = data.generator === "model" ? c.modelModeShared.replace("{model}", data.model ?? "AI") : modeNote;
 
   return (
     <AppShell current="chat" locale={locale} t={t} chatEnabled workspace>
@@ -137,7 +141,7 @@ export default async function ChatPage({ searchParams }: Props = {}) {
         assistantNames={Object.fromEntries(
           ready.map((a) => [a.assistant_id, locale === "ar" ? a.name_ar : a.name_en]),
         )}
-        showTopics={isDefault}
+        showTopics={!current}
         suggestions={suggestions.map((p) => ({
           id: p.prompt_id,
           text: locale === "ar" ? p.ar : p.en,
@@ -146,8 +150,10 @@ export default async function ChatPage({ searchParams }: Props = {}) {
         topics={data.supported_topics ?? []}
         typedInput={data.typed_input ?? "topics"}
         modeNote={modeNote}
+        modeNoteShared={modeNoteShared}
         history={data.history ?? null}
         initialConversations={initialConversations}
+        context={data.context ?? null}
       />
     </AppShell>
   );

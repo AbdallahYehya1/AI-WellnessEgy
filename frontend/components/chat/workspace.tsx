@@ -1,8 +1,9 @@
 "use client";
 
-import { type KeyboardEvent, useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 
 import { Composer } from "@/components/chat/composer";
+import { ConsentDialog } from "@/components/chat/consent-dialog";
 import { HistoryConsent } from "@/components/chat/history-consent";
 import { AssistantIcon } from "@/components/assistants/icons";
 import { MessageEntry } from "@/components/chat/messages";
@@ -13,6 +14,7 @@ import type {
   ChatTurn,
   ConversationDetail,
   ConversationPage,
+  ContextSettings,
   ConversationSummary,
   HistorySettings,
   StoredMessage,
@@ -32,7 +34,32 @@ export type ChatActions = {
   deleteChat: (id: string) => Promise<ActionResult<null>>;
   deleteAllChats: () => Promise<ActionResult<null>>;
   setHistoryEnabled: (enabled: boolean, consentVersion?: string) => Promise<ActionResult<HistorySettings>>;
+  setContextEnabled?: (enabled: boolean, consentVersion?: string) => Promise<ActionResult<ContextSettings>>;
 };
+
+/** sessionStorage key for a draft started from a Daily Reflection (offered, never sent). */
+export const DRAFT_KEY = "aiwe.chatDraft";
+
+const subscribeNothing = () => () => {};
+
+function storedDraft(assistantId: string | undefined): string | null {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as { assistant?: string; text?: string };
+    return typeof saved.text === "string" && saved.assistant === assistantId ? saved.text.slice(0, MAX_MESSAGE_CHARS) : null;
+  } catch {
+    return null; // storage blocked or malformed
+  }
+}
+
+function clearDraft() {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // nothing to clear
+  }
+}
 
 export type CurrentAssistant = { id: string; name: string; description: string; icon: string };
 
@@ -49,8 +76,12 @@ type Props = {
   topics: SupportedTopic[];
   typedInput: "topics" | "free";
   modeNote: string | null;
+  /** The note shown instead once the user shares context with the provider. */
+  modeNoteShared?: string | null;
   history: HistorySettings | null;
   initialConversations?: ConversationPage | null;
+  /** Provider context (D-59): offered only when the server allows it; off until opted in. */
+  context?: ContextSettings | null;
 };
 
 type FailedSend = { text: string; clientMessageId: string; message: string; code?: ChatErrorCode };
@@ -98,6 +129,8 @@ export function ChatWorkspace({
   modeNote,
   history: initialHistory,
   initialConversations,
+  context: initialContext = null,
+  modeNoteShared,
 }: Props) {
   const t = messages[locale].chat;
   const at = messages[locale].assistants;
@@ -120,6 +153,9 @@ export function ChatWorkspace({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
+  const [context, setContext] = useState<ContextSettings | null>(initialContext);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [contextError, setContextError] = useState<string | null>(null);
   const [consentError, setConsentError] = useState<string | null>(null);
   const [unseen, setUnseen] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
@@ -128,6 +164,11 @@ export function ChatWorkspace({
   const drawerRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const sending = useRef(false);
+
+  // A draft started from a Daily Reflection is offered, and only used if the person chooses it.
+  const reflectionDraft = useSyncExternalStore(subscribeNothing, () => storedDraft(assistantId), () => null);
+  const [draftHandled, setDraftHandled] = useState(false);
+  const offeredDraft = draftHandled ? null : reflectionDraft;
 
   const saving = !!history?.available && history.enabled;
   const maxLength = typedInput === "topics" ? MAX_TOPIC_CHARS : MAX_MESSAGE_CHARS;
@@ -218,9 +259,15 @@ export function ChatWorkspace({
             text: response.notice ?? t.fallbackNotice,
             createdAt: now,
             handoff: response.handoff && assistantNames[response.handoff] ? response.handoff : null,
+            supportKind: response.status === "support" ? (response.support_kind ?? null) : null,
+            resources: response.resources ?? [],
           };
     setEntries((current) => [
-      ...current.map((e) => (e.id === userEntryId && e.kind === "user" ? { ...e, topic: response.topic ?? null } : e)),
+            ...current.map((e) =>
+        e.id === userEntryId && e.kind === "user"
+          ? { ...e, topic: response.topic ?? null, shared: response.provider_context ?? null }
+          : e,
+      ),
       answer,
     ]);
     if (response.conversation) {
@@ -380,6 +427,22 @@ export function ChatWorkspace({
     }
   }
 
+  async function shareContext(enabled: boolean) {
+    if (!context || !actions.setContextEnabled) return;
+    setBusy(true);
+    setContextError(null);
+    const result = await actions.setContextEnabled(enabled, enabled ? context.consent_version : undefined);
+    setBusy(false);
+    if (!result.ok) {
+      if (enabled) setContextError(translateMessage(locale, result.message));
+      else setNotice(translateMessage(locale, result.message));
+      return;
+    }
+    setContext(result.data);
+    setContextOpen(false);
+    focusComposer();
+  }
+
   async function turnOff() {
     setBusy(true);
     const result = await actions.setHistoryEnabled(false);
@@ -535,7 +598,9 @@ export function ChatWorkspace({
                   <p className="text-center text-xs text-ink-muted">{t.cannotDo}</p>
                 )}
                 <p className="text-xs leading-5 text-ink-muted">{assistant && !showTopics ? at.scope : t.scope}</p>
-                {modeNote ? <p className="text-xs leading-5 text-ink-muted">{modeNote}</p> : null}
+                {(context?.enabled ? (modeNoteShared ?? modeNote) : modeNote) ? (
+                  <p className="text-xs leading-5 text-ink-muted">{context?.enabled ? (modeNoteShared ?? modeNote) : modeNote}</p>
+                ) : null}
               </div>
             ) : (
               <>
@@ -630,6 +695,49 @@ export function ChatWorkspace({
                 ))}
               </ul>
             ) : null}
+            {offeredDraft ? (
+              <div className="mb-2 rounded-2xl border border-line bg-surface-muted px-3 py-2 text-sm" dir="auto">
+                <p className="text-xs font-semibold text-ink-muted">{t.draftOffer}</p>
+                <p className="mt-1 text-ink">{offeredDraft}</p>
+                <div className="mt-2 flex gap-3">
+                  <button
+                    type="button"
+                    className="min-h-9 font-semibold text-primary-strong underline underline-offset-4"
+                    onClick={() => {
+                      setDraft(offeredDraft);
+                      clearDraft();
+                      setDraftHandled(true);
+                      focusComposer();
+                    }}
+                  >
+                    {t.draftUse}
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-9 text-ink-muted underline underline-offset-4"
+                    onClick={() => {
+                      clearDraft();
+                      setDraftHandled(true);
+                    }}
+                  >
+                    {t.draftDismiss}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {context?.available && actions.setContextEnabled ? (
+              <p className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-xs text-ink-muted" dir="auto">
+                <span>{context.enabled ? t.context.onLine : t.context.offLine}</span>
+                <button
+                  type="button"
+                  onClick={() => (context.enabled ? shareContext(false) : setContextOpen(true))}
+                  disabled={busy}
+                  className="min-h-9 font-semibold text-primary-strong underline underline-offset-4 disabled:opacity-50"
+                >
+                  {context.enabled ? t.context.onAction : t.context.offAction}
+                </button>
+              </p>
+            ) : null}
             <Composer
               t={t}
               value={draft}
@@ -645,6 +753,28 @@ export function ChatWorkspace({
         </div>
       </section>
 
+      {contextOpen && context ? (
+        <ConsentDialog
+          id="context-consent"
+          title={t.context.consentTitle}
+          points={t.context.consentPoints.map((point) =>
+            point
+              .replace("{provider}", context.provider ?? "Groq")
+              .replace("{model}", context.model ?? "")
+              .replace("{region}", t.context.region)
+              .replace("{retention}", t.context.groqRetention),
+          )}
+          agreeLabel={t.context.consentAgree}
+          declineLabel={t.context.consentDecline}
+          busy={busy}
+          error={contextError}
+          onAgree={() => shareContext(true)}
+          onDecline={() => {
+            setContextOpen(false);
+            setContextError(null);
+          }}
+        />
+      ) : null}
       {consentOpen && history ? (
         <HistoryConsent
           t={t}

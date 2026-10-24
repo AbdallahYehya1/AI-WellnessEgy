@@ -144,7 +144,9 @@ describe("chat page with an assistant", () => {
 
   it.each(["finance", "unknown", "../../etc"])("falls back to the default assistant for %s", async (requested) => {
     render(await ChatPage({ searchParams: Promise.resolve({ assistant: requested }) }));
-    expect(screen.getByText("Topics I can answer right now")).toBeTruthy();
+    // The default is Emotional Wellbeing, a full assistant with its own starters.
+    expect(screen.getByRole("heading", { level: 2, name: "Emotional Wellbeing & Resilience" })).toBeTruthy();
+    expect(screen.getByText("Emotional Wellbeing & Resilience starter one")).toBeTruthy();
     expect(screen.queryByText(/Financial Wellbeing/)).toBeNull();
   });
 });

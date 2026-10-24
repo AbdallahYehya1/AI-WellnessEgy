@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 
 import { FormAlert, SubmitButton } from "@/components/auth/form-parts";
+import { DRAFT_KEY } from "@/components/chat/workspace";
 import { buttonStyles } from "@/components/ui/primitives";
 import type { Locale } from "@/lib/i18n/config";
 import { messages } from "@/lib/i18n/messages";
@@ -20,6 +21,12 @@ type Props = {
 
 const POSITIVE = new Set(["happy", "calm", "good", "excited"]);
 
+function joinList(items: string[], locale: Locale): string {
+  if (items.length < 2) return items.join("");
+  if (locale === "ar") return items.join(" و");
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
 const CHIP =
   "flex min-h-12 cursor-pointer items-center gap-2 rounded-2xl border-2 border-line-strong bg-surface px-3 py-2 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted has-checked:border-primary-strong has-checked:bg-surface-muted has-checked:text-primary-strong has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus";
 
@@ -35,6 +42,30 @@ export function ReflectionForm({ action, locale = "en", assistantNames }: Props)
   if (state.saved) {
     const onlyPositive = state.saved.emotions.every((e) => POSITIVE.has(e));
     const suggestions = state.saved.suggestions.filter((id) => assistantNames[id]);
+    const saved = state.saved;
+    // A starting message the person can edit; written only when they choose it.
+    const draft = () => {
+      const feelings = saved.emotions.map((e) => {
+        const label = t.emotions[e as keyof typeof t.emotions] ?? e;
+        return locale === "ar" ? label : label.toLowerCase();
+      });
+      const factors = saved.factors.map((f) => {
+        const label = t.factors[f as keyof typeof t.factors] ?? f;
+        return locale === "ar" ? label : label.toLowerCase();
+      });
+      return (
+        t.draftFeelings.replace("{feelings}", joinList(feelings, locale)) +
+        (factors.length ? t.draftFactors.replace("{factors}", joinList(factors, locale)) : "") +
+        t.draftAsk
+      );
+    };
+    const startWithFeelings = (id: string) => {
+      try {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ assistant: id, text: draft() }));
+      } catch {
+        // storage blocked: the chat simply opens empty
+      }
+    };
     return (
       <div role="status" className="space-y-4">
         <div>
@@ -50,6 +81,18 @@ export function ReflectionForm({ action, locale = "en", assistantNames }: Props)
                 {/* Opens the assistant only; no reflection data is sent to it. */}
                 <Link href={`/chat?assistant=${id}`} className={buttonStyles("secondary")}>
                   {t.explore.replace("{assistant}", assistantNames[id] ?? id)}
+                </Link>
+              </li>
+            ))}
+            {suggestions.slice(0, 1).map((id) => (
+              <li key={`${id}-draft`}>
+                {/* Fills an editable draft in that chat; nothing is sent until the person sends it. */}
+                <Link
+                  href={`/chat?assistant=${id}`}
+                  onClick={() => startWithFeelings(id)}
+                  className={buttonStyles("ghost")}
+                >
+                  {t.exploreWithFeelings.replace("{assistant}", assistantNames[id] ?? id)}
                 </Link>
               </li>
             ))}

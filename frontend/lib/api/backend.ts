@@ -218,7 +218,8 @@ export type RefusalReason =
   | "sensitive"
   | "regulated"
   | "needs_detail"
-  | "daily_limit";
+  | "daily_limit"
+  | "shared_limit";
 
 export type ChatCitation = {
   chunk_id: string;
@@ -257,7 +258,26 @@ export type ChatResponse = {
   assistant_id?: string | null;
   /** A better-suited assistant, suggested only; nothing is shared with it. */
   handoff?: string | null;
-  support_kind?: "crisis" | "relationship_safety" | null;
+  support_kind?: SupportKind | null;
+  /** What the AI provider received about the situation (identifiers removed), when opted in. */
+  provider_context?: string | null;
+  /** With a relationship-safety notice: vetted sources about abuse and getting help. */
+  resources?: ChatCitation[];
+};
+
+export type SupportKind = "crisis" | "relationship_safety" | "medical" | "danger";
+
+/** Provider context (D-59): whether a user's situation, minus identifiers, may reach the AI provider. */
+export type ContextSettings = {
+  mode: "structured" | "minimized" | "original";
+  available: boolean;
+  enabled: boolean;
+  consent_version: string;
+  consented_version: string | null;
+  provider: string | null;
+  model: string | null;
+  processing_region: string | null;
+  retention: string | null;
 };
 
 export type AssistantInfo = {
@@ -301,6 +321,7 @@ export type ChatConfig = {
   supported_topics?: SupportedTopic[];
   history?: HistorySettings | null;
   assistants?: AssistantInfo[];
+  context?: ContextSettings | null;
 };
 
 export type StoredMessage = {
@@ -353,6 +374,14 @@ export function sendChatMessage(token: string, body: SendChatBody) {
 
 export function updateHistorySettings(token: string, enabled: boolean, consentVersion?: string) {
   return request<HistorySettings>("/chat/history", {
+    token,
+    method: "PUT",
+    body: enabled ? { enabled, consent_version: consentVersion } : { enabled },
+  });
+}
+
+export function updateContextSettings(token: string, enabled: boolean, consentVersion?: string) {
+  return request<ContextSettings>("/chat/context", {
     token,
     method: "PUT",
     body: enabled ? { enabled, consent_version: consentVersion } : { enabled },
