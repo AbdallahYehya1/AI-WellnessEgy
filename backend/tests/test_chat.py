@@ -428,6 +428,17 @@ def test_config_reports_the_adult_prototype(client: TestClient) -> None:
             "max_conversations": 200,
         },
         "assistants": [],  # listed only in curated (assistant) mode
+        "context": {  # provider context (D-59): structured unless configured and opted in
+            "mode": "structured",
+            "available": False,
+            "enabled": False,
+            "consent_version": "chat-context-v1",
+            "consented_version": None,
+            "provider": None,
+            "model": None,
+            "processing_region": None,
+            "retention": None,
+        },
     }
     assert [t["prompt_id"] for t in body["supported_topics"]] == [
         "stress",

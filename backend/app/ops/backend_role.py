@@ -68,12 +68,18 @@ GRANTS_0005: dict[str, tuple[str, ...]] = {
     "chat_conversations": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "chat_messages": ("SELECT", "INSERT", "DELETE"),
 }
+# 0006 adds columns; table grants stay as 0005. The limiter may write ONE column: each
+# request's provider tokens (shared daily budget, D-59). It still can't rewrite history.
+GRANTS_0006 = GRANTS_0005
+COLUMN_UPDATES_BY_REVISION: dict[str, dict[str, tuple[str, ...]]] = {
+    "0006": {"chat_rate_events": ("tokens",)},
+}
 GRANTS_BY_REVISION = {
     "0002": GRANTS_0002,
     "0003": GRANTS_0003,
     "0004": GRANTS_0003,
     "0005": GRANTS_0005,
-    "0006": GRANTS_0005,  # 0006 only adds columns: same grants
+    "0006": GRANTS_0006,
 }
 GRANTS = GRANTS_0002
 SUPPORTED_REVISION = "0002"
@@ -151,6 +157,10 @@ def role_sql(
         f"GRANT SELECT ({', '.join(cols)}) ON {SCHEMA}.{table} TO {ROLE}"
         for table, cols in RETURNING_COLUMNS.items()
         if table in grants
+    ]
+    statements += [
+        f"GRANT UPDATE ({', '.join(cols)}) ON {SCHEMA}.{table} TO {ROLE}"
+        for table, cols in COLUMN_UPDATES_BY_REVISION.get(revision, {}).items()
     ]
     statements += [
         f"GRANT USAGE ON SEQUENCE {SCHEMA}.{seq} TO {ROLE}"
@@ -270,8 +280,27 @@ def verify_role(conn: Connection) -> dict[str, Any]:
             for s in ("app", "auth", "storage", "public", "extensions", "vault")
             if scalar("select count(*) from pg_namespace where nspname = :s", s=s)
         }
+        has_token_column = bool(
+            scalar(
+                "select count(*) from information_schema.columns where table_schema = :s "
+                "and table_name = 'chat_rate_events' and column_name = 'tokens'",
+                s=SCHEMA,
+            )
+        )
+        column_updates = {
+            f"{table}.{column}": bool(
+                scalar(
+                    "select has_column_privilege(current_user, :t, :c, 'UPDATE')",
+                    t=f"{SCHEMA}.{table}",
+                    c=column,
+                )
+            )
+            for table, column in (("chat_rate_events", "tokens"), ("chat_rate_events", "user_id"))
+            if has_token_column or column != "tokens"
+        }
         report: dict[str, Any] = {
             "current_user": scalar("select current_user"),
+            "column_updates": column_updates,
             "superuser": attrs[0],
             "createrole": attrs[1],
             "createdb": attrs[2],
@@ -309,8 +338,10 @@ def verify_role(conn: Connection) -> dict[str, Any]:
     finally:
         tx.rollback()
     # The catalog (readable by any role) tells which revision's tables exist.
-    if "chat_conversations" in tables:
-        revision = "0005"  # 0006 adds columns only; same grant set
+    if "chat_conversations" in tables and has_token_column:
+        revision = "0006"
+    elif "chat_conversations" in tables:
+        revision = "0005"
     elif "chat_rate_events" in tables:
         revision = "0003"
     else:
@@ -318,6 +349,10 @@ def verify_role(conn: Connection) -> dict[str, Any]:
     grants = GRANTS_BY_REVISION[revision]
     report["grant_set"] = revision
     expected = {t: [p for p in PRIVILEGES if p in grants.get(t, ())] for t in tables}
+    allowed_columns = {
+        f"{t}.{c}" for t, cols in COLUMN_UPDATES_BY_REVISION.get(revision, {}).items() for c in cols
+    }
+    expected_columns = {key: key in allowed_columns for key in report["column_updates"]}
     problems = [
         f"{key} should be {want!r}"
         for key, want, got in (
@@ -328,6 +363,7 @@ def verify_role(conn: Connection) -> dict[str, Any]:
             ("can_create_in_app", False, report["can_create_in_app"]),
             ("can_create_in_public", False, report["can_create_in_public"]),
             ("table_privileges", expected, granted),
+            ("column_updates", expected_columns, report["column_updates"]),
         )
         if got != want
     ]

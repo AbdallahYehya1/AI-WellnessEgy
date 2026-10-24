@@ -41,6 +41,8 @@ Outcome = Literal[
     "accept",
     "crisis",
     "relationship_safety",
+    "medical",
+    "danger",
     "personal_details",
     "clinical",
     "regulated",
@@ -59,7 +61,6 @@ _HARM_IN_RELATIONSHIPS = (
     "hit me",
     "beats me",
     "slaps me",
-    "threaten",
     "afraid of him",
     "afraid of her",
     "scared of him",
@@ -115,6 +116,12 @@ _HARM_IN_RELATIONSHIPS = (
     "اخد فلوسي",
     "واخد مرتبي",
     "اخد الباسبور",
+    "يمنعني من",
+    "بيمنعني من",
+    "تمنعني من",
+    "يراقب هاتفي",
+    "بيراقب تليفوني",
+    "بيفتش تليفوني",
     "بيضربني",
     "بتضربني",
     "بيضربوني",
@@ -210,7 +217,7 @@ _REGULATED = (
     "custody",
     "legal",
     " sue ",
-    "sue my",
+    " sue my",
     "suing",
     "labour law",
     "labor law",
@@ -252,6 +259,117 @@ _SENSITIVE = (
     "سلاح",
     "انتقام",
     "جنس",
+)
+# --- Risk patterns (D-60): grammar-like patterns, not only fixed phrases ---------------
+# Someone doing physical harm TO the person (or their children). "beat me at chess" and
+# "kick me out of the meeting" style uses are excluded where the object or context shows it.
+_VIOLENCE = re.compile(
+    r"\b(?:hit|hits|hitting|beat|beats|beating|slap(?:s|ped|ping)?|punch(?:es|ed|ing)?|"
+    r"kick(?:s|ed|ing)?|chok(?:e|es|ed|ing)|strangl(?:e|es|ed|ing)|burn(?:s|ed|t)|"
+    r"bit|bites|shov(?:e|es|ed)|threaten(?:s|ed|ing)?|rap(?:e|es|ed|ing))\s+"
+    r"(?:me|us|my\s+(?:kids?|children|son|daughter|baby|mother|mum|mom|sister))\b"
+    r"(?!\s+(?:at|in|on|out\s+of\s+(?:the|a)\s+(?:game|match|meeting|team|group)))",
+    re.IGNORECASE,
+)
+_SEXUAL_VIOLENCE = (
+    "raped",
+    "rape me",
+    "sexual assault",
+    "sexually assaulted",
+    "forced me to have sex",
+    "forces me to have sex",
+    "touched me without",
+    "molest",
+    "اغتصب",
+    "اعتداء جنسي",
+    "اتحرش بيا",
+    "اتحرش بي",
+    "غصبني",
+)
+# Threats and immediate danger from someone else. Not "will kill me" / "gonna kill me",
+# which are everyday idioms ("my boss will kill me if I'm late").
+_THREATS = (
+    "threatened to kill",
+    "threatens to kill",
+    "said he would kill",
+    "said she would kill",
+    "trying to kill me",
+    "has a knife",
+    "with a knife",
+    "has a gun",
+    "locked me in",
+    "locks me in",
+    "هيقتلني",
+    "هددني بالقتل",
+    "بيهددني بالقتل",
+    "معاه سكينه",
+    "قفل علي الباب",
+)
+# Harm the person may do to someone else, or a request for means to do it.
+_DANGER = (
+    "kill him",
+    "kill her",
+    "kill them",
+    "hurt him badly",
+    "hurt her badly",
+    "make a bomb",
+    "build a bomb",
+    "poison him",
+    "poison her",
+    "poison someone",
+    "اقتله",
+    "اقتلها",
+    "اموته",
+    "اسممه",
+    "اسممها",
+)
+# Possible medical emergencies: urgent care, never general guidance.
+_MEDICAL_EMERGENCY = (
+    "chest pain",
+    "pain in my chest",
+    "can't breathe",
+    "cannot breathe",
+    "cant breathe",
+    "trouble breathing",
+    "struggling to breathe",
+    "passed out",
+    "fainted",
+    "unconscious",
+    "heart attack",
+    "having a stroke",
+    "seizure",
+    "severe bleeding",
+    "bleeding heavily",
+    "been poisoned",
+    "وجع في صدري",
+    "الم في صدري",
+    "مش قادر اتنفس",
+    "مش عارف اتنفس",
+    "اغمي علي",
+    "فقد الوعي",
+    "نزيف",
+    "جلطه",
+    "تشنجات",
+    "اتسمم",
+)
+# Family: a parent talking WITH children about substances or sex is in scope.
+_KIDS_TALK = (
+    "talk to my",
+    "talk with my",
+    "conversation with my",
+    "teen",
+    "my son",
+    "my daughter",
+    "my kids",
+    "my children",
+    "my child",
+    "اكلم ابني",
+    "اكلم بنتي",
+    "اتكلم مع ولادي",
+    "ابني",
+    "بنتي",
+    "ولادي",
+    "مراهق",
 )
 _INJECTION = re.compile(
     r"ignore (all |any )?(previous|prior|above) instructions|system prompt|developer mode|"
@@ -420,10 +538,19 @@ def understand(assistant: Assistant, message: str, has_history: bool) -> Underst
 
     if _has(padded, CRISIS_SCREEN):
         return Understanding("crisis", aid, language)
-    if _has(padded, _HARM_IN_RELATIONSHIPS):
-        if aid in ("relationships", "family", "social"):
-            return Understanding("relationship_safety", aid, language)
-        return Understanding("crisis", aid, language)
+    # Being hurt, threatened or controlled: a safety-focused support response in every
+    # assistant (resources for abuse, never a refusal).
+    if (
+        _has(padded, _HARM_IN_RELATIONSHIPS)
+        or _has(padded, _SEXUAL_VIOLENCE)
+        or _has(padded, _THREATS)
+        or _VIOLENCE.search(text)
+    ):
+        return Understanding("relationship_safety", aid, language)
+    if _has(padded, _DANGER):
+        return Understanding("danger", aid, language)
+    if _has(padded, _MEDICAL_EMERGENCY):
+        return Understanding("medical", aid, language)
     if _has(padded, DISTRESS_SCREEN):
         return Understanding("crisis", aid, language)
     if _PERSONAL_DETAILS.search(lowered):
@@ -432,7 +559,8 @@ def understand(assistant: Assistant, message: str, has_history: bool) -> Underst
         return Understanding("clinical", aid, language)
     if _has(padded, _REGULATED):
         return Understanding("regulated", aid, language)
-    if _has(padded, _SENSITIVE) or _INJECTION.search(text):
+    sensitive = _has(padded, _SENSITIVE) and not (aid == "family" and _has(padded, _KIDS_TALK))
+    if sensitive or _INJECTION.search(text):
         return Understanding("sensitive", aid, language)
 
     follow_tables = _FOLLOW_AR if is_arabic else _FOLLOW_EN

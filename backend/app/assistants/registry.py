@@ -80,8 +80,11 @@ ASSISTANTS: tuple[Assistant, ...] = (
         "التواصل والخلافات والثقة والحدود وخطط المستقبل مع شريك حياتك.",
         "In a marriage or close relationship, what are practical ways to",
         "في الجواز أو العلاقة، إيه الطرق العملية عشان",
-        "Help with communication, disagreements and shared decisions between partners. "
-        "Keep both partners' perspectives in mind and suggest how to talk things through.",
+        "Help with communication, disagreements and shared decisions between partners. Keep both "
+        "partners' perspectives in mind and suggest how to talk things through. Distinguish "
+        "ordinary disagreements from control, threats, humiliation or fear: if those appear, say "
+        "gently that this goes beyond a usual disagreement and that support is available, without "
+        "labelling anyone.",
         (
             "How can I communicate better with my partner?",
             "We keep arguing about money. How should we discuss it?",
@@ -97,7 +100,7 @@ ASSISTANTS: tuple[Assistant, ...] = (
         "family",
         "family",
         ("relationships", "emotional"),
-        "preview",
+        "ready",
         "home",
         "Family & Parenting",
         "العيلة وتربية الأولاد",
@@ -142,7 +145,7 @@ ASSISTANTS: tuple[Assistant, ...] = (
         "growth",
         "growth",
         ("planning", "emotional"),
-        "preview",
+        "ready",
         "sprout",
         "Personal Growth & Habits",
         "تطوير الذات والعادات",
@@ -158,7 +161,7 @@ ASSISTANTS: tuple[Assistant, ...] = (
         "fitness",
         "fitness",
         ("emotional",),
-        "preview",
+        "ready",
         "activity",
         "Fitness & Healthy Lifestyle",
         "اللياقة ونمط الحياة الصحي",
@@ -166,8 +169,10 @@ ASSISTANTS: tuple[Assistant, ...] = (
         "إزاي تبدأ وتكمل في النشاط البدني والحركة والراحة.",
         "For an active, healthy lifestyle, what are practical ways to",
         "لنمط حياة صحي ونشيط، إيه الطرق العملية عشان",
-        "Give general activity guidance only; no injury treatment, clinical nutrition or "
-        "medical fitness clearance.",
+        "Give general activity, movement and everyday nutrition guidance only. No injury "
+        "treatment, clinical nutrition or medical fitness clearance: for pain, injury, chest "
+        "symptoms, dizziness, pregnancy or a health condition, suggest checking with a doctor "
+        "first. Encourage starting small and building up gradually.",
         ("How can I begin exercising?", "How do I balance fitness and work?"),
         ("عايز أبدأ تمرين بس مش عارف ألتزم.", "إزاي أتحرك أكتر وأنا مشغول؟"),
     ),
@@ -183,7 +188,9 @@ ASSISTANTS: tuple[Assistant, ...] = (
         "التوتر اليومي، المشاعر الصعبة، الارتكاز، اليقظة الذهنية، والنوم.",
         "For everyday emotional wellbeing, what are practical ways to",
         "للصحة النفسية اليومية، إيه الطرق العملية عشان",
-        "Offer supportive, grounded education about everyday stress and feelings.",
+        "Offer supportive, grounded education about everyday stress, feelings and coping. You are "
+        "not a therapist: if difficult feelings persist, get worse or affect daily life, suggest "
+        "talking to a doctor or a mental health professional.",
         ("I'm stressed about exams.", "How do I handle a difficult day?"),
         ("أنا مضغوط ومش عارف أركز.", "إزاي أهدى بعد يوم صعب؟"),
     ),
@@ -191,7 +198,7 @@ ASSISTANTS: tuple[Assistant, ...] = (
         "social",
         "social",
         ("emotional",),
-        "preview",
+        "ready",
         "users",
         "Friendships & Social Life",
         "الصداقة والحياة الاجتماعية",
@@ -207,7 +214,7 @@ ASSISTANTS: tuple[Assistant, ...] = (
         "planning",
         "planning",
         ("career", "growth"),
-        "preview",
+        "ready",
         "compass",
         "Life Planning & Decisions",
         "تخطيط الحياة والقرارات",
@@ -223,7 +230,7 @@ ASSISTANTS: tuple[Assistant, ...] = (
         "finance",
         "finance",
         ("relationships",),
-        "preview",
+        "ready",
         "wallet",
         "Financial Wellbeing",
         "الصحة المالية",
@@ -231,7 +238,10 @@ ASSISTANTS: tuple[Assistant, ...] = (
         "الميزانية، الادخار، فلوس الطوارئ، والكلام عن الفلوس.",
         "For everyday money matters, what are practical ways to",
         "في الفلوس اليومية، إيه الطرق العملية عشان",
-        "Give general financial education only; no personalised investment, tax or legal advice.",
+        "Give general financial education only (budgeting, tracking spending, saving, emergency "
+        "funds, money conversations). You are not a licensed financial adviser: no personalised "
+        "investment, tax, legal or debt-settlement advice. Keep examples relevant to someone in "
+        "Egypt and avoid products or rules from other countries.",
         ("How can I manage my monthly salary?", "How do I start saving consistently?"),
         ("إزاي أظبط مصاريفي كل شهر؟",),
     ),
@@ -239,7 +249,7 @@ ASSISTANTS: tuple[Assistant, ...] = (
         "everyday",
         "everyday",
         ("planning",),
-        "preview",
+        "ready",
         "sparkles",
         "Everyday Life Guidance",
         "إرشاد للحياة اليومية",
@@ -247,7 +257,12 @@ ASSISTANTS: tuple[Assistant, ...] = (
         "التنظيم، القرارات اليومية، والوصول للمساعد المناسب.",
         "In everyday life, what are practical ways to",
         "في الحياة اليومية، إيه الطرق العملية عشان",
-        "Help organise and think things through; suggest a specialised assistant when one fits.",
+        "Help organise ordinary days, think problems through and brainstorm realistic options "
+        "with their trade-offs. When a question clearly belongs to a specialised area, say which "
+        "assistant could help more: Marriage & Healthy Relationships, Family & Parenting, Career "
+        "& Work, Personal Growth & Habits, Fitness & Healthy Lifestyle, Emotional Wellbeing & "
+        "Resilience, Friendships & Social Life, Life Planning & Decisions, or Financial "
+        "Wellbeing.",
         ("I'm overwhelmed by everything I need to organise.",),
         ("حاسس إن عندي حاجات كتير ومش عارف أبدأ منين.",),
     ),

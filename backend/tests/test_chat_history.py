@@ -156,7 +156,7 @@ def test_a_typed_question_is_answered_from_its_reviewed_topic_and_saved_encrypte
         "question": "What habits help with better sleep? (Context: evenings)",
     }
     assert body["reply"]["model"] == "openai/gpt-oss-20b"
-    assert body["reply"]["citations"][0]["source_ref"].startswith("https://www.")
+    assert body["reply"]["citations"][0]["source_ref"].startswith("https://")
     conversation = body["conversation"]
     assert conversation["title"] == "What habits help with better sleep?"  # neutral, no user words
     assert conversation["message_count"] == 2

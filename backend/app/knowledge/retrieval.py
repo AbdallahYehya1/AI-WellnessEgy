@@ -228,7 +228,7 @@ CONCEPTS["coping"] = (
 # Search terms each concept contributes, in the documents' own wording.
 EXPANSIONS: dict[str, tuple[str, str]] = {
     "stress": ("stress coping", "الضغط النفسي الإجهاد"),
-    "grounding": ("grounding slowing", "الارتكاز"),
+    "grounding": ("grounding", "الارتكاز"),
     "thoughts": ("difficult thoughts feelings unhooking", "الأفكار المشاعر الانفكاك"),
     "kindness": ("kind kindness", "اللطف لطيفاً"),
     "values": ("values", "القيم"),
@@ -484,6 +484,74 @@ def retrieve_terms(
     )
 
 
+RRF_K = 60  # reciprocal-rank fusion constant (the usual default)
+
+
+def retrieve_hybrid(
+    session: Session,
+    *,
+    english: str,
+    arabic: str,
+    free_text: str,
+    language: str,
+    age_band: str,
+    statuses: tuple[str, ...],
+    domains: tuple[str, ...],
+    limit: int = MAX_PASSAGES,
+) -> list[RetrievedChunk]:
+    """Assistant retrieval with the situation's own words (D-59): the subtopic terms and
+    the (redacted) message are searched separately, each filtered to ``domains`` in SQL,
+    and merged by reciprocal-rank fusion, so a relevant passage that the lexicon missed
+    can still be found. Without subtopic terms the message alone is searched."""
+    if not domains:
+        return []
+    lists: list[list[RetrievedChunk]] = []
+    if english.strip() or arabic.strip():
+        lists.append(
+            retrieve_terms(
+                session,
+                english=english,
+                arabic=arabic,
+                language=language,
+                age_band=age_band,
+                statuses=statuses,
+                domains=domains,
+                limit=limit * 2,
+            )
+        )
+    en_words = " ".join(_LATIN_WORD.findall(free_text))
+    ar_words = " ".join(_ARABIC_WORD.findall(free_text))
+    if en_words or ar_words:
+        lists.append(
+            _run(
+                session,
+                english=en_words,
+                arabic=ar_words,
+                english_topic=en_words,
+                arabic_topic=ar_words,
+                simple="",
+                language=language,
+                age_band=age_band,
+                statuses=statuses,
+                domains=domains,
+                primary=domains[:1],
+                limit=limit * 2,
+            )
+        )
+    scores: dict[uuid.UUID, float] = {}
+    chunks: dict[uuid.UUID, RetrievedChunk] = {}
+    for weight, ranked in zip((1.0, 0.7), lists, strict=False):
+        for rank, chunk in enumerate(ranked):
+            chunks[chunk.chunk_id] = chunk
+            scores[chunk.chunk_id] = scores.get(chunk.chunk_id, 0.0) + weight / (RRF_K + rank + 1)
+    primary = domains[0]
+    ordered = sorted(
+        chunks.values(),
+        key=lambda c: (primary not in c.domains, -scores[c.chunk_id], str(c.chunk_id)),
+    )
+    return ordered[:limit]
+
+
 def _run(
     session: Session,
     *,
@@ -514,6 +582,71 @@ def _run(
             "any_domain": domains is None,
             "domains": list(domains or ()),
             "primary": list(primary),
+        },
+    ).all()
+    return [
+        RetrievedChunk(
+            chunk_id=row.id,
+            content=row.content,
+            title=row.title,
+            publisher=row.publisher,
+            source_ref=row.source_ref,
+            version_label=row.version_label,
+            synthetic=row.review_status == "synthetic",
+            review_status=row.review_status,
+            domains=tuple(row.domains or ()),
+        )
+        for row in rows
+    ]
+
+
+# Vetted safety sources (D-60): shown with the safety notice when someone may be hurt,
+# threatened or controlled. Retrieved directly; no model is involved.
+SAFETY_SOURCES = (
+    "owh-signs-of-abuse-en",
+    "owh-leaving-an-abusive-relationship-en",
+    "owh-how-to-help-a-friend-en",
+    "odphp-relationship-violence-warning-signs-en",
+    "cdc-intimate-partner-violence-about-en",
+    "medlineplus-domestic-violence-en",
+)
+_SAFETY_SQL = text(
+    """
+    SELECT c.id, c.content, s.title, s.publisher, s.source_ref, s.version_label,
+           s.review_status, s.domains,
+           ts_rank_cd(c.search_vector,
+                      replace(plainto_tsquery('english', :q)::text, '&', '|')::tsquery) AS rank
+    FROM app.knowledge_chunks c
+    JOIN app.knowledge_sources s ON s.id = c.source_id
+    WHERE s.slug = ANY (CAST(:slugs AS text[]))
+      AND CAST(:band AS text) = ANY (s.age_bands)
+      AND s.review_status IN :statuses
+      AND (s.expires_at IS NULL OR s.expires_at > now())
+    ORDER BY rank DESC, s.slug, c.id
+    LIMIT :limit
+    """
+).bindparams(bindparam("statuses", expanding=True))
+
+
+def retrieve_safety_resources(
+    session: Session,
+    *,
+    free_text: str,
+    age_band: str,
+    statuses: tuple[str, ...],
+    limit: int = 3,
+) -> list[RetrievedChunk]:
+    """Passages from the vetted safety sources, ranked by the message's English words plus
+    abuse vocabulary (Arabic messages rank by the vocabulary alone)."""
+    query = " ".join(_LATIN_WORD.findall(free_text)) + " abuse signs safety help control"
+    rows = session.execute(
+        _SAFETY_SQL,
+        {
+            "q": query,
+            "slugs": list(SAFETY_SOURCES),
+            "band": age_band,
+            "statuses": list(statuses),
+            "limit": limit,
         },
     ).all()
     return [

@@ -38,6 +38,10 @@ CHAT_FIELDS = frozenset(
         "chat_provider_daily_limit",
         "chat_history_keys",
         "chat_history_retention_days",
+        "chat_user_daily_limit",
+        "chat_daily_token_budget",
+        "chat_context_mode",
+        "chat_original_wording_review",
     }
 )
 _LOWERCASE_FIELDS = frozenset({"environment", "chat_provider", "chat_demo_access"})
@@ -104,6 +108,19 @@ class Settings(BaseSettings):
     # Ceiling on chat requests across ALL users per 24 hours while a real model is
     # the provider, protecting a shared free quota. Over it, chat answers "unavailable".
     chat_provider_daily_limit: int = Field(default=300, gt=0, le=100_000)
+    # Fair use (D-56): one account's model requests per 24 hours, inside the global cap.
+    chat_user_daily_limit: int = Field(default=25, gt=0, le=10_000)
+    # Provider tokens per 24 hours across ALL assistants and users (D-59). Over it,
+    # chat answers "unavailable" until usage falls below it again.
+    chat_daily_token_budget: int = Field(default=150_000, gt=0, le=10_000_000)
+    # What the provider receives about the user's situation (D-59):
+    # - "structured" (default): a question composed from recognised topics only.
+    # - "minimized": the user's words with identifiers removed, ONLY for users who opted
+    #   in to provider processing; everyone else stays on "structured".
+    # - "original": the user's own words for users who opted in. Needs
+    #   CHAT_ORIGINAL_WORDING_REVIEW (a reference to the completed privacy/legal review).
+    chat_context_mode: Literal["structured", "minimized", "original"] = "structured"
+    chat_original_wording_review: str = ""
     # Opt-in saved chat history (D-54). Encryption keys for message bodies and titles:
     # "<id>:<base64 32-byte key>[,<older id>:<older key>]" (first encrypts, all decrypt).
     # Unset: history is unavailable and chat stays browser-only.
@@ -127,6 +144,9 @@ class Settings(BaseSettings):
         "chat_demo_allowed_users",
         "chat_demo_access",
         "chat_provider_daily_limit",
+        "chat_user_daily_limit",
+        "chat_daily_token_budget",
+        "chat_context_mode",
         "chat_history_retention_days",
         mode="before",
     )
@@ -220,6 +240,11 @@ class Settings(BaseSettings):
             problems.append(
                 "CHAT_DEMO_CURATED requires CHAT_DEMO_ALLOWED_USERS "
                 "(or CHAT_DEMO_ACCESS=all_consented_adults)"
+            )
+        if self.chat_context_mode == "original" and not self.chat_original_wording_review.strip():
+            problems.append(
+                "CHAT_CONTEXT_MODE=original requires CHAT_ORIGINAL_WORDING_REVIEW "
+                "(the completed privacy and legal review); use structured or minimized"
             )
         if self.is_deployed and (
             self.chat_signing_key is None or len(self.chat_signing_key.get_secret_value()) < 32

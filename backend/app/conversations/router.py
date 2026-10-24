@@ -8,11 +8,13 @@ user's conversation answers exactly like a missing one (404).
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, Response
 
 from app.ai.prompts.age_bands import AGE_BANDS, band_enabled, resolve_age_band
+from app.assistants.context import CONTEXT_CONSENT_VERSION
 from app.assistants.registry import ASSISTANTS, BY_ID
 from app.auth.dependencies import CurrentPrincipal
 from app.common.errors import ApiError, ErrorResponse
@@ -25,6 +27,8 @@ from app.conversations.schemas import (
     ChatConfig,
     ChatRequest,
     ChatResponse,
+    ContextSettings,
+    ContextSettingsUpdate,
     ConversationDetail,
     ConversationPage,
     ConversationSummary,
@@ -92,6 +96,34 @@ def _history_settings(runtime: ChatRuntime | None, user: User) -> HistorySetting
     )
 
 
+GROQ_RETENTION = (
+    "Groq doesn't keep request content by default, but may log it for up to 30 days to "
+    "investigate abuse or reliability, unless Zero Data Retention is enabled. Data is "
+    "processed and stored in the United States."
+)
+
+
+def _context_settings(runtime: ChatRuntime | None, user: User) -> ContextSettings:
+    mode = runtime.context_mode if runtime is not None else "structured"
+    is_model = runtime is not None and getattr(runtime.provider, "kind", "") == "model"
+    available = runtime is not None and runtime.demo_curated and mode != "structured"
+    return ContextSettings(
+        mode="original"
+        if mode == "original"
+        else "minimized"
+        if mode == "minimized"
+        else "structured",
+        available=available,
+        enabled=available and user.chat_context_consent_version == CONTEXT_CONSENT_VERSION,
+        consent_version=CONTEXT_CONSENT_VERSION,
+        consented_version=user.chat_context_consent_version,
+        provider="Groq" if is_model else None,
+        model=getattr(runtime.provider, "model_name", None) if is_model and runtime else None,
+        processing_region="United States" if is_model else None,
+        retention=GROQ_RETENTION if is_model else None,
+    )
+
+
 def _cipher(runtime: ChatRuntime | None) -> HistoryCipher:
     if runtime is None or runtime.history is None:
         raise ApiError(503, "history_unavailable", "Saved chat history isn't available.")
@@ -126,6 +158,7 @@ def read_config(request: Request, user: ConsentedUser, principal: CurrentPrincip
         ],
         history=_history_settings(runtime, user) if allowed else None,
         assistants=_assistants() if curated and allowed else [],
+        context=_context_settings(runtime, user) if allowed else None,
     )
 
 
@@ -168,6 +201,35 @@ def update_history_settings(
             )
     history_store.set_history_enabled(session, user, payload.enabled)
     return _history_settings(runtime, user)
+
+
+# --- Provider context (opt-in, D-59) ---------------------------------------------------
+
+
+@router.put("/context", response_model=ContextSettings, responses=ERRORS)
+def update_context_settings(
+    payload: ContextSettingsUpdate, request: Request, user: ConsentedUser, session: DbSession
+) -> ContextSettings:
+    runtime = _runtime(request)
+    settings = _context_settings(runtime, user)
+    if payload.enabled:
+        if not settings.available:
+            raise ApiError(
+                409, "context_unavailable", "Sharing more context isn't available right now."
+            )
+        if payload.consent_version != CONTEXT_CONSENT_VERSION:
+            raise ApiError(
+                422,
+                "context_consent_required",
+                "Please read and accept the current notice about sharing your situation.",
+            )
+        user.chat_context_consent_version = CONTEXT_CONSENT_VERSION
+        user.chat_context_consented_at = datetime.now(UTC)
+    else:  # withdrawing never needs anything else
+        user.chat_context_consent_version = None
+        user.chat_context_consented_at = None
+    session.flush()
+    return _context_settings(runtime, user)
 
 
 Limit = Annotated[int, Query(ge=1, le=50)]

@@ -44,7 +44,7 @@ def test_every_approved_question_gets_a_cited_reply(
     body = send(demo_client(), getattr(prompt, language)).json()
     assert body["status"] == "reply", (prompt.prompt_id, language)
     assert body["reply"]["citations"]
-    assert all(c["source_ref"].startswith("https://www.") for c in body["reply"]["citations"])
+    assert all(c["source_ref"].startswith("https://") for c in body["reply"]["citations"])
 
 
 @pytest.mark.parametrize(

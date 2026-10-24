@@ -33,6 +33,23 @@ from tests.test_chat import chat_client, consent, make_runtime, send
 SOURCES = Path(__file__).resolve().parents[1] / "app" / "knowledge" / "sources"
 WHO_URL = "https://www.who.int/publications/i/item/9789240003927"
 NIMH_HOST = "https://www.nimh.nih.gov/"
+
+
+def _emotional_sources() -> tuple[set[str], set[str]]:
+    """Publishers and URLs of the real sources tagged for Emotional Wellbeing."""
+    publishers, refs = set(), set()
+    for f in SOURCES.glob("*.md"):
+        meta = dict(
+            line.split(": ", 1)
+            for line in f.read_text(encoding="utf-8").split("---")[1].strip().splitlines()
+        )
+        if "emotional" in meta["domains"]:
+            publishers.add(meta["publisher"])
+            refs.add(meta["source_ref"])
+    return publishers, refs
+
+
+EMOTIONAL_PUBLISHERS, EMOTIONAL_REFS = _emotional_sources()
 SOURCE_COUNT = len(list(SOURCES.glob("*.md")))
 
 DEMO_PROMPTS = [
@@ -64,7 +81,7 @@ def test_demo_prompts_get_cited_replies_from_real_sources(demo: TestClient, prom
     for c in citations:
         assert c["review_status"] == "draft"  # authentic, not clinically reviewed
         assert c["synthetic"] is False
-        assert c["source_ref"].startswith((WHO_URL, NIMH_HOST))
+        assert c["source_ref"] in EMOTIONAL_REFS  # an ingested Emotional Wellbeing source
     # The scripted generator quotes the passage, not its heading.
     assert "(WHO, Doing What Matters" not in body["reply"]["text"]
 
@@ -106,10 +123,7 @@ def test_continuing_an_earlier_topic_keeps_its_sources(demo: TestClient) -> None
         demo, "Can we continue discussing the earlier stress-management technique?", history
     ).json()
     assert body["status"] == "reply"
-    assert {c["publisher"] for c in body["reply"]["citations"]} <= {
-        "National Institute of Mental Health (NIMH)",
-        "World Health Organization",
-    }
+    assert {c["publisher"] for c in body["reply"]["citations"]} <= EMOTIONAL_PUBLISHERS
 
 
 @pytest.mark.parametrize("prompt", ["What is the capital of France?", "Write a Python function"])

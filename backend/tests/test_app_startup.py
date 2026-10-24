@@ -45,6 +45,7 @@ def test_only_expected_routes_are_exposed() -> None:
         "/chat/config",
         "/chat/messages",
         "/chat/history",
+        "/chat/context",
         "/chat/conversations",
         "/chat/conversations/{conversation_id}",
     }

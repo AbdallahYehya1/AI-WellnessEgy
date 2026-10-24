@@ -34,7 +34,9 @@ def test_report_assistant_retrieval(db_engine: Engine) -> None:
         if not row["domain"]["hit"]:
             print("MISS", json.dumps(row, ensure_ascii=False))
     for assistant in ("relationships", "career"):
-        domain = summary[assistant]["domain"]
+        # Production retrieval for assistants is hybrid (D-61): subtopic terms plus the
+        # message's own words, filtered to the assistant's domains in SQL.
+        domain = summary[assistant]["hybrid"]
         baseline = summary[assistant]["baseline"]
         assert domain["hit_at_4"] >= 0.9, (assistant, domain)
         assert domain["leakage"] == 0.0, (assistant, domain)  # enforced in SQL

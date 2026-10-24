@@ -14,6 +14,13 @@ Daily Reflection:
   check-ins and stay exactly as they are; version 2 rows are reflections and have no
   numeric score. Old scores are never reinterpreted as emotions.
 
+Provider context (D-59):
+- users.chat_context_consent_version / chat_context_consented_at: a user's explicit
+  opt-in to sending a privacy-minimised description of their situation to the model
+  provider. NULL means not opted in (the default for everyone).
+- chat_rate_events.tokens: provider tokens used by a request, for the shared daily token
+  budget across all assistants.
+
 Additive, apart from mood_score becoming nullable (version 2 rows only). Downgrading
 deletes version 2 reflections, which cannot be represented in 0005.
 
@@ -136,8 +143,26 @@ def upgrade() -> None:
         schema=SCHEMA,
     )
 
+    op.add_column("users", sa.Column("chat_context_consent_version", sa.String(40)), schema=SCHEMA)
+    op.add_column(
+        "users", sa.Column("chat_context_consented_at", sa.DateTime(timezone=True)), schema=SCHEMA
+    )
+    op.add_column("chat_rate_events", sa.Column("tokens", sa.Integer()), schema=SCHEMA)
+    op.create_check_constraint(
+        op.f("ck_chat_rate_events_tokens_nonnegative"),
+        "chat_rate_events",
+        "tokens IS NULL OR tokens >= 0",
+        schema=SCHEMA,
+    )
+
 
 def downgrade() -> None:
+    op.drop_constraint(
+        op.f("ck_chat_rate_events_tokens_nonnegative"), "chat_rate_events", schema=SCHEMA
+    )
+    op.drop_column("chat_rate_events", "tokens", schema=SCHEMA)
+    op.drop_column("users", "chat_context_consented_at", schema=SCHEMA)
+    op.drop_column("users", "chat_context_consent_version", schema=SCHEMA)
     op.execute("DELETE FROM app.mood_checkins WHERE entry_version = 2")
     op.drop_constraint(op.f("ck_mood_checkins_factors_count"), "mood_checkins", schema=SCHEMA)
     op.drop_constraint(op.f("ck_mood_checkins_entry_valid"), "mood_checkins", schema=SCHEMA)

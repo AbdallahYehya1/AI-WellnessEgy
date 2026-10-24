@@ -42,3 +42,7 @@ class User(Base):
     chat_history_enabled: Mapped[bool] = mapped_column(default=False, server_default=false())
     chat_history_consent_version: Mapped[str | None] = mapped_column(String(40))
     chat_history_consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Opt-in to sending a privacy-minimised description of the situation to the provider
+    # (D-59). NULL: not opted in, so only the structured question is sent.
+    chat_context_consent_version: Mapped[str | None] = mapped_column(String(40))
+    chat_context_consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -26,21 +26,37 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.assistants.context import redact
 from app.assistants.registry import BY_ID, DOMAINS
 from app.assistants.understanding import Understanding, understand
-from app.knowledge.retrieval import retrieve, retrieve_terms
+from app.knowledge.retrieval import (
+    retrieve,
+    retrieve_hybrid,
+    retrieve_safety_resources,
+    retrieve_terms,
+)
 
 STATUSES = ("approved", "draft")
 
 COMM = "cdc-healthy-communication-en"
-REL = "nhs-healthy-relationships-en"
-SOLVE = "nhs-problem-solving-en"
+# NHS sources were retired (D-58); their cases now accept the closest replacements.
+REL = "cdc-healthy-communication-en"
+SOLVE = "opm-performance-playbook-en"
 MONEY = "cfpb-emergency-fund-en"
 NIOSH = "niosh-stress-at-work-en"
-WORK = "nhs-work-related-stress-en"
+WORK = "niosh-stress-at-work-page-en"
 OPM = "opm-individual-development-planning-en"
-CHANGE = "nhs-change-uncertainty-en"
-TODO = "nhs-to-do-list-en"
+CHANGE = "opm-career-development-en"
+TODO = "opm-performance-playbook-en"
+
+# Sources added in the D-61 expansion that legitimately answer some earlier cases.
+WORKLIFE = "opm-work-life-en"
+BUDGET = "cfpb-budgeting-en"
+SPENDING = "cfpb-managing-spending-en"
+MONEY_TIPS = "cfpb-money-smart-tips-en"
+SAVINGS = "cfpb-savings-habit-en"
+PERF = "opm-performance-management-cycle-en"
+PLAYBOOK = "opm-performance-playbook-en"
 
 
 @dataclass(frozen=True)
@@ -84,6 +100,9 @@ CASES: tuple[Case, ...] = (
         REL,
         MONEY,
         SOLVE,
+        BUDGET,
+        SPENDING,
+        MONEY_TIPS,
     ),
     _c(
         "rel-worklate",
@@ -94,6 +113,7 @@ CASES: tuple[Case, ...] = (
         REL,
         COMM,
         MONEY,
+        WORKLIFE,
     ),
     _c(
         "rel-future",
@@ -141,6 +161,9 @@ CASES: tuple[Case, ...] = (
         REL,
         MONEY,
         SOLVE,
+        BUDGET,
+        SPENDING,
+        MONEY_TIPS,
     ),
     _c(
         "rel-mixed",
@@ -218,6 +241,8 @@ CASES: tuple[Case, ...] = (
         "مديري بينتقد شغلي على طول، أرد عليه إزاي من غير مشاكل؟",
         WORK,
         NIOSH,
+        PERF,
+        PLAYBOOK,
     ),
     _c(
         "car-ar-pressure",
@@ -277,6 +302,10 @@ HELD_OUT_V2: tuple[Case, ...] = (
         REL,
         SOLVE,
         MONEY,
+        BUDGET,
+        SPENDING,
+        MONEY_TIPS,
+        SAVINGS,
     ),
     _c(
         "v2-rel-trust",
@@ -301,6 +330,7 @@ HELD_OUT_V2: tuple[Case, ...] = (
         "مراتي بتقول إني مش بقعد معاها عشان الشغل، أعمل إيه؟",
         REL,
         COMM,
+        WORKLIFE,
     ),
     _c(
         "v2-car-raise",
@@ -310,6 +340,8 @@ HELD_OUT_V2: tuple[Case, ...] = (
         "with my manager.",
         OPM,
         WORK,
+        PERF,
+        PLAYBOOK,
     ),
     _c(
         "v2-car-burnout",
@@ -405,6 +437,28 @@ def evaluate(session: Session, cases: tuple[Case, ...] = CASES) -> dict[str, Any
             modes["domain"] = _search(session, u, (assistant.domain, *u.secondary_domains))
         else:
             modes["monolithic"] = modes["domain"] = []
+        # Opted-in provider context (D-59): subtopic terms plus the redacted message.
+        hybrid = (
+            retrieve_hybrid(
+                session,
+                english=u.search_en,
+                arabic=u.search_ar,
+                free_text=redact(case.message).text,
+                language=u.language,
+                age_band="adult",
+                statuses=STATUSES,
+                domains=(assistant.domain, *u.secondary_domains),
+            )
+            if u.outcome in ("accept", "needs_detail", "needs_context")
+            else []
+        )
+        modes["hybrid"] = [str(c.chunk_id) for c in hybrid]
+        if u.outcome == "relationship_safety":
+            # What the person sees: the safety notice with vetted sources (no model).
+            safety = retrieve_safety_resources(
+                session, free_text=redact(case.message).text, age_band="adult", statuses=STATUSES
+            )
+            modes["domain"] = modes["hybrid"] = [str(c.chunk_id) for c in safety]
         row: dict[str, Any] = {
             "case": case.case_id,
             "assistant": case.assistant,
@@ -429,7 +483,7 @@ def summarise(results: list[dict[str, Any]]) -> dict[str, Any]:
         groups.setdefault("all", []).append(r)
     for name, rows in sorted(groups.items()):
         stats: dict[str, Any] = {"cases": len(rows)}
-        for mode in ("baseline", "monolithic", "domain"):
+        for mode in ("baseline", "monolithic", "domain", "hybrid"):
             scored: list[dict[str, Any]] = [r[mode] for r in rows]
             n = len(rows)
             stats[mode] = {

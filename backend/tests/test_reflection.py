@@ -37,7 +37,7 @@ def test_a_reflection_can_hold_several_feelings_and_factors(client: TestClient) 
     assert response.status_code == 201
     body = response.json()
     # Optional next steps: only assistants that are ready, never a diagnosis.
-    assert body["suggested_assistants"] == ["career", "emotional"]
+    assert body["suggested_assistants"] == ["career", "growth", "emotional"]
     entry = client.get("/mood/history", headers=bearer()).json()["checkins"][0]
     assert entry["kind"] == "reflection"
     assert entry["mood_score"] is None  # no good-to-bad score

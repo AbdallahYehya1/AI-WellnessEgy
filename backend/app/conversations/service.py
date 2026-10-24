@@ -41,11 +41,23 @@ from app.ai.provider.base import (
     Passage,
     ProviderError,
 )
+from app.assistants.context import (
+    CONTEXT_CONSENT_VERSION,
+    ContextMode,
+    provider_message,
+    redact,
+)
 from app.assistants.registry import BY_ID as ASSISTANTS_BY_ID
 from app.assistants.registry import LEGACY_ASSISTANT, Assistant
 from app.assistants.understanding import Understanding, understand
 from app.common.errors import ApiError
-from app.common.ratelimit import allow_request, requests_last_day, user_requests_last_day
+from app.common.ratelimit import (
+    allow_request,
+    record_tokens,
+    requests_last_day,
+    tokens_last_day,
+    user_requests_last_day,
+)
 from app.conversations import history as history_store
 from app.conversations.crypto import HistoryCipher
 from app.conversations.demo import DEMO_PROMPTS
@@ -66,7 +78,11 @@ from app.conversations.schemas import (
     TopicOut,
 )
 from app.core.logging import get_logger
-from app.knowledge.retrieval import retrieve, retrieve_terms
+from app.knowledge.retrieval import (
+    retrieve,
+    retrieve_hybrid,
+    retrieve_safety_resources,
+)
 from app.safety.assessor import SafetyAssessor, assess_safety_risk
 from app.safety.contracts import Assessment, Outcome, RiskLevel, SafetyDecision
 from app.safety.gate import GenerationGate, PermitError, generate_with_permit
@@ -79,9 +95,12 @@ logger = get_logger(__name__)
 
 NOTICES: dict[str, str] = {
     "support": (
-        "[Placeholder, pending clinical review (D-13)] I'm not able to help with this "
-        "message here. Support content for situations like this is still being reviewed "
-        "by qualified professionals."
+        "It sounds like you may be going through something very painful, and you don't have "
+        "to face it alone. If you might act on thoughts of harming yourself, or you are in "
+        "danger now, call an ambulance on 123 or go to the nearest emergency department. In "
+        "Egypt, the Ministry of Health mental health line, 16328, answers around the clock. "
+        "If you can, tell someone you trust how you are feeling. This assistant can't give "
+        "crisis support, but you can come back to it for everyday questions."
     ),
     "out_of_scope": (
         "I can't diagnose conditions or give advice about medication. A qualified health "
@@ -96,9 +115,20 @@ NOTICES: dict[str, str] = {
     "relationship_safety": (
         "What you describe may mean you are being hurt, threatened or controlled. That is not "
         "your fault, and you deserve to be safe. If you are in immediate danger in Egypt, call "
-        "the police on 122 or an ambulance on 123. Talking to someone you trust can help. This "
-        "assistant can't safely help with this situation, but you can keep using it for other "
-        "questions."
+        "the police on 122 or an ambulance on 123. The National Council for Women's complaints "
+        "office (15115) offers advice and support, and if a child is at risk, the Child Helpline "
+        "is 16000. Talking to someone you trust can help. This assistant can't safely help with "
+        "this situation, but you can keep using it for other questions."
+    ),
+    "medical": (
+        "This may need medical care. If it could be an emergency, call an ambulance on 123 or "
+        "go to the nearest emergency department now. This assistant can't assess symptoms or "
+        "injuries."
+    ),
+    "danger": (
+        "If anyone is in immediate danger, call the police on 122. This assistant can't help "
+        "with harming anyone. If you are struggling with anger or thoughts of hurting someone, "
+        "the Ministry of Health mental health line, 16328, can help."
     ),
 }
 ASSISTANT_REPLY_CHARS = 1600
@@ -126,6 +156,11 @@ class ChatRuntime:
     history_retention_days: int = 90
     # Fair use (D-56): one account's model calls per 24 hours, inside the global cap.
     user_daily_limit: int = 25
+    # Shared provider token budget per 24 hours across all assistants (D-59).
+    daily_token_budget: int = 150_000
+    # What the provider may receive about the situation (D-59). Anything but
+    # "structured" applies only to users with current provider-context consent.
+    context_mode: str = "structured"
 
     @property
     def retrievable_statuses(self) -> tuple[str, ...]:
@@ -219,6 +254,9 @@ REFUSAL_NOTICES: dict[str, str] = {
     "daily_limit": (
         "You've reached today's limit for this free prototype. Please come back tomorrow."
     ),
+    "shared_limit": (
+        "The assistants have reached today's shared free limit. Please try again tomorrow."
+    ),
 }
 _ASSISTANT_REFUSALS: dict[str, RefusalReason] = {
     "personal_details": "personal_details",
@@ -228,6 +266,23 @@ _ASSISTANT_REFUSALS: dict[str, RefusalReason] = {
     "needs_detail": "needs_detail",
     "needs_context": "needs_context",
     "too_long": "too_long",
+}
+# Without a recognised subtopic, a message can still be answered from its own words
+# when the user opted in to provider context (D-59): a follow-up, or a real description.
+_CONTEXTUAL_OK = ("needs_detail", "needs_context")
+_MIN_SITUATION_WORDS = 5
+# The model's risk flag (second layer, D-59) -> support response.
+_MODEL_RISK_SUPPORT: dict[str, SupportKind] = {
+    "self_harm": "crisis",
+    "abuse": "relationship_safety",
+    "medical_emergency": "medical",
+    "danger": "danger",
+}
+_SUPPORT_NOTICE = {
+    "crisis": "support",
+    "relationship_safety": "relationship_safety",
+    "medical": "medical",
+    "danger": "danger",
 }
 _GATE_REFUSALS: dict[str, RefusalReason] = {
     "unsupported": "unsupported_topic",
@@ -298,36 +353,75 @@ def _stored_context(runtime: ChatRuntime, turns: list[StoredTurn]) -> _Context:
     return context
 
 
+def context_mode_for(runtime: ChatRuntime, user: User) -> ContextMode:
+    """Anything beyond the structured question needs this user's current opt-in (D-59)."""
+    if (
+        runtime.context_mode in ("minimized", "original")
+        and user.chat_context_consent_version == CONTEXT_CONSENT_VERSION
+    ):
+        return "original" if runtime.context_mode == "original" else "minimized"
+    return "structured"
+
+
 def _assistant_context(
-    assistant: Assistant, stored: list[StoredTurn] | None, history: list[HistoryTurn]
+    assistant: Assistant,
+    stored: list[StoredTurn] | None,
+    history: list[HistoryTurn],
+    mode: ContextMode,
 ) -> _Context:
-    """Assistant mode: earlier user turns are their re-expressed questions (saved
-    encrypted, or re-derived from signed browser history); the user's own words never
-    reach the model, and a crisis anywhere earlier still routes to support."""
+    """Assistant mode: each earlier user turn is re-read in the current context mode
+    (composed question, or redacted situation for opted-in users). Saved turns are
+    decrypted for the verified owner; browser turns arrive with signed replies. A crisis
+    anywhere earlier still routes to support."""
     context = _Context()
     keep = False
-    if stored is not None:
-        for turn in stored:
-            if turn.role == "user":
-                keep = bool(turn.query)
-                if turn.query:
-                    context.search_context.append(turn.query)
-                    context.model_history.append(("user", turn.query))
-            elif keep:
-                context.model_history.append(("assistant", turn.text))
-        return context
-    for item in history:
-        if item.role == "user":
-            u = understand(assistant, item.text, has_history=bool(context.model_history))
-            if u.outcome in ("crisis", "relationship_safety"):
+    turns = (
+        [(t.role, t.text) for t in stored]
+        if stored is not None
+        else [(h.role, h.text) for h in history]
+    )
+    for role, text_ in turns:
+        if role == "user":
+            u = understand(assistant, text_, has_history=bool(context.model_history))
+            if u.outcome in ("crisis", "relationship_safety", "medical", "danger"):
                 context.crisis = True
-            keep = u.outcome == "accept"
+            keep = u.outcome == "accept" or (mode != "structured" and u.outcome in _CONTEXTUAL_OK)
             if keep:
-                context.search_context.append(u.question)
-                context.model_history.append(("user", u.question))
+                context.search_context.append(text_)
+                context.model_history.append(("user", provider_message(assistant, u, text_, mode)))
         elif keep:
-            context.model_history.append(("assistant", item.text))
+            context.model_history.append(("assistant", text_))
     return context
+
+
+def _safety_resources(
+    session: Session, runtime: ChatRuntime, band: str, message: str
+) -> list[Citation]:
+    """Vetted information about abuse and getting help, shown with the safety notice.
+    Retrieved locally (nothing is sent to the provider); failures just omit them."""
+    try:
+        with session.begin_nested():
+            chunks = retrieve_safety_resources(
+                session,
+                free_text=redact(message).text,
+                age_band=band,
+                statuses=runtime.retrievable_statuses,
+            )
+    except Exception:
+        logger.error("chat_safety_resources_unavailable")
+        return []
+    return [
+        Citation(
+            chunk_id=c.chunk_id,
+            source_title=c.title,
+            publisher=c.publisher,
+            source_ref=c.source_ref,
+            version_label=c.version_label,
+            synthetic=c.synthetic,
+            review_status=c.review_status,
+        )
+        for c in chunks
+    ]
 
 
 def _citation_out(raw: dict[str, Any]) -> Citation:
@@ -361,7 +455,9 @@ def stored_message_out(runtime: ChatRuntime, user: User, turn: StoredTurn) -> St
         language="ar" if turn.language == "ar" else "en",
         topic=(
             TopicOut(prompt_id="assistant", question=turn.query)
-            if turn.query
+            # Only a composed question is shown back; a provider-context turn (D-59) is
+            # the user's own message, already visible.
+            if turn.query and not turn.query.startswith("Assistant area:")
             else _topic(turn.intent_id, turn.language)
         )
         if turn.role == "user"
@@ -471,14 +567,23 @@ def handle_message(
         raise ApiError(422, "unknown_assistant", "This assistant doesn't exist.")
     if assistant.status != "ready":
         raise ApiError(403, "assistant_unavailable", "This assistant isn't available yet.")
-    assistant_mode = runtime.demo_curated and assistant.assistant_id != LEGACY_ASSISTANT
+    # Every assistant, Emotional Wellbeing included, runs the assistant pipeline when the
+    # client names it (the web app always does). Requests without an assistant id (older
+    # clients) keep the original seven-topic behaviour.
+    assistant_mode = runtime.demo_curated and (
+        assistant.assistant_id != LEGACY_ASSISTANT or payload.assistant_id is not None
+    )
     # Every assistant searches its own domain, in every mode (D-56).
     search_domains: tuple[str, ...] = (assistant.domain,)
     understanding: Understanding | None = None
     search_en = search_ar = ""
+    mode: ContextMode = "structured"
+    free_text = ""
+    provider_context: str | None = None
     if assistant_mode:
+        mode = context_mode_for(runtime, user)
         context = _assistant_context(
-            assistant, stored_turns, payload.history if conversation is None else []
+            assistant, stored_turns, payload.history if conversation is None else [], mode
         )
 
     # --- Typed-input gate (topic mode): refused before limits, retrieval or any model ---
@@ -490,9 +595,14 @@ def handle_message(
     topic_question: str | None = None
     if assistant_mode:
         u = understand(assistant, payload.message, has_history=bool(context.model_history))
-        if u.outcome in ("crisis", "relationship_safety") or context.crisis:
+        if u.outcome == "personal_details" and mode != "structured":
+            # Opted-in context: identifiers are removed instead of refusing the message.
+            u = understand(
+                assistant, redact(payload.message).text, has_history=bool(context.model_history)
+            )
+        if u.outcome in ("crisis", "relationship_safety", "medical", "danger") or context.crisis:
             kind: SupportKind = (
-                "relationship_safety" if u.outcome == "relationship_safety" else "crisis"
+                u.outcome if u.outcome in ("relationship_safety", "medical", "danger") else "crisis"
             )
             decision = SafetyDecision(
                 risk_level=RiskLevel.HIGH,
@@ -501,14 +611,23 @@ def handle_message(
                 reason_code=f"assistant_{kind}",
             )
             _record(session, user, request_id, band.value, decision, "support")
-            notice_key = "relationship_safety" if kind == "relationship_safety" else "support"
             return ChatResponse(
                 status="support",
-                notice=NOTICES[notice_key],
+                notice=NOTICES[_SUPPORT_NOTICE[kind]],
                 support_kind=kind,
                 assistant_id=assistant.assistant_id,
+                resources=_safety_resources(session, runtime, band.value, payload.message)
+                if kind == "relationship_safety"
+                else [],
             )
-        if u.outcome != "accept":
+        contextual = (
+            mode != "structured"
+            and u.outcome in _CONTEXTUAL_OK
+            and (
+                bool(context.model_history) or len(payload.message.split()) >= _MIN_SITUATION_WORDS
+            )
+        )
+        if u.outcome != "accept" and not contextual:
             logger.info("chat_input_refused", extra={"reason": u.outcome})
             refusal = _refuse(_ASSISTANT_REFUSALS.get(u.outcome, "needs_detail"))
             refusal.handoff = u.handoff
@@ -516,7 +635,7 @@ def handle_message(
             return refusal
         understanding = u
         language = u.language
-        if u.follow_up and context.search_context:
+        if (u.follow_up or not u.subtopics) and context.search_context:
             # A follow-up searches the topic of the previous question again.
             previous = understand(assistant, context.search_context[-1], has_history=False)
             search_en, search_ar = previous.search_en, previous.search_ar
@@ -524,7 +643,14 @@ def handle_message(
         else:
             search_en, search_ar, secondary = u.search_en, u.search_ar, u.secondary_domains
         search_domains = (assistant.domain, *secondary)
-        message = model_question = topic_question = u.question
+        message = model_question = provider_message(assistant, u, payload.message, mode)
+        # Retrieval is local, so the (redacted) words always help find evidence (D-61);
+        # what reaches the provider still depends on the mode.
+        free_text = redact(payload.message).text
+        if mode == "structured":
+            topic_question = u.question
+        else:
+            provider_context = free_text if mode == "minimized" else payload.message
     elif runtime.demo_curated:
         gate = classify(payload.message, context.intents)
         if gate.outcome == "crisis" or context.crisis:
@@ -589,6 +715,19 @@ def handle_message(
                 notice=REFUSAL_NOTICES["daily_limit"],
                 refusal_reason="daily_limit",
             )
+        try:
+            with session.begin_nested():
+                tokens_used = tokens_last_day(session)
+        except Exception:  # cannot tell: fail closed
+            logger.error("chat_token_budget_unavailable")
+            return _respond("unavailable")
+        if tokens_used >= runtime.daily_token_budget:
+            logger.warning("chat_token_budget_reached")
+            return ChatResponse(
+                status="unavailable",
+                notice=REFUSAL_NOTICES["shared_limit"],
+                refusal_reason="shared_limit",
+            )
 
     if assistant_mode:
         # Screened by understand() above; the curated assessor only knows the reviewed
@@ -612,10 +751,11 @@ def handle_message(
     try:
         with session.begin_nested():
             if assistant_mode:
-                chunks = retrieve_terms(
+                chunks = retrieve_hybrid(
                     session,
                     english=search_en,
                     arabic=search_ar,
+                    free_text=free_text,
                     language=language,
                     age_band=band.value,
                     statuses=runtime.retrievable_statuses,
@@ -637,7 +777,7 @@ def handle_message(
         logger.error("chat_retrieval_unavailable", extra={"category": _failure_category(error)})
         _record(session, user, request_id, band.value, decision, "unavailable")
         return _respond("unavailable")
-    if not chunks:
+    if not chunks and not assistant_mode:  # assistants may coach without passages (D-59)
         logger.info("chat_no_evidence")
         _record(session, user, request_id, band.value, decision, "no_evidence")
         return _respond("no_evidence")
@@ -669,9 +809,36 @@ def handle_message(
         _record(session, user, request_id, band.value, decision, "unavailable")
         return _respond("unavailable")
 
+    if result.total_tokens is not None:
+        try:
+            with session.begin_nested():
+                record_tokens(session, user.id, result.total_tokens)
+        except Exception:  # accounting must not lose the answer; it is logged
+            logger.error("chat_token_record_failed")
+    if assistant_mode and result.risk in _MODEL_RISK_SUPPORT:
+        # The model read the situation as risky although the screens didn't: support,
+        # never the generated text (D-59, second layer).
+        kind = _MODEL_RISK_SUPPORT[result.risk]
+        risk_decision = SafetyDecision(
+            risk_level=RiskLevel.HIGH,
+            outcome=Outcome.SUPPORT,
+            policy_version=runtime.policy.policy_id,
+            reason_code=f"model_risk_{result.risk}",
+        )
+        _record(session, user, request_id, band.value, risk_decision, "support")
+        return ChatResponse(
+            status="support",
+            notice=NOTICES[_SUPPORT_NOTICE[kind]],
+            support_kind=kind,
+            assistant_id=assistant.assistant_id,
+            resources=_safety_resources(session, runtime, band.value, payload.message)
+            if kind == "relationship_safety"
+            else [],
+        )
+
     retrieved = {str(c.chunk_id): c for c in chunks}
     max_chars = ASSISTANT_REPLY_CHARS if assistant_mode else band_config.max_reply_chars
-    if not validate_output(result, set(retrieved), max_chars):
+    if not validate_output(result, set(retrieved), max_chars, allow_uncited=assistant_mode):
         logger.warning("chat_output_rejected")  # e.g. a citation of an unretrieved passage
         _record(session, user, request_id, band.value, decision, "unable_to_answer")
         return _respond("unable_to_answer")
@@ -703,6 +870,7 @@ def handle_message(
         else _topic(intent_id, language),
         assistant_id=assistant.assistant_id,
         handoff=understanding.handoff if understanding is not None else None,
+        provider_context=provider_context,
     )
     if not saving or cipher is None:
         return response
@@ -713,6 +881,8 @@ def handle_message(
             first = understanding.subtopics[0]
             phrase = first.phrase_ar if language == "ar" else first.phrase_en
             title = phrase[:1].upper() + phrase[1:]
+        elif assistant_mode:  # encrypted at rest and never sent to the provider
+            title = " ".join(payload.message.split())[:60]
         else:
             title = (_canonical(intent_id, language) if intent_id else payload.message) or ""
         conversation = history_store.create_conversation(

@@ -237,6 +237,7 @@ EXPECTED_CONSTRAINTS = {
     ("mood_checkins", "ck_mood_checkins_mood_score_range"),
     ("mood_checkins", "ck_mood_checkins_entry_valid"),  # 0006
     ("mood_checkins", "ck_mood_checkins_factors_count"),  # 0006
+    ("chat_rate_events", "ck_chat_rate_events_tokens_nonnegative"),  # 0006
     ("knowledge_sources", "ck_knowledge_sources_domains_valid"),  # 0006
     ("mood_checkins", "ck_mood_checkins_note_length"),
     ("mood_checkins", "ck_mood_checkins_tags_count"),

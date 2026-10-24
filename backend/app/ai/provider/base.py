@@ -40,6 +40,10 @@ class GenerationRequest:
 class GenerationResult:
     text: str
     cited_chunk_ids: list[str]
+    # The model's own risk reading of the situation (D-59), a second layer behind the
+    # backend screens: "none", "self_harm", "abuse", "medical_emergency" or "danger".
+    risk: str = "none"
+    total_tokens: int | None = None  # provider usage, for the shared token budget
 
 
 class ProviderError(Exception):

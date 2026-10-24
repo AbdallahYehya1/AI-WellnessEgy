@@ -151,9 +151,14 @@ def test_verify_report_matches_the_design(role_url_for_tests: str) -> None:
     assert report["superuser"] is report["createrole"] is report["createdb"] is False
     assert report["settings"]["statement_timeout"] == "5s"
     assert report["table_privileges"]["audit_events"] == ["INSERT"]
-    # The test database is at head (0005), so the chat-history grant set applies.
-    assert report["grant_set"] == "0005"  # 0006 adds columns only: same grants
+    # The test database is at head (0006): the 0005 table grants plus one column.
+    assert report["grant_set"] == "0006"
     assert report["table_privileges"]["chat_rate_events"] == ["SELECT", "INSERT", "DELETE"]
+    # The limiter may record token counts, never rewrite who made a request.
+    assert report["column_updates"] == {
+        "chat_rate_events.tokens": True,
+        "chat_rate_events.user_id": False,
+    }
     assert report["table_privileges"]["chat_conversations"] == [
         "SELECT",
         "INSERT",

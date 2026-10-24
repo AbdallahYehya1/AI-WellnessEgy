@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import os
 from pathlib import Path
 from typing import Any
@@ -120,11 +121,7 @@ def test_registry_has_ten_distinct_assistants_with_their_own_vocabulary() -> Non
         assert LEXICON[a.assistant_id], a.assistant_id
         assert a.starters_en and a.starters_ar
         assert "diagnose" in a.instructions  # the shared limits are always included
-    assert {a.assistant_id for a in ASSISTANTS if a.status == "ready"} == {
-        "relationships",
-        "career",
-        "emotional",
-    }
+    assert all(a.status == "ready" for a in ASSISTANTS)  # all ten answer (D-61)
 
 
 def test_the_specific_situation_is_kept_without_the_users_words() -> None:
@@ -207,7 +204,7 @@ def test_an_assistant_answers_from_its_own_domain_with_the_composed_question(
     cited = {c["publisher"] for c in body["reply"]["citations"]}
     assert cited & {
         "U.S. Centers for Disease Control and Prevention (CDC)",
-        "NHS website (Open Government Licence v3.0)",
+        "U.S. Office of Personnel Management (OPM)",
         "U.S. Consumer Financial Protection Bureau (CFPB)",
     }
 
@@ -239,10 +236,14 @@ def test_a_safety_message_gets_support_and_reaches_no_model(
     assert provider(rt).calls == []
 
 
-def test_preview_and_unknown_assistants_are_refused(client: TestClient) -> None:
-    preview = ask(client, "How can I start exercising?", "fitness")
-    assert preview.status_code == 403
-    assert preview.json()["error"]["code"] == "assistant_unavailable"
+def test_preview_and_unknown_assistants_are_refused(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    preview = dataclasses.replace(BY_ID["fitness"], status="preview")
+    monkeypatch.setitem(BY_ID, "fitness", preview)  # the service reads this registry dict
+    refused = ask(client, "How can I start exercising?", "fitness")
+    assert refused.status_code == 403
+    assert refused.json()["error"]["code"] == "assistant_unavailable"
     assert ask(client, "hi", "astrology").status_code == 422
     assert ask(client, "hi", "Career!").status_code == 422  # validated pattern
 
@@ -314,8 +315,7 @@ def test_config_lists_all_ten_with_their_status(client: TestClient) -> None:
     config = client.get("/chat/config", headers=bearer()).json()
     statuses = {a["assistant_id"]: a["status"] for a in config["assistants"]}
     assert len(statuses) == 10
-    assert statuses["relationships"] == statuses["career"] == "ready"
-    assert statuses["fitness"] == "preview"
+    assert set(statuses.values()) == {"ready"}
 
 
 def test_unknown_assistant_filter_is_rejected(client: TestClient) -> None:
