@@ -23,12 +23,16 @@ _PROHIBITED = re.compile(
 )
 
 
-def validate_output(result: object, retrieved_ids: set[str], max_chars: int) -> bool:
+def validate_output(
+    result: object, retrieved_ids: set[str], max_chars: int, *, allow_uncited: bool = False
+) -> bool:
+    """``allow_uncited``: assistant coaching (D-59) may answer without citations; it is
+    then labelled as general guidance. Any citation must still be of a retrieved passage."""
     if not isinstance(result, GenerationResult):
         return False
     if not result.text.strip() or len(result.text) > max_chars:
         return False
     cited = set(result.cited_chunk_ids)
-    if not cited or not cited <= retrieved_ids:
+    if (not cited and not allow_uncited) or not cited <= retrieved_ids:
         return False  # uncited, or cites something that was not retrieved
     return not _PROHIBITED.search(result.text)

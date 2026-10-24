@@ -7,6 +7,7 @@ version_label: updated-2022-06
 content_type: wellness-education
 language: en
 age_bands: adult
+domains: emotional
 review_status: draft
 licence: Public domain (NCCIH: "not copyrighted and is in the public domain"; duplication encouraged)
 permitted_use: attributed summary with short quotations, non-commercial prototype

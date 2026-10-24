@@ -27,7 +27,12 @@ RefusalReason = Literal[
     "personal_details",
     "clinical",
     "sensitive",
+    "regulated",  # investment, tax or legal advice (assistants)
+    "needs_detail",  # nothing specific recognised for this assistant yet
+    "daily_limit",  # this account's fair-use allowance for today is used up
+    "shared_limit",  # the shared daily provider budget for all users is used up
 ]
+SupportKind = Literal["crisis", "relationship_safety", "medical", "danger"]
 
 ChatStatus = Literal[
     "reply", "support", "out_of_scope", "no_evidence", "unable_to_answer", "unavailable"
@@ -57,6 +62,8 @@ class ChatRequest(BaseModel):
     conversation_id: UUID | None = None
     # Lets a retried send return the saved answer instead of saving it twice.
     client_message_id: UUID | None = None
+    # Which specialised assistant to talk to (D-56); a saved conversation keeps its own.
+    assistant_id: str | None = Field(default=None, max_length=40, pattern=r"^[a-z]+$")
 
     @field_validator("message")
     @classmethod
@@ -100,6 +107,7 @@ class TopicOut(BaseModel):
 
 class ConversationSummary(BaseModel):
     conversation_id: UUID
+    assistant_id: str = "emotional"
     title: str
     message_count: int
     created_at: datetime
@@ -118,6 +126,15 @@ class ChatResponse(BaseModel):
     user_message_id: UUID | None = None
     assistant_message_id: UUID | None = None
     created_at: datetime | None = None
+    assistant_id: str | None = None
+    # A better-suited assistant for this message, suggested only; nothing is shared.
+    handoff: str | None = None
+    support_kind: SupportKind | None = None
+    # What the provider received about the situation when the user opted in to provider
+    # context (identifiers removed), shown back for transparency (D-59).
+    provider_context: str | None = None
+    # With a relationship-safety notice: vetted sources about abuse and getting help.
+    resources: list[Citation] = []
 
 
 class StoredMessageOut(BaseModel):
@@ -168,12 +185,46 @@ class HistorySettings(BaseModel):
     max_conversations: int
 
 
+class ContextSettings(BaseModel):
+    """Provider context (D-59): what the AI provider may receive about a situation."""
+
+    # "structured" | "minimized" | "original": what the server offers to opted-in users.
+    mode: Literal["structured", "minimized", "original"]
+    available: bool  # the server offers more than the structured question
+    enabled: bool  # this user opted in to the current notice
+    consent_version: str
+    consented_version: str | None = None
+    provider: str | None = None  # e.g. "Groq"
+    model: str | None = None
+    processing_region: str | None = None
+    retention: str | None = None
+
+
+class ContextSettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    consent_version: str | None = Field(default=None, max_length=40)
+
+
 class HistorySettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool
     # Required to opt in: the version of the storage notice the user agreed to.
     consent_version: str | None = Field(default=None, max_length=40)
+
+
+class AssistantOut(BaseModel):
+    assistant_id: str
+    status: Literal["ready", "preview"]
+    icon: str
+    name_en: str
+    name_ar: str
+    description_en: str
+    description_ar: str
+    starters_en: list[str]
+    starters_ar: list[str]
 
 
 class SupportedTopic(BaseModel):
@@ -207,3 +258,5 @@ class ChatConfig(BaseModel):
     typed_input: Literal["topics", "free"] = "topics"
     supported_topics: list[SupportedTopic] = []
     history: HistorySettings | None = None
+    assistants: list[AssistantOut] = []
+    context: ContextSettings | None = None

@@ -34,6 +34,24 @@ SOURCES = Path(__file__).resolve().parents[1] / "app" / "knowledge" / "sources"
 WHO_URL = "https://www.who.int/publications/i/item/9789240003927"
 NIMH_HOST = "https://www.nimh.nih.gov/"
 
+
+def _emotional_sources() -> tuple[set[str], set[str]]:
+    """Publishers and URLs of the real sources tagged for Emotional Wellbeing."""
+    publishers, refs = set(), set()
+    for f in SOURCES.glob("*.md"):
+        meta = dict(
+            line.split(": ", 1)
+            for line in f.read_text(encoding="utf-8").split("---")[1].strip().splitlines()
+        )
+        if "emotional" in meta["domains"]:
+            publishers.add(meta["publisher"])
+            refs.add(meta["source_ref"])
+    return publishers, refs
+
+
+EMOTIONAL_PUBLISHERS, EMOTIONAL_REFS = _emotional_sources()
+SOURCE_COUNT = len(list(SOURCES.glob("*.md")))
+
 DEMO_PROMPTS = [
     "I've been stressed about work. What general coping techniques might help?",
     "Can you explain a simple grounding exercise?",
@@ -44,7 +62,7 @@ DEMO_PROMPTS = [
 @pytest.fixture
 def curated(db_engine: Engine) -> None:
     with Session(db_engine) as session, session.begin():
-        assert ingest_directory(session, SOURCES) == 10
+        assert ingest_directory(session, SOURCES) == SOURCE_COUNT
 
 
 @pytest.fixture
@@ -63,7 +81,7 @@ def test_demo_prompts_get_cited_replies_from_real_sources(demo: TestClient, prom
     for c in citations:
         assert c["review_status"] == "draft"  # authentic, not clinically reviewed
         assert c["synthetic"] is False
-        assert c["source_ref"].startswith((WHO_URL, NIMH_HOST))
+        assert c["source_ref"] in EMOTIONAL_REFS  # an ingested Emotional Wellbeing source
     # The scripted generator quotes the passage, not its heading.
     assert "(WHO, Doing What Matters" not in body["reply"]["text"]
 
@@ -105,10 +123,7 @@ def test_continuing_an_earlier_topic_keeps_its_sources(demo: TestClient) -> None
         demo, "Can we continue discussing the earlier stress-management technique?", history
     ).json()
     assert body["status"] == "reply"
-    assert {c["publisher"] for c in body["reply"]["citations"]} <= {
-        "National Institute of Mental Health (NIMH)",
-        "World Health Organization",
-    }
+    assert {c["publisher"] for c in body["reply"]["citations"]} <= EMOTIONAL_PUBLISHERS
 
 
 @pytest.mark.parametrize("prompt", ["What is the capital of France?", "Write a Python function"])
@@ -375,7 +390,7 @@ def test_config_says_when_replies_come_from_a_model(groq_url: str, curated: None
 
 _DOC = (
     "---\nslug: s\ntitle: t\npublisher: p\nsource_ref: https://example.org\nversion_label: 1\n"
-    "content_type: x\nlanguage: en\nage_bands: adult\nreview_status: {status}\n"
+    "content_type: x\nlanguage: en\nage_bands: adult\ndomains: emotional\nreview_status: {status}\n"
     "{extra}---\nBody text.\n"
 )
 
@@ -435,7 +450,7 @@ def test_curated_import_stores_provenance_and_is_repeatable(db_engine: Engine) -
         hashes = conn.execute(
             text("select count(*), count(distinct content_sha256) from app.knowledge_chunks")
         ).one()
-    assert len(rows) == 10
+    assert len(rows) == SOURCE_COUNT
     for slug, verified, clinical, licence, retrieved in rows:
         assert verified is True and clinical == "none" and licence and retrieved, slug
     assert all(sections), "every curated passage has its heading as section"

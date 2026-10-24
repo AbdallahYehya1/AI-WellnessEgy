@@ -7,6 +7,7 @@ import {
   type ChatTurn,
   type ConversationDetail,
   type ConversationPage,
+  type ContextSettings,
   type ConversationSummary,
   type HistorySettings,
   deleteAllConversations,
@@ -15,6 +16,7 @@ import {
   listConversations,
   renameConversation,
   sendChatMessage,
+  updateContextSettings,
   updateHistorySettings,
 } from "@/lib/api/backend";
 import { getVerifiedSession } from "@/lib/auth/session";
@@ -73,7 +75,10 @@ export type SendInput = {
   history?: ChatTurn[];
   conversationId?: string;
   clientMessageId?: string;
+  assistantId?: string;
 };
+
+const ASSISTANT_ID = /^[a-z]{2,40}$/;
 
 export async function sendChat(input: SendInput): Promise<ChatActionResult> {
   const accessToken = await token();
@@ -92,6 +97,7 @@ export async function sendChat(input: SendInput): Promise<ChatActionResult> {
     history: conversationId ? [] : cleanHistory(input.history),
     conversation_id: conversationId,
     client_message_id: clientMessageId,
+    assistant_id: typeof input.assistantId === "string" && ASSISTANT_ID.test(input.assistantId) ? input.assistantId : undefined,
   });
   if (result.ok) return { kind: "response", response: result.data };
   handleAuth(result.status, result.error);
@@ -115,16 +121,26 @@ export async function sendChat(input: SendInput): Promise<ChatActionResult> {
       };
     case "conversation_not_found":
       return { kind: "error", message: "This chat no longer exists.", code: "not_found" };
+    case "assistant_unavailable":
+    case "unknown_assistant":
+      return { kind: "error", message: "This assistant isn't available yet.", code: "not_available" };
+    case "assistant_mismatch":
+      return { kind: "error", message: "This chat belongs to another assistant. Please start a new chat.", code: "invalid" };
     default:
       return { kind: "error", message: GENERIC_ERROR, code: "failed" };
   }
 }
 
-export async function loadConversations(cursor?: string, query?: string): Promise<ActionResult<ConversationPage>> {
+export async function loadConversations(
+  cursor?: string,
+  query?: string,
+  assistant?: string,
+): Promise<ActionResult<ConversationPage>> {
   const accessToken = await token();
   const q = typeof query === "string" ? query.trim().slice(0, 80) : "";
   const safeCursor = typeof cursor === "string" && cursor.length <= 200 ? cursor : undefined;
-  const result = await listConversations(accessToken, { cursor: safeCursor, q: q || undefined });
+  const safeAssistant = typeof assistant === "string" && ASSISTANT_ID.test(assistant) ? assistant : undefined;
+  const result = await listConversations(accessToken, { cursor: safeCursor, q: q || undefined, assistant: safeAssistant });
   if (result.ok) return { ok: true, data: result.data };
   handleAuth(result.status, result.error);
   return { ok: false, message: HISTORY_ERROR, code: "failed" };
@@ -176,6 +192,16 @@ export async function setHistoryEnabled(enabled: boolean, consentVersion?: strin
   const accessToken = await token();
   const version = typeof consentVersion === "string" ? consentVersion.slice(0, 40) : undefined;
   const result = await updateHistorySettings(accessToken, enabled === true, version);
+  if (result.ok) return { ok: true, data: result.data };
+  handleAuth(result.status, result.error);
+  return { ok: false, message: "Your choice couldn't be saved. Please try again.", code: "failed" };
+}
+
+/** Opt in to (or out of) sharing the situation, minus identifiers, with the AI provider (D-59). */
+export async function setContextEnabled(enabled: boolean, consentVersion?: string): Promise<ActionResult<ContextSettings>> {
+  const accessToken = await token();
+  const version = typeof consentVersion === "string" ? consentVersion.slice(0, 40) : undefined;
+  const result = await updateContextSettings(accessToken, enabled === true, version);
   if (result.ok) return { ok: true, data: result.data };
   handleAuth(result.status, result.error);
   return { ok: false, message: "Your choice couldn't be saved. Please try again.", code: "failed" };

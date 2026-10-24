@@ -37,20 +37,22 @@ test.describe("chat workspace", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/chat");
     await expect(page.getByRole("heading", { name: "New chat" })).toBeVisible();
-    await expect(page.getByText("Topics I can answer right now")).toBeVisible();
+    // Emotional Wellbeing is a full assistant: its own starters, no fixed topic list.
+    await expect(page.getByRole("heading", { level: 2, name: "Emotional Wellbeing & Resilience" })).toBeVisible();
+    await expect(page.getByText("Topics I can answer right now")).toHaveCount(0);
     await expect(composer(page)).toBeEnabled();
     await settle(page);
     await page.screenshot({ path: `${SCREENS}/chat-desktop-empty.png` });
 
-    // Unsaved by default: a typed question is answered from its reviewed topic.
+    // Unsaved by default: a natural question is answered from its sources.
     await ask(page, "How can I sleep better at night?");
-    await expect(log(page).getByText(/Answered as:/)).toContainText("What habits help with better sleep?");
+    await expect(log(page).getByText(/Answered as:/)).toContainText("sleep");
     await expect(log(page).getByText(/^Sources \(\d\)$/).first()).toBeVisible();
     await expect(page.getByText("Not saved", { exact: true })).toBeVisible();
 
-    // Unsupported and personal text is refused with an explanation.
-    await ask(page, "My boss shouts at me every day, what should I do?");
-    await expect(log(page).getByRole("note").last()).toContainText("couldn't match that to one of the topics");
+    // Something the assistant can't place gets a request for more detail.
+    await ask(page, "What is the capital of France?");
+    await expect(log(page).getByRole("note").last()).toContainText("tell me a little more");
 
     // Opt in, with the storage notice.
     await sidebar(page).getByRole("button", { name: "Turn on saved chats" }).click();
@@ -59,19 +61,24 @@ test.describe("chat workspace", () => {
     await dialog.getByRole("button", { name: "Save my chats" }).click();
     await expect(sidebar(page).getByText("Saving chats is on")).toBeVisible();
 
-    // New chat → saved conversation in the sidebar.
+    // New chat → saved conversation in the sidebar (titled from what was recognised).
     await sidebar(page).getByRole("button", { name: "New chat", exact: true }).click();
     await ask(page, "What is mindfulness?");
     await expect(page.getByText("Saved", { exact: true })).toBeVisible();
-    await expect(sidebar(page).getByRole("button", { name: /^What is mindfulness\?/ })).toHaveAttribute("aria-current", "page");
+    const first = sidebar(page).locator("button[aria-current='page']");
+    await expect(first).toHaveCount(1);
+    const firstTitle = (await first.innerText()).split("\n")[0]!.trim();
     await ask(page, "tell me more");
     await expect(log(page).locator(":scope > li")).toHaveCount(4);
 
     // Another conversation, then reopen and continue the first.
     await sidebar(page).getByRole("button", { name: "New chat", exact: true }).click();
     await ask(page, "ازاي انام كويس؟");
-    await expect(sidebar(page).getByRole("button", { name: /^إيه العادات اللي تساعد على نوم أحسن/ })).toBeVisible();
-    await sidebar(page).getByRole("button", { name: /^What is mindfulness\?/ }).click();
+    const second = sidebar(page).locator("button[aria-current='page']");
+    await expect(second).toHaveCount(1);
+    const secondTitle = (await second.innerText()).split("\n")[0]!.trim();
+    expect(secondTitle).not.toBe(firstTitle);
+    await sidebar(page).getByRole("button", { name: firstTitle }).first().click();
     await expect(log(page).locator(":scope > li")).toHaveCount(4);
     await ask(page, "summarize please");
     await expect(log(page).locator(":scope > li")).toHaveCount(6);
@@ -80,18 +87,17 @@ test.describe("chat workspace", () => {
 
     // Refresh keeps saved history.
     await page.reload();
-    await expect(sidebar(page).getByRole("button", { name: /^What is mindfulness\?/ })).toBeVisible();
-    await sidebar(page).getByRole("button", { name: /^What is mindfulness\?/ }).click();
+    await sidebar(page).getByRole("button", { name: firstTitle }).first().click();
     await expect(log(page).locator(":scope > li")).toHaveCount(6);
 
     // Rename and search.
-    await sidebar(page).getByRole("button", { name: /Actions for What is mindfulness/ }).click();
+    await sidebar(page).getByRole("button", { name: `Actions for ${firstTitle}` }).click();
     await sidebar(page).getByRole("menuitem", { name: "Rename" }).click();
     await sidebar(page).getByLabel("Chat title").fill("Mindfulness notes");
     await sidebar(page).getByLabel("Chat title").press("Enter");
     await expect(sidebar(page).getByRole("button", { name: /^Mindfulness notes/ })).toBeVisible();
     await sidebar(page).getByLabel("Search saved chats").fill("notes");
-    await expect(sidebar(page).getByRole("button", { name: /^إيه العادات/ })).toHaveCount(0);
+    await expect(sidebar(page).getByRole("button", { name: secondTitle })).toHaveCount(0);
     await sidebar(page).getByLabel("Search saved chats").fill("");
 
     // Sign out and back in: the history is still there.
@@ -114,7 +120,7 @@ test.describe("chat workspace", () => {
     await expect(sidebar(page).getByText("Chats aren't saved", { exact: true })).toBeVisible();
     await sidebar(page).getByRole("button", { name: "Delete all saved chats" }).click();
     await sidebar(page).getByRole("button", { name: "Delete all" }).click();
-    await expect(sidebar(page).getByRole("button", { name: /^إيه العادات/ })).toHaveCount(0);
+    await expect(sidebar(page).getByRole("button", { name: secondTitle })).toHaveCount(0);
     expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
     await context.close();
   });
@@ -143,7 +149,7 @@ test.describe("chat workspace", () => {
     await owner.page.getByRole("button", { name: "Turn on saved chats" }).first().click();
     await owner.page.getByRole("button", { name: "Save my chats" }).click();
     await ask(owner.page, "What is mindfulness?");
-    await expect(sidebar(owner.page).getByRole("button", { name: /^What is mindfulness\?/ })).toBeVisible();
+    await expect(sidebar(owner.page).locator("button[aria-current='page']")).toHaveCount(1);
 
     const other = await onboardedUser(browser, "chatother");
     await other.page.goto("/chat");
@@ -240,11 +246,12 @@ test.describe("chat workspace", () => {
     await page.goto("/chat");
     await page.getByRole("button", { name: /العربية/ }).click();
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
-    await expect(page.getByText("المواضيع اللي أقدر أرد عليها دلوقتي")).toBeVisible();
+    await expect(page.getByText("المواضيع اللي أقدر أرد عليها دلوقتي")).toHaveCount(0);
     await ask(page, "ازاي انام كويس؟");
     await expect(log(page).getByText(/^المصادر \(\d\)$/).first()).toBeVisible();
+    // Two concerns in one message are answered together, not refused.
     await ask(page, "نصايح للنوم والتوتر");
-    await expect(log(page).getByRole("note").last()).toContainText("موضوع واحد");
+    await expect(log(page).getByRole("note")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
     await settle(page);
     await page.screenshot({ path: `${SCREENS}/chat-mobile-arabic.png` });

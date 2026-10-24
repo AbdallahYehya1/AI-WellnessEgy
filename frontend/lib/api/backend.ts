@@ -145,11 +145,43 @@ export function recordConsent(token: string, version: string, granted: boolean) 
 
 export type MoodCheckin = {
   checkin_id: string;
-  mood_score: number;
+  /** "checkin": a legacy 1-5 rating; "reflection": Daily Reflection feelings. */
+  kind?: "checkin" | "reflection";
+  mood_score: number | null;
+  emotions?: string[];
+  factors?: string[];
   tags: string[];
   note: string | null;
   submitted_at: string;
 };
+
+export type ReflectionCreated = { checkin_id: string; submitted_at: string; suggested_assistants: string[] };
+
+export type MoodInsights = {
+  period: "week" | "month";
+  start: string;
+  end: string;
+  reflections: number;
+  days_with_reflections: number;
+  enough_data: boolean;
+  emotions: { label: string; count: number }[];
+  factors: { label: string; count: number }[];
+  links: { emotion: string; factor: string; days: number }[];
+  calendar: { day: string; emotions: string[] }[];
+};
+
+export function recordReflection(token: string, emotions: string[], factors: string[]) {
+  return request<ReflectionCreated>("/mood/reflections", {
+    token,
+    method: "POST",
+    body: { emotions, factors },
+  });
+}
+
+export function fetchMoodInsights(token: string, period: "week" | "month", tzOffset: number) {
+  const params = new URLSearchParams({ period, tz_offset: String(tzOffset) });
+  return request<MoodInsights>(`/mood/insights?${params.toString()}`, { token });
+}
 
 export function recordMoodCheckin(token: string, moodScore: number) {
   return request<{ checkin_id: string; submitted_at: string }>("/mood/checkins", {
@@ -183,7 +215,11 @@ export type RefusalReason =
   | "personal_or_unclear"
   | "personal_details"
   | "clinical"
-  | "sensitive";
+  | "sensitive"
+  | "regulated"
+  | "needs_detail"
+  | "daily_limit"
+  | "shared_limit";
 
 export type ChatCitation = {
   chunk_id: string;
@@ -201,6 +237,7 @@ export type ChatTopic = { prompt_id: string; question: string };
 
 export type ConversationSummary = {
   conversation_id: string;
+  assistant_id?: string;
   title: string;
   message_count: number;
   created_at: string;
@@ -218,6 +255,41 @@ export type ChatResponse = {
   user_message_id?: string | null;
   assistant_message_id?: string | null;
   created_at?: string | null;
+  assistant_id?: string | null;
+  /** A better-suited assistant, suggested only; nothing is shared with it. */
+  handoff?: string | null;
+  support_kind?: SupportKind | null;
+  /** What the AI provider received about the situation (identifiers removed), when opted in. */
+  provider_context?: string | null;
+  /** With a relationship-safety notice: vetted sources about abuse and getting help. */
+  resources?: ChatCitation[];
+};
+
+export type SupportKind = "crisis" | "relationship_safety" | "medical" | "danger";
+
+/** Provider context (D-59): whether a user's situation, minus identifiers, may reach the AI provider. */
+export type ContextSettings = {
+  mode: "structured" | "minimized" | "original";
+  available: boolean;
+  enabled: boolean;
+  consent_version: string;
+  consented_version: string | null;
+  provider: string | null;
+  model: string | null;
+  processing_region: string | null;
+  retention: string | null;
+};
+
+export type AssistantInfo = {
+  assistant_id: string;
+  status: "ready" | "preview";
+  icon: string;
+  name_en: string;
+  name_ar: string;
+  description_en: string;
+  description_ar: string;
+  starters_en: string[];
+  starters_ar: string[];
 };
 
 export type HistorySettings = {
@@ -248,6 +320,8 @@ export type ChatConfig = {
   typed_input?: "topics" | "free";
   supported_topics?: SupportedTopic[];
   history?: HistorySettings | null;
+  assistants?: AssistantInfo[];
+  context?: ContextSettings | null;
 };
 
 export type StoredMessage = {
@@ -279,6 +353,7 @@ export type SendChatBody = {
   history?: ChatTurn[];
   conversation_id?: string;
   client_message_id?: string;
+  assistant_id?: string;
 };
 
 // Safety assessment (2s) plus generation (10s) can exceed the default timeout.
@@ -305,10 +380,22 @@ export function updateHistorySettings(token: string, enabled: boolean, consentVe
   });
 }
 
-export function listConversations(token: string, options: { cursor?: string; q?: string; limit?: number } = {}) {
+export function updateContextSettings(token: string, enabled: boolean, consentVersion?: string) {
+  return request<ContextSettings>("/chat/context", {
+    token,
+    method: "PUT",
+    body: enabled ? { enabled, consent_version: consentVersion } : { enabled },
+  });
+}
+
+export function listConversations(
+  token: string,
+  options: { cursor?: string; q?: string; limit?: number; assistant?: string } = {},
+) {
   const params = new URLSearchParams({ limit: String(options.limit ?? 30) });
   if (options.cursor) params.set("cursor", options.cursor);
   if (options.q) params.set("q", options.q);
+  if (options.assistant) params.set("assistant", options.assistant);
   return request<ConversationPage>(`/chat/conversations?${params.toString()}`, { token });
 }
 

@@ -66,7 +66,7 @@ export default async function DashboardPage({ searchParams }: Props) {
               {d.assistantTitle}
             </h2>
             <p className="mt-1 text-sm text-ink-muted">{d.assistantBody}</p>
-            <ButtonLink href="/chat" className="mt-4">
+            <ButtonLink href="/assistants" className="mt-4">
               {d.assistantAction}
             </ButtonLink>
           </Card>

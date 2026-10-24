@@ -8,11 +8,14 @@ user's conversation answers exactly like a missing one (404).
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, Response
 
 from app.ai.prompts.age_bands import AGE_BANDS, band_enabled, resolve_age_band
+from app.assistants.context import CONTEXT_CONSENT_VERSION
+from app.assistants.registry import ASSISTANTS, BY_ID
 from app.auth.dependencies import CurrentPrincipal
 from app.common.errors import ApiError, ErrorResponse
 from app.consent.dependencies import ConsentedUser
@@ -20,9 +23,12 @@ from app.conversations import history as history_store
 from app.conversations.crypto import HistoryCipher
 from app.conversations.demo import DEMO_PROMPTS, is_allowed
 from app.conversations.schemas import (
+    AssistantOut,
     ChatConfig,
     ChatRequest,
     ChatResponse,
+    ContextSettings,
+    ContextSettingsUpdate,
     ConversationDetail,
     ConversationPage,
     ConversationSummary,
@@ -49,6 +55,23 @@ ERRORS: dict[int | str, dict[str, object]] = {
 }
 
 
+def _assistants() -> list[AssistantOut]:
+    return [
+        AssistantOut(
+            assistant_id=a.assistant_id,
+            status=a.status,
+            icon=a.icon,
+            name_en=a.name_en,
+            name_ar=a.name_ar,
+            description_en=a.description_en,
+            description_ar=a.description_ar,
+            starters_en=list(a.starters_en),
+            starters_ar=list(a.starters_ar),
+        )
+        for a in ASSISTANTS
+    ]
+
+
 def _runtime(request: Request) -> ChatRuntime | None:
     runtime: ChatRuntime | None = request.app.state.chat_runtime
     return runtime
@@ -70,6 +93,34 @@ def _history_settings(runtime: ChatRuntime | None, user: User) -> HistorySetting
         consented_version=user.chat_history_consent_version,
         retention_days=runtime.history_retention_days if runtime is not None else 90,
         max_conversations=history_store.MAX_CONVERSATIONS,
+    )
+
+
+GROQ_RETENTION = (
+    "Groq doesn't keep request content by default, but may log it for up to 30 days to "
+    "investigate abuse or reliability, unless Zero Data Retention is enabled. Data is "
+    "processed and stored in the United States."
+)
+
+
+def _context_settings(runtime: ChatRuntime | None, user: User) -> ContextSettings:
+    mode = runtime.context_mode if runtime is not None else "structured"
+    is_model = runtime is not None and getattr(runtime.provider, "kind", "") == "model"
+    available = runtime is not None and runtime.demo_curated and mode != "structured"
+    return ContextSettings(
+        mode="original"
+        if mode == "original"
+        else "minimized"
+        if mode == "minimized"
+        else "structured",
+        available=available,
+        enabled=available and user.chat_context_consent_version == CONTEXT_CONSENT_VERSION,
+        consent_version=CONTEXT_CONSENT_VERSION,
+        consented_version=user.chat_context_consent_version,
+        provider="Groq" if is_model else None,
+        model=getattr(runtime.provider, "model_name", None) if is_model and runtime else None,
+        processing_region="United States" if is_model else None,
+        retention=GROQ_RETENTION if is_model else None,
     )
 
 
@@ -106,6 +157,8 @@ def read_config(request: Request, user: ConsentedUser, principal: CurrentPrincip
             if not p.follow_up
         ],
         history=_history_settings(runtime, user) if allowed else None,
+        assistants=_assistants() if curated and allowed else [],
+        context=_context_settings(runtime, user) if allowed else None,
     )
 
 
@@ -150,6 +203,35 @@ def update_history_settings(
     return _history_settings(runtime, user)
 
 
+# --- Provider context (opt-in, D-59) ---------------------------------------------------
+
+
+@router.put("/context", response_model=ContextSettings, responses=ERRORS)
+def update_context_settings(
+    payload: ContextSettingsUpdate, request: Request, user: ConsentedUser, session: DbSession
+) -> ContextSettings:
+    runtime = _runtime(request)
+    settings = _context_settings(runtime, user)
+    if payload.enabled:
+        if not settings.available:
+            raise ApiError(
+                409, "context_unavailable", "Sharing more context isn't available right now."
+            )
+        if payload.consent_version != CONTEXT_CONSENT_VERSION:
+            raise ApiError(
+                422,
+                "context_consent_required",
+                "Please read and accept the current notice about sharing your situation.",
+            )
+        user.chat_context_consent_version = CONTEXT_CONSENT_VERSION
+        user.chat_context_consented_at = datetime.now(UTC)
+    else:  # withdrawing never needs anything else
+        user.chat_context_consent_version = None
+        user.chat_context_consented_at = None
+    session.flush()
+    return _context_settings(runtime, user)
+
+
 Limit = Annotated[int, Query(ge=1, le=50)]
 
 
@@ -161,18 +243,28 @@ def list_conversations(
     limit: Limit = 30,
     cursor: Annotated[str | None, Query(max_length=200)] = None,
     q: Annotated[str | None, Query(max_length=80)] = None,
+    assistant: Annotated[str | None, Query(max_length=40)] = None,
 ) -> ConversationPage:
     runtime = _runtime(request)
+    if assistant is not None and assistant not in BY_ID:
+        raise ApiError(422, "unknown_assistant", "This assistant doesn't exist.")
     cipher = _cipher(runtime)
     assert runtime is not None  # noqa: S101 - _cipher checked it
     history_store.purge_expired(session, user.id, runtime.history_retention_days)
     rows, next_cursor = history_store.list_conversations(
-        session, cipher, user.id, limit=limit, cursor=cursor, query=(q or "").strip() or None
+        session,
+        cipher,
+        user.id,
+        limit=limit,
+        cursor=cursor,
+        query=(q or "").strip() or None,
+        assistant_id=assistant,
     )
     return ConversationPage(
         conversations=[
             ConversationSummary(
                 conversation_id=c.id,
+                assistant_id=c.assistant_id,
                 title=title,
                 message_count=c.message_count,
                 created_at=c.created_at,

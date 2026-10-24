@@ -7,6 +7,7 @@ version_label: last-reviewed-2026-04
 content_type: wellness-education
 language: en
 age_bands: adult
+domains: emotional, growth
 review_status: draft
 licence: Public domain (NIMH website text; NIMH asks to be cited as the source)
 permitted_use: attributed summary with short quotations, non-commercial prototype

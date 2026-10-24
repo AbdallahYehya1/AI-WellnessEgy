@@ -32,12 +32,18 @@ class GenerationRequest:
     # "en" or "ar": the language the reply must be written in, decided by the server
     # (the model is not left to guess it from a re-expressed question).
     reply_language: str | None = None
+    # Assistant mode (D-56): evidence-grounded guidance plus clearly general coaching.
+    coaching: bool = False
 
 
 @dataclass(frozen=True)
 class GenerationResult:
     text: str
     cited_chunk_ids: list[str]
+    # The model's own risk reading of the situation (D-59), a second layer behind the
+    # backend screens: "none", "self_harm", "abuse", "medical_emergency" or "danger".
+    risk: str = "none"
+    total_tokens: int | None = None  # provider usage, for the shared token budget
 
 
 class ProviderError(Exception):

@@ -162,6 +162,9 @@ def build_chat_runtime(settings: Settings) -> ChatRuntime | None:
         provider_daily_limit=settings.chat_provider_daily_limit,
         history=_history_cipher(settings),
         history_retention_days=settings.chat_history_retention_days,
+        user_daily_limit=settings.chat_user_daily_limit,
+        daily_token_budget=settings.chat_daily_token_budget,
+        context_mode=settings.chat_context_mode,
     )
 
 

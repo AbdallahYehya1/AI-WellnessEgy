@@ -21,6 +21,23 @@ vi.mock("next/link", () => ({
 const { default: HistoryPage } = await import("@/app/history/page");
 const { default: SettingsPage } = await import("@/app/settings/page");
 
+const INSIGHTS = {
+  period: "week" as const,
+  start: "2026-10-17",
+  end: "2026-10-23",
+  reflections: 4,
+  days_with_reflections: 4,
+  enough_data: true,
+  emotions: [{ label: "anxious", count: 3 }, { label: "calm", count: 1 }],
+  factors: [{ label: "work", count: 2 }],
+  links: [{ emotion: "anxious", factor: "work", days: 2 }],
+  calendar: [{ day: "2026-10-22", emotions: ["anxious"] }],
+};
+
+function reflection(emotions: string[], submittedAt: string) {
+  return { checkin_id: `r-${submittedAt}`, kind: "reflection" as const, mood_score: null, emotions, factors: [], tags: [], note: null, submitted_at: submittedAt };
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   getVerifiedSession.mockResolvedValue(SESSION);
@@ -29,6 +46,7 @@ beforeEach(() => {
   backend.fetchProfile.mockResolvedValue(ok(PROFILE));
   backend.fetchMe.mockResolvedValue({ status: "ok", me: ME });
   backend.fetchCurrentConsent.mockResolvedValue(ok(CURRENT));
+  backend.fetchMoodInsights.mockResolvedValue(ok({ ...INSIGHTS, enough_data: false, emotions: [], factors: [], links: [], calendar: [] }));
 });
 
 describe("history page", () => {
@@ -43,14 +61,46 @@ describe("history page", () => {
 
   it("shows an empty state with a next action", async () => {
     render(await HistoryPage());
-    expect(screen.getByText("No check-ins yet.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Do your first check-in" }).getAttribute("href")).toBe("/check-in");
+    expect(screen.getByText("No reflections yet.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Add a reflection" }).getAttribute("href")).toBe("/check-in");
   });
 
-  it("shows an accessible chart and the same data as a table", async () => {
+  it("says when there isn't enough to summarise, without pressure", async () => {
+    backend.fetchMoodHistory.mockResolvedValue(ok({ checkins: [reflection(["calm"], "2026-10-22T08:00:00Z")] }));
+    backend.fetchMoodInsights.mockResolvedValue(ok({ ...INSIGHTS, enough_data: false, reflections: 1, days_with_reflections: 1, emotions: [], calendar: [] }));
+    render(await HistoryPage());
+    expect(screen.getByRole("status").textContent).toContain("Skipping days is completely fine");
+    expect(document.body.textContent?.toLowerCase()).not.toContain("streak");
+  });
+
+  it("describes the week in counts of days, with no causes or scores", async () => {
+    backend.fetchMoodHistory.mockResolvedValue(ok({ checkins: [reflection(["anxious"], "2026-10-22T08:00:00Z")] }));
+    backend.fetchMoodInsights.mockResolvedValue(ok(INSIGHTS));
+    render(await HistoryPage());
+    expect(backend.fetchMoodInsights).toHaveBeenCalledWith(SESSION.accessToken, "week", expect.any(Number));
+    const feelings = screen.getByRole("heading", { name: "Feelings you chose most" }).parentElement!;
+    expect(feelings.textContent).toContain("Anxious");
+    expect(feelings.textContent).toContain("3 days");
+    expect(screen.getByText("You chose Anxious on 2 days when Work was marked.")).toBeTruthy();
+    expect(screen.getByText(/They don't show causes/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "This week" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "This month" }).getAttribute("href")).toBe("/history?period=month");
+    expect(screen.queryByRole("img", { name: /Mood over your last check-ins/ })).toBeNull(); // no legacy chart
+  });
+
+  it("switches to the month", async () => {
+    backend.fetchMoodHistory.mockResolvedValue(ok({ checkins: [reflection(["calm"], "2026-10-22T08:00:00Z")] }));
+    backend.fetchMoodInsights.mockResolvedValue(ok({ ...INSIGHTS, period: "month" }));
+    render(await HistoryPage({ searchParams: Promise.resolve({ period: "month" }) }));
+    expect(backend.fetchMoodInsights).toHaveBeenCalledWith(SESSION.accessToken, "month", expect.any(Number));
+    expect(screen.getByRole("link", { name: "This month" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("keeps old 1-5 check-ins visible as an accessible chart", async () => {
     backend.fetchMoodHistory.mockResolvedValue(
       ok({ checkins: [moodCheckin(4, "2026-10-03T09:00:00Z"), moodCheckin(2, "2026-10-02T09:00:00Z")] }),
     );
+    backend.fetchMoodInsights.mockResolvedValue(ok({ ...INSIGHTS, enough_data: false }));
     render(await HistoryPage());
     const chart = screen.getByRole("img", { name: /Mood over your last check-ins/ });
     expect(chart.querySelectorAll("title")).toHaveLength(2);
@@ -60,10 +110,10 @@ describe("history page", () => {
     expect(backend.fetchMoodHistory).toHaveBeenCalledWith(SESSION.accessToken, 30);
   });
 
-  it("explains when check-ins can't be loaded", async () => {
+  it("explains when reflections can't be loaded", async () => {
     backend.fetchMoodHistory.mockResolvedValue(fail(503, "service_unavailable"));
     render(await HistoryPage());
-    expect(screen.getByRole("status").textContent).toMatch(/can't be loaded/);
+    expect(screen.getByRole("status").textContent).toMatch(/can't load your reflections/);
   });
 });
 

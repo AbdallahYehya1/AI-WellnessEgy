@@ -7,6 +7,7 @@ version_label: 20-MH-8125
 content_type: wellness-education
 language: en
 age_bands: adult
+domains: emotional
 review_status: draft
 licence: Public domain (NIMH publication; NIMH asks to be cited as the source)
 permitted_use: attributed short quotations, non-commercial prototype

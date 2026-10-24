@@ -7,6 +7,7 @@ import type { Entry } from "@/components/chat/types";
 import type { ChatCitation, ChatStatus } from "@/lib/api/backend";
 import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/messages";
+import { translateMessage } from "@/lib/i18n/translate";
 
 type ChatText = Messages["chat"];
 
@@ -20,6 +21,15 @@ const LINKABLE_HOSTS = new Set([
   "nccih.nih.gov",
   "www.cdc.gov",
   "cdc.gov",
+  // Publishers added with the ten assistants (D-61), each licence-checked.
+  "odphp.health.gov",
+  "medlineplus.gov",
+  "womenshealth.gov",
+  "www.niddk.nih.gov",
+  "www.opm.gov",
+  "www.consumerfinance.gov",
+  "www.mymoney.gov",
+  "www.ready.gov",
 ]);
 
 export function linkableSource(ref: string): string | null {
@@ -74,7 +84,12 @@ export function MessageEntry({ entry, t, locale }: { entry: Entry; t: ChatText; 
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-x-2 px-1 text-xs text-ink-muted">
-            {entry.topic && !sameQuestion(entry.topic.question, entry.text) ? (
+            {entry.shared ? (
+              <span dir="auto" className="basis-full text-end">
+                {t.sharedWithAi} <span className="font-medium text-ink">{entry.shared}</span>
+              </span>
+            ) : null}
+            {!entry.shared && entry.topic && !sameQuestion(entry.topic.question, entry.text) ? (
               <span dir="auto">
                 {t.answeredAs} <span className="font-medium text-ink">{entry.topic.question}</span>
               </span>
@@ -98,7 +113,11 @@ export function MessageEntry({ entry, t, locale }: { entry: Entry; t: ChatText; 
           <div className="text-[0.975rem] text-ink">
             <Markdown text={entry.text} />
           </div>
-          <Citations citations={entry.citations} t={t} />
+          {entry.citations.length > 0 ? (
+            <Citations citations={entry.citations} t={t} />
+          ) : (
+            <p className="text-xs text-ink-muted">{t.generalGuidance}</p>
+          )}
           <div className="flex items-center gap-3 text-xs text-ink-muted">
             <CopyButton text={entry.text} t={t} />
             <time dateTime={entry.createdAt}>{timeLabel(entry.createdAt, locale)}</time>
@@ -107,7 +126,14 @@ export function MessageEntry({ entry, t, locale }: { entry: Entry; t: ChatText; 
       </div>
     );
   }
-  const body = entry.status === "out_of_scope" && entry.reason ? t.refusals[entry.reason] : entry.text;
+  const body =
+    entry.status === "out_of_scope" && entry.reason
+      ? t.refusals[entry.reason]
+      : entry.supportKind
+        ? t.support[entry.supportKind]
+        : entry.reason === "daily_limit" || entry.reason === "shared_limit"
+          ? t.refusals[entry.reason]
+          : translateMessage(locale, entry.text);
   return (
     <div role="note" data-status={entry.status} className={`rounded-2xl border px-4 py-3 text-sm ${NOTICE_TONE[entry.status]}`}>
       <span className="sr-only">{t.assistantNotice}: </span>
@@ -115,6 +141,11 @@ export function MessageEntry({ entry, t, locale }: { entry: Entry; t: ChatText; 
       <p className="mt-1 leading-6" dir="auto">
         {body}
       </p>
+      {entry.resources && entry.resources.length > 0 ? (
+        <div className="mt-3">
+          <Citations citations={entry.resources} t={t} />
+        </div>
+      ) : null}
     </div>
   );
 }

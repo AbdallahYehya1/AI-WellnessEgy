@@ -1,11 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MoodForm } from "@/components/mood/mood-form";
 import { MoodHistory } from "@/components/mood/mood-history";
-import type { MoodFormState } from "@/lib/mood/actions";
-import { parseMoodScore } from "@/lib/mood/score";
+import { ReflectionForm } from "@/components/mood/reflection-form";
+import type { ReflectionFormState } from "@/lib/mood/actions";
 import {
   backend,
   fail,
@@ -24,31 +23,46 @@ vi.mock("@/lib/api/backend", () => backend);
 vi.mock("@/lib/auth/actions", () => ({ signOut: vi.fn() }));
 vi.mock("@/lib/preferences/actions", () => ({ setLocale: vi.fn(), setTheme: vi.fn() }));
 vi.mock("next/link", () => ({
-  default: ({ href, children }: { href: string; children: React.ReactNode }) => (
-    <a href={href}>{children}</a>
+  default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
   ),
 }));
 
 const { default: CheckInPage } = await import("@/app/check-in/page");
-const { submitMoodCheckin } = await import("@/lib/mood/actions");
+const { submitReflection } = await import("@/lib/mood/actions");
 
-function form(fields: Record<string, string>): FormData {
+function form(emotions: string[], factors: string[] = []): FormData {
   const data = new FormData();
-  for (const [key, value] of Object.entries(fields)) data.set(key, value);
+  for (const e of emotions) data.append("emotions", e);
+  for (const f of factors) data.append("factors", f);
   return data;
 }
+
+function reflection(emotions: string[], submittedAt: string) {
+  return { checkin_id: `r-${submittedAt}`, kind: "reflection" as const, mood_score: null, emotions, factors: [], tags: [], note: null, submitted_at: submittedAt };
+}
+
+const READY = [
+  { assistant_id: "career", status: "ready", icon: "briefcase", name_en: "Career & Work", name_ar: "الشغل", description_en: "", description_ar: "", starters_en: [], starters_ar: [] },
+  { assistant_id: "fitness", status: "preview", icon: "activity", name_en: "Fitness", name_ar: "اللياقة", description_en: "", description_ar: "", starters_en: [], starters_ar: [] },
+];
 
 beforeEach(() => {
   vi.resetAllMocks();
   getVerifiedSession.mockResolvedValue(SESSION);
   backend.fetchMyConsent.mockResolvedValue(ok(myConsent("granted", VERSION)));
   backend.fetchMoodHistory.mockResolvedValue(ok({ checkins: [] }));
-  backend.recordMoodCheckin.mockResolvedValue(
-    ok({ checkin_id: "c1", submitted_at: "2026-10-02T09:00:00Z" }, 201),
+  backend.fetchChatConfig.mockResolvedValue(
+    ok({ enabled: true, age_band: "adult", age_band_label: "Adult", test_only_policy: false, prototype: true, assistants: READY }),
+  );
+  backend.recordReflection.mockResolvedValue(
+    ok({ checkin_id: "r1", submitted_at: "2026-10-23T09:00:00Z", suggested_assistants: ["career"] }, 201),
   );
 });
 
-describe("check-in page", () => {
+describe("Daily Reflection page", () => {
   it("requires a signed-in user", async () => {
     getVerifiedSession.mockResolvedValue(null);
     expect(await expectRedirect(CheckInPage())).toBe("/sign-in?next=/check-in");
@@ -64,154 +78,157 @@ describe("check-in page", () => {
     expect(backend.fetchMoodHistory).not.toHaveBeenCalled();
   });
 
-  it("explains the check-in without clinical language and offers the 1-5 scale", async () => {
+  it("asks how you feel with labelled feelings, optional factors and no numeric scale", async () => {
     render(await CheckInPage());
-    expect(screen.getByText(/not a medical assessment/)).toBeTruthy();
-    expect(screen.getByRole("group", { name: "How are you feeling right now?" })).toBeTruthy();
-    expect(screen.getAllByRole("radio").map((r) => (r as HTMLInputElement).value)).toEqual([
-      "1",
-      "2",
-      "3",
-      "4",
-      "5",
-    ]);
-    expect(screen.getByRole("link", { name: "Skip for now" }).getAttribute("href")).toBe(
-      "/dashboard",
-    );
+    expect(screen.getByRole("heading", { name: "Daily Reflection" })).toBeTruthy();
+    const feelings = screen.getByRole("group", { name: "How do you feel today?" });
+    const boxes = within(feelings).getAllByRole("checkbox");
+    expect(boxes).toHaveLength(9);
+    for (const label of ["Happy", "Calm", "Good", "Okay", "Anxious", "Sad", "Frustrated", "Tired", "Excited"]) {
+      expect(within(feelings).getByRole("checkbox", { name: new RegExp(label) })).toBeTruthy();
+    }
+    const factors = screen.getByRole("group", { name: "What's contributing to how you feel? (optional)" });
+    expect(within(factors).getAllByRole("checkbox")).toHaveLength(11);
+    expect(screen.queryByRole("radio")).toBeNull();
     const text = document.body.textContent?.toLowerCase() ?? "";
-    for (const word of ["depress", "disorder", "symptom", "risk score"]) {
+    for (const word of ["depress", "disorder", "symptom", "risk score", "streak"]) {
       expect(text).not.toContain(word);
     }
   });
 
-  it("shows the user's recent check-ins", async () => {
+  it("shows recent reflections and old check-ins accurately", async () => {
     backend.fetchMoodHistory.mockResolvedValue(
-      ok({ checkins: [moodCheckin(3, "2026-10-02T08:00:00Z")] }),
+      ok({ checkins: [reflection(["excited", "anxious"], "2026-10-22T08:00:00Z"), moodCheckin(3, "2026-10-02T08:00:00Z")] }),
     );
     render(await CheckInPage());
-    expect(screen.getByRole("list", { name: "Recent check-ins" }).textContent).toContain("3 / 5");
-    expect(backend.fetchMoodHistory).toHaveBeenCalledWith(SESSION.accessToken, 7);
+    const list = screen.getByRole("list", { name: "Recent check-ins" });
+    expect(list.textContent).toContain("Excited");
+    expect(list.textContent).toContain("Anxious");
+    expect(list.textContent).toContain("Check-in: 3 / 5");
   });
 
   it("fails closed when consent can't be checked", async () => {
     backend.fetchMyConsent.mockResolvedValue(fail(0, "network_error"));
     render(await CheckInPage());
     expect(screen.getByRole("alert")).toBeTruthy();
-    expect(screen.queryByRole("radio")).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
   it("still offers the form if only history fails to load", async () => {
     backend.fetchMoodHistory.mockResolvedValue(fail(503, "service_unavailable"));
     render(await CheckInPage());
-    expect(screen.getAllByRole("radio")).toHaveLength(5);
-    expect(screen.getByText(/can.t be loaded right now/)).toBeTruthy();
+    expect(screen.getAllByRole("checkbox").length).toBe(20);
+    expect(screen.getByText(/can.t load your recent reflections/)).toBeTruthy();
   });
 });
 
-describe("submitMoodCheckin", () => {
-  it("saves a valid check-in and continues to the dashboard", async () => {
-    const url = await expectRedirect(submitMoodCheckin({}, form({ moodScore: "4" })));
-    expect(url).toBe("/dashboard?status=checked-in");
-    expect(backend.recordMoodCheckin).toHaveBeenCalledWith(SESSION.accessToken, 4);
+describe("submitReflection", () => {
+  it("saves feelings and factors and offers ready assistants, sharing nothing", async () => {
+    const state = await submitReflection({}, form(["anxious", "excited"], ["work"]));
+    expect(backend.recordReflection).toHaveBeenCalledWith(SESSION.accessToken, ["anxious", "excited"], ["work"]);
+    expect(state.saved).toEqual({ emotions: ["anxious", "excited"], factors: ["work"], suggestions: ["career"] });
   });
 
-  it.each(["", "0", "6", "3.5", " 3", "three", "10"])(
-    "rejects %j without calling the API",
-    async (value) => {
-      const state = await submitMoodCheckin({}, form({ moodScore: value }));
-      expect(state.fieldError).toBe("Choose a number from 1 to 5.");
-      expect(backend.recordMoodCheckin).not.toHaveBeenCalled();
-    },
-  );
-
-  it("rejects a missing score", async () => {
-    expect((await submitMoodCheckin({}, form({}))).fieldError).toBeDefined();
+  it.each([[[]], [["hopeless"]]])("needs at least one known feeling (%j)", async (emotions) => {
+    const state = await submitReflection({}, form(emotions));
+    expect(state.fieldError).toBe("Choose at least one feeling.");
+    expect(backend.recordReflection).not.toHaveBeenCalled();
   });
 
-  it("sends the user back to consent if the API requires it", async () => {
-    backend.recordMoodCheckin.mockResolvedValue(fail(403, "consent_required"));
-    expect(await expectRedirect(submitMoodCheckin({}, form({ moodScore: "2" })))).toBe(
-      "/onboarding/consent",
-    );
+  it("drops unknown factors and duplicates before sending", async () => {
+    await submitReflection({}, form(["calm", "calm"], ["work", "dating apps", "work"]));
+    expect(backend.recordReflection).toHaveBeenCalledWith(SESSION.accessToken, ["calm"], ["work"]);
   });
 
-  it("sends the user to sign in if the session is rejected", async () => {
-    backend.recordMoodCheckin.mockResolvedValue(fail(401, "unauthorized"));
-    expect(await expectRedirect(submitMoodCheckin({}, form({ moodScore: "2" })))).toBe(
-      "/sign-in?next=/check-in",
-    );
-  });
-
-  it("maps a server validation error to the field message", async () => {
-    backend.recordMoodCheckin.mockResolvedValue(fail(422, "validation_failed"));
-    const state = await submitMoodCheckin({}, form({ moodScore: "2" }));
-    expect(state.fieldError).toBe("Choose a number from 1 to 5.");
+  it("sends the user back to consent or sign-in when needed", async () => {
+    backend.recordReflection.mockResolvedValue(fail(403, "consent_required"));
+    expect(await expectRedirect(submitReflection({}, form(["calm"])))).toBe("/onboarding/consent");
+    backend.recordReflection.mockResolvedValue(fail(401, "unauthorized"));
+    expect(await expectRedirect(submitReflection({}, form(["calm"])))).toBe("/sign-in?next=/check-in");
   });
 
   it("shows a safe message when the API is unavailable", async () => {
-    backend.recordMoodCheckin.mockResolvedValue(fail(0, "network_error"));
-    const state = await submitMoodCheckin({}, form({ moodScore: "2" }));
-    expect(state.formError).toBe("We couldn't save your check-in right now. Please try again.");
-  });
-
-  it("requires a signed-in user", async () => {
-    getVerifiedSession.mockResolvedValue(null);
-    expect(await expectRedirect(submitMoodCheckin({}, form({ moodScore: "2" })))).toBe(
-      "/sign-in?next=/check-in",
-    );
-    expect(backend.recordMoodCheckin).not.toHaveBeenCalled();
+    backend.recordReflection.mockResolvedValue(fail(0, "network_error"));
+    const state = await submitReflection({}, form(["calm"]));
+    expect(state.formError).toBe("We couldn't save your reflection right now. Please try again.");
   });
 });
 
-describe("parseMoodScore", () => {
-  it("accepts only the documented 1-5 integers", () => {
-    expect(["1", "2", "3", "4", "5"].map(parseMoodScore)).toEqual([1, 2, 3, 4, 5]);
-    expect(parseMoodScore(null)).toBeNull();
-    expect(parseMoodScore(new File([], "x"))).toBeNull();
-  });
-});
-
-describe("MoodForm", () => {
-  it("submits the selected score", async () => {
-    const action = vi.fn<(s: MoodFormState, d: FormData) => Promise<MoodFormState>>(
-      async () => ({}),
-    );
-    render(<MoodForm action={action} />);
-    await userEvent.click(screen.getByRole("radio", { name: "4" }));
-    await userEvent.click(screen.getByRole("button", { name: "Save check-in" }));
+describe("ReflectionForm", () => {
+  it("submits several feelings and optional factors", async () => {
+    const action = vi.fn<(s: ReflectionFormState, d: FormData) => Promise<ReflectionFormState>>(async () => ({}));
+    render(<ReflectionForm action={action} assistantNames={{}} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("checkbox", { name: /Excited/ }));
+    await user.click(screen.getByRole("checkbox", { name: /Anxious/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Work" }));
+    await user.click(screen.getByRole("button", { name: "Save reflection" }));
     await waitFor(() => expect(action).toHaveBeenCalled());
-    expect(action.mock.calls[0]?.[1].get("moodScore")).toBe("4");
+    const data = action.mock.calls[0]![1];
+    expect(data.getAll("emotions")).toEqual(["anxious", "excited"]);
+    expect(data.getAll("factors")).toEqual(["work"]);
   });
 
-  it("shows validation feedback", async () => {
-    const action = vi.fn(
-      async (): Promise<MoodFormState> => ({ fieldError: "Choose a number from 1 to 5." }),
-    );
-    render(<MoodForm action={action} />);
-    await userEvent.click(screen.getByRole("button", { name: "Save check-in" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Choose a number from 1 to 5.");
+  it("after saving offers optional next steps that open an assistant without sharing the reflection", async () => {
+    const action = vi.fn(async (): Promise<ReflectionFormState> => ({
+      saved: { emotions: ["anxious"], factors: ["work"], suggestions: ["career", "fitness"] },
+    }));
+    render(<ReflectionForm action={action} assistantNames={{ career: "Career & Work" }} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Save reflection" }));
+    expect(await screen.findByText("Reflection saved")).toBeTruthy();
+    const link = screen.getByRole("link", { name: "Talk it through with Career & Work" });
+    expect(link.getAttribute("href")).toBe("/chat?assistant=career"); // no feelings in the URL
+    expect(screen.queryByText(/fitness/i)).toBeNull(); // not ready, not offered
+    expect(screen.getByRole("link", { name: "See your reflections" }).getAttribute("href")).toBe("/history");
   });
 
-  it("shows a form-level error", async () => {
-    const action = vi.fn(async (): Promise<MoodFormState> => ({ formError: "We couldn't save." }));
-    render(<MoodForm action={action} />);
-    await userEvent.click(screen.getByRole("radio", { name: "2" }));
-    await userEvent.click(screen.getByRole("button", { name: "Save check-in" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("We couldn't save.");
+  it("needs no follow-up for good feelings", async () => {
+    const action = vi.fn(async (): Promise<ReflectionFormState> => ({
+      saved: { emotions: ["happy", "calm"], factors: [], suggestions: [] },
+    }));
+    render(<ReflectionForm action={action} assistantNames={{}} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Save reflection" }));
+    expect(await screen.findByText(/Good feelings are worth noticing too/)).toBeTruthy();
+  });
+
+  it("gives every choice a visible focus style distinct from the selected style", () => {
+    render(<ReflectionForm action={vi.fn(async () => ({}))} assistantNames={{}} />);
+    for (const box of screen.getAllByRole("checkbox")) {
+      const label = box.closest("label");
+      for (const cls of ["has-focus-visible:outline-2", "has-focus-visible:outline-offset-2", "has-focus-visible:outline-focus"]) {
+        expect(label?.classList.contains(cls)).toBe(true);
+      }
+      expect(label?.classList.contains("has-checked:bg-surface-muted")).toBe(true);
+    }
+  });
+
+  it("is operable with the keyboard alone", async () => {
+    const action = vi.fn<(s: ReflectionFormState, d: FormData) => Promise<ReflectionFormState>>(async () => ({}));
+    render(<ReflectionForm action={action} assistantNames={{}} />);
+    const user = userEvent.setup();
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole("checkbox", { name: /Happy/ }));
+    await user.keyboard(" ");
+    expect((screen.getByRole("checkbox", { name: /Happy/ }) as HTMLInputElement).checked).toBe(true);
+    screen.getByRole("button", { name: "Save reflection" }).focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    expect(action.mock.calls[0]![1].getAll("emotions")).toEqual(["happy"]);
+  });
+
+  it("works in Arabic with the Egyptian Arabic question", () => {
+    render(<ReflectionForm action={vi.fn(async () => ({}))} assistantNames={{}} locale="ar" />);
+    expect(screen.getByRole("group", { name: "حاسس بإيه النهارده؟" })).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: /مبسوط/ })).toBeTruthy();
   });
 });
 
 describe("MoodHistory", () => {
-  it("lists date and score only, never the note", () => {
-    render(
-      <MoodHistory
-        checkins={[{ ...moodCheckin(2, "2026-10-02T09:30:00Z"), note: "private text" }]}
-      />,
-    );
+  it("lists date and what was recorded, never the note", () => {
+    render(<MoodHistory checkins={[{ ...moodCheckin(2, "2026-10-02T09:30:00Z"), note: "private text" }]} />);
     const item = screen.getByRole("listitem");
-    expect(item.textContent).toContain("2 / 5");
-    // 09:30 UTC is shown in Cairo time (UTC+3 in October).
-    expect(item.textContent).toContain("2 Oct 2026, 12:30");
+    expect(item.textContent).toContain("Check-in: 2 / 5");
+    expect(item.textContent).toContain("2 Oct 2026, 12:30"); // Cairo time
     expect(document.body.textContent).not.toContain("private text");
   });
 
@@ -222,45 +239,6 @@ describe("MoodHistory", () => {
 
   it("has an empty state", () => {
     render(<MoodHistory checkins={[]} />);
-    expect(screen.getByText("No check-ins yet.")).toBeTruthy();
-  });
-});
-
-describe("MoodForm keyboard accessibility", () => {
-  const FOCUS_CLASSES = [
-    "has-focus-visible:outline-2",
-    "has-focus-visible:outline-offset-2",
-    "has-focus-visible:outline-focus",
-  ];
-
-  it("gives every score a visible focus style distinct from the selected style", () => {
-    render(<MoodForm action={vi.fn(async () => ({}))} />);
-    for (const radio of screen.getAllByRole("radio")) {
-      const label = radio.closest("label");
-      expect(label).not.toBeNull();
-      for (const cls of FOCUS_CLASSES) expect(label?.classList.contains(cls)).toBe(true);
-      // Selection is shown differently (background + border), not by the outline.
-      expect(label?.classList.contains("has-checked:bg-surface-muted")).toBe(true);
-      // ...and the focus outline is not the selection colour.
-      expect(label?.classList.contains("has-checked:outline-focus")).toBe(false);
-    }
-  });
-
-  it("is reachable and operable with the keyboard alone", async () => {
-    const action = vi.fn<(s: MoodFormState, d: FormData) => Promise<MoodFormState>>(
-      async () => ({}),
-    );
-    render(<MoodForm action={action} />);
-    await userEvent.tab();
-    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "1" }));
-    await userEvent.keyboard("{ArrowRight}{ArrowRight}");
-    const three = screen.getByRole("radio", { name: "3" }) as HTMLInputElement;
-    expect(document.activeElement).toBe(three);
-    expect(three.checked).toBe(true);
-    await userEvent.tab();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Save check-in" }));
-    await userEvent.keyboard("{Enter}");
-    await waitFor(() => expect(action).toHaveBeenCalled());
-    expect(action.mock.calls[0]?.[1].get("moodScore")).toBe("3");
+    expect(screen.getByText("No reflections yet.")).toBeTruthy();
   });
 });

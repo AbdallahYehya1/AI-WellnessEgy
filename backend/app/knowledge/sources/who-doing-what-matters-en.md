@@ -8,6 +8,7 @@ published_on: 2020-04-29
 content_type: wellness-education
 language: en
 age_bands: adult
+domains: emotional
 review_status: draft
 licence: CC BY-NC-SA 3.0 IGO
 permitted_use: verbatim excerpts of the five skill summaries, non-commercial prototype, attributed; WHO does not endorse this app

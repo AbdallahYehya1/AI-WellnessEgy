@@ -8,6 +8,7 @@ published_on: 2020-04-29
 content_type: wellness-education
 language: ar
 age_bands: adult
+domains: emotional
 review_status: draft
 licence: CC BY-NC-SA 3.0 IGO
 permitted_use: excerpts of the official WHO Arabic edition (ISBN 978-92-4-001167-0), non-commercial prototype, attributed; WHO does not endorse this app

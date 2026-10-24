@@ -33,7 +33,7 @@ export function AppShell({ current, locale, t, chatEnabled, children, fullHeight
     { section: "check-in", href: "/check-in", label: t.nav.checkIn, icon: <HeartIcon /> },
     { section: "history", href: "/history", label: t.nav.history, icon: <ChartIcon /> },
     ...(chatEnabled
-      ? [{ section: "chat" as const, href: "/chat", label: t.nav.assistant, icon: <ChatIcon /> }]
+      ? [{ section: "chat" as const, href: "/assistants", label: t.nav.assistant, icon: <ChatIcon /> }]
       : []),
     { section: "settings", href: "/settings", label: t.nav.settings, icon: <SettingsIcon /> },
   ];

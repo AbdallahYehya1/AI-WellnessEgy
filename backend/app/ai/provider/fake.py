@@ -55,6 +55,15 @@ class FakeProvider:
                 text="You have depression and should take medication.",
                 cited_chunk_ids=[request.passages[0].chunk_id],
             )
+        if "[[fake-risk]]" in text:
+            return GenerationResult(
+                text="Please reach out for help.", cited_chunk_ids=[], risk="self_harm"
+            )
+        if not request.passages:  # assistant coaching with no matching evidence
+            return GenerationResult(
+                text="Here are some general, practical ideas to consider. (Scripted test reply.)",
+                cited_chunk_ids=[],
+            )
         cited = request.passages[:2]
         language = "ar" if _ARABIC.search(cited[0].text) else "en"
         reply = LEAD_IN[language] + " " + " ".join(_excerpt(p.text) for p in cited)

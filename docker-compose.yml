@@ -34,6 +34,12 @@ x-api-environment: &api-environment
   # Opt-in saved chat history (D-54): unset keys = history unavailable (browser-only chat).
   CHAT_HISTORY_KEYS: ${CHAT_HISTORY_KEYS:-}
   CHAT_HISTORY_RETENTION_DAYS: ${CHAT_HISTORY_RETENTION_DAYS:-90}
+  # Shared provider budget and provider context (D-59). Context stays "structured"
+  # unless set; "original" also needs CHAT_ORIGINAL_WORDING_REVIEW.
+  CHAT_USER_DAILY_LIMIT: ${CHAT_USER_DAILY_LIMIT:-25}
+  CHAT_DAILY_TOKEN_BUDGET: ${CHAT_DAILY_TOKEN_BUDGET:-150000}
+  CHAT_CONTEXT_MODE: ${CHAT_CONTEXT_MODE:-structured}
+  CHAT_ORIGINAL_WORDING_REVIEW: ${CHAT_ORIGINAL_WORDING_REVIEW:-}
 
 services:
   db:

@@ -235,6 +235,10 @@ EXPECTED_CONSTRAINTS = {
     ("knowledge_sources", "pk_knowledge_sources"),
     ("knowledge_sources", "uq_knowledge_sources_slug_version_label"),
     ("mood_checkins", "ck_mood_checkins_mood_score_range"),
+    ("mood_checkins", "ck_mood_checkins_entry_valid"),  # 0006
+    ("mood_checkins", "ck_mood_checkins_factors_count"),  # 0006
+    ("chat_rate_events", "ck_chat_rate_events_tokens_nonnegative"),  # 0006
+    ("knowledge_sources", "ck_knowledge_sources_domains_valid"),  # 0006
     ("mood_checkins", "ck_mood_checkins_note_length"),
     ("mood_checkins", "ck_mood_checkins_tags_count"),
     ("mood_checkins", "fk_mood_checkins_user_id_users"),
@@ -306,3 +310,73 @@ def test_0005_keeps_existing_users_and_starts_everyone_with_history_off(
         assert tuple(row) == ("Existing person", False, None)
     finally:
         command.upgrade(config, "head")
+
+
+def test_0006_keeps_existing_check_ins_conversations_and_sources(
+    test_database_url: str, db_engine: Engine
+) -> None:
+    config = alembic_config(test_database_url)
+    command.downgrade(config, "0005")
+    try:
+        with db_engine.begin() as connection:
+            user_id: object = connection.execute(
+                text(
+                    "INSERT INTO app.users (id, supabase_user_id) VALUES "
+                    "(gen_random_uuid(), gen_random_uuid()) RETURNING id"
+                )
+            ).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO app.mood_checkins (id, user_id, mood_score) "
+                    "VALUES (gen_random_uuid(), :u, 4)"
+                ),
+                {"u": user_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO app.chat_conversations (id, user_id, title_enc) "
+                    "VALUES (gen_random_uuid(), :u, 'v1.k1.x')"
+                ),
+                {"u": user_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO app.knowledge_sources (id, slug, title, publisher, source_ref, "
+                    "version_label, content_type, language, age_bands, review_status) VALUES "
+                    "(gen_random_uuid(), 'cdc-physical-activity-benefits-en', 't', 'p', 'r', "
+                    "'v', 'c', 'en', ARRAY['adult'], 'draft')"
+                )
+            )
+        command.upgrade(config, "head")
+        with db_engine.connect() as connection:
+            mood = connection.execute(
+                text("SELECT mood_score, emotions, factors, entry_version FROM app.mood_checkins")
+            ).one()
+            assistant: str = connection.execute(
+                text("SELECT assistant_id FROM app.chat_conversations")
+            ).scalar_one()
+            domains: list[str] = connection.execute(
+                text("SELECT domains FROM app.knowledge_sources")
+            ).scalar_one()
+        assert tuple(mood) == (4, [], [], 1)  # the old score is kept, never turned into emotions
+        assert assistant == "emotional"
+        assert domains == ["fitness", "emotional"]
+        with db_engine.begin() as connection:  # a reflection needs emotions and no score
+            for sql in (
+                "INSERT INTO app.mood_checkins (id, user_id, entry_version) "
+                "VALUES (gen_random_uuid(), :u, 2)",
+                "INSERT INTO app.mood_checkins (id, user_id, entry_version, mood_score, emotions) "
+                "VALUES (gen_random_uuid(), :u, 2, 3, ARRAY['calm'])",
+                "INSERT INTO app.mood_checkins (id, user_id) VALUES (gen_random_uuid(), :u)",
+            ):
+                with pytest.raises(sa.exc.IntegrityError), connection.begin_nested():
+                    connection.execute(text(sql), {"u": user_id})
+    finally:
+        command.upgrade(config, "head")
+        with db_engine.begin() as connection:
+            connection.execute(
+                text(
+                    "TRUNCATE app.chat_messages, app.chat_conversations, app.mood_checkins, "
+                    "app.knowledge_chunks, app.knowledge_sources, app.users CASCADE"
+                )
+            )

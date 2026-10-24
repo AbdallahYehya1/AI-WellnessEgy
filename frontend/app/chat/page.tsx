@@ -14,6 +14,7 @@ import {
   openConversation,
   renameChat,
   sendChat,
+  setContextEnabled,
   setHistoryEnabled,
 } from "@/lib/chat/actions";
 import { CHAT_PATH } from "@/lib/chat/limits";
@@ -38,6 +39,7 @@ const ACTIONS: ChatActions = {
   deleteChat,
   deleteAllChats,
   setHistoryEnabled,
+  setContextEnabled,
 };
 
 /**
@@ -45,7 +47,11 @@ const ACTIONS: ChatActions = {
  * is made by the backend. Returning users get only their conversation list here; a
  * conversation's messages load when they open it.
  */
-export default async function ChatPage() {
+type Props = { searchParams?: Promise<Record<string, string | string[] | undefined>> };
+
+const DEFAULT_ASSISTANT = "emotional";
+
+export default async function ChatPage({ searchParams }: Props = {}) {
   const { locale, t } = await getMessages();
   const session = await getVerifiedSession();
   if (!session) redirect(`/sign-in?next=${CHAT_PATH}`);
@@ -80,11 +86,33 @@ export default async function ChatPage() {
     );
   }
 
+  const params = (await searchParams) ?? {};
+  const requested = typeof params.assistant === "string" ? params.assistant : DEFAULT_ASSISTANT;
+  const assistants = data.assistants ?? [];
+  const ready = assistants.filter((a) => a.status === "ready");
+  // An unknown or not-yet-ready assistant falls back to the default (never a broken page).
+  const current = ready.find((a) => a.assistant_id === requested) ?? ready.find((a) => a.assistant_id === DEFAULT_ASSISTANT);
+  const assistantId = current?.assistant_id ?? DEFAULT_ASSISTANT;
+
   let initialConversations: ConversationPage | null = null;
   if (data.history?.available) {
-    const list = await listConversations(session.accessToken);
+    const list = await listConversations(session.accessToken, { assistant: current ? assistantId : undefined });
     initialConversations = list.ok ? list.data : null;
   }
+  // Every assistant (Emotional Wellbeing included) takes natural questions; the
+  // seven-topic list remains only for servers without assistants.
+  const followUps = (data.demo_prompts ?? []).filter((p) => p.follow_up);
+  const suggestions = !current
+    ? (data.demo_prompts ?? [])
+    : [
+        ...(locale === "ar" ? current.starters_ar : current.starters_en).map((text, i) => ({
+          prompt_id: `${assistantId}-${i}`,
+          en: text,
+          ar: text,
+          follow_up: false,
+        })),
+        ...followUps,
+      ];
 
   const modeNote =
     data.generator === "model"
@@ -92,13 +120,29 @@ export default async function ChatPage() {
       : data.test_only_policy || data.generator
         ? c.testMode
         : null;
+  const modeNoteShared = data.generator === "model" ? c.modelModeShared.replace("{model}", data.model ?? "AI") : modeNote;
 
   return (
     <AppShell current="chat" locale={locale} t={t} chatEnabled workspace>
       <ChatWorkspace
         actions={ACTIONS}
         locale={locale}
-        suggestions={(data.demo_prompts ?? []).map((p) => ({
+        key={assistantId}
+        assistant={
+          current
+            ? {
+                id: current.assistant_id,
+                name: locale === "ar" ? current.name_ar : current.name_en,
+                description: locale === "ar" ? current.description_ar : current.description_en,
+                icon: current.icon,
+              }
+            : null
+        }
+        assistantNames={Object.fromEntries(
+          ready.map((a) => [a.assistant_id, locale === "ar" ? a.name_ar : a.name_en]),
+        )}
+        showTopics={!current}
+        suggestions={suggestions.map((p) => ({
           id: p.prompt_id,
           text: locale === "ar" ? p.ar : p.en,
           followUp: p.follow_up,
@@ -106,8 +150,10 @@ export default async function ChatPage() {
         topics={data.supported_topics ?? []}
         typedInput={data.typed_input ?? "topics"}
         modeNote={modeNote}
+        modeNoteShared={modeNoteShared}
         history={data.history ?? null}
         initialConversations={initialConversations}
+        context={data.context ?? null}
       />
     </AppShell>
   );

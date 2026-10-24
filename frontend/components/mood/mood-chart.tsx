@@ -16,7 +16,10 @@ const SCORES = [1, 2, 3, 4, 5];
  */
 export function MoodChart({ checkins, locale = "en" }: { checkins: MoodCheckin[]; locale?: Locale }) {
   const t = messages[locale].history;
-  const points = [...checkins].reverse();
+  // Legacy 1-5 check-ins only: reflections have feelings, not a score.
+  const points = [...checkins]
+    .filter((c): c is MoodCheckin & { mood_score: number } => c.mood_score !== null)
+    .reverse();
   if (points.length < 2) return null;
 
   const plotW = WIDTH - PAD.left - PAD.right;
