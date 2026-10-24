@@ -392,63 +392,82 @@ API already answers publicly and authenticates every data endpoint itself.
 | No secrets in the browser | Built JavaScript contains only `NEXT_PUBLIC_SUPABASE_URL` and the publishable key |
 | Previews still protected | A preview deployment URL still redirects to Vercel login |
 
-## 15. Specialised assistants and Daily Reflection (migration 0006) — needs founder approval
+## 15. Ten assistants, provider context and Daily Reflection (migration 0006) — needs founder approval
 
-Nothing here runs until the founder approves it. **Order matters:** the new backend code
-reads the 0006 columns, so migrate and re-ingest *before* merging. The current production
-code keeps working on a 0006 database, because every new column has a default or is
-nullable.
+Nothing here runs until the founder approves it. **Order matters:** the new backend reads
+the 0006 columns, so migrate, apply grants and ingest *before* merging. The current
+production code keeps working on a 0006 database, because every new column has a default
+or is nullable.
 
 ### What changes
 
 | Change | Detail |
 |---|---|
-| `knowledge_sources.domains` | text[] (checked against the 10 assistant ids, GIN index). Backfill: every existing source becomes `emotional`. CDC activity, CDC sleep and NIMH caring also get a second domain. |
+| `knowledge_sources.domains` | text[] (checked against the 10 assistant ids, GIN index). Backfill: existing sources become `emotional`; CDC activity and sleep and NIMH caring get a second domain. |
 | `chat_conversations.assistant_id` | varchar(40), default `emotional`. Existing chats become Emotional Wellbeing chats. |
-| `chat_messages.query_enc` | Nullable. Holds the encrypted composed question for new assistant turns. |
-| `mood_checkins` | `mood_score` becomes nullable. New columns: `emotions`, `factors`, `note_enc` (unused), `entry_version` (default 1). Checks keep v1 rows score-only and require v2 rows to have at least one feeling. Existing rows are unchanged. |
-| Role grants | Unchanged: the 0005 grant set covers 0006. |
-| Knowledge | 9 new sources: relationships, career, planning, finance. |
+| `chat_messages.query_enc` | Nullable. The encrypted text the provider received for that turn. |
+| `mood_checkins` | `mood_score` nullable; `emotions`, `factors`, `note_enc` (unused), `entry_version` (default 1). Old rows are unchanged. |
+| `users.chat_context_consent_version` / `_consented_at` | Nullable. NULL means not opted in to provider context (D-59), which is everyone at first. |
+| `chat_rate_events.tokens` | Nullable integer, at least 0. Feeds the shared token budget. |
+| Role grants (`app_backend`) | The 0005 set plus **`UPDATE (tokens)` on `chat_rate_events`** (column only). Must be re-applied. |
+| Knowledge | 64 licence-checked sources (598 passages). Production today has the original curated set; expect about 54 `new` and 10 `unchanged`. |
 
-### Rehearsal (done 2026-10-24, local Docker stack)
+### Backend environment (Vercel backend project, Production)
 
-1. Downgraded a database to 0005 and inserted legacy rows: two 1–5 check-ins (one with a
-   note), an encrypted conversation and message, and two knowledge sources.
-2. Upgraded to 0006. Fingerprints (md5) of the mood rows and message ciphertext were
+| Variable | Value | Notes |
+|---|---|---|
+| `CHAT_CONTEXT_MODE` | `minimized` | Only if the founder approves D-59. Users still have to opt in one by one. Leave unset to keep everyone on `structured`. |
+| `CHAT_DAILY_TOKEN_BUDGET` | `150000` | Shared across all assistants. Below Groq's published 200K tokens per day for gpt-oss-20b. |
+| `CHAT_USER_DAILY_LIMIT` | `25` (default) | Per account per 24 hours. |
+| `CHAT_PROVIDER_DAILY_LIMIT` | `60` (current) | Global request cap; unchanged. |
+
+Groq: enable **Zero Data Retention** in the Groq console (Data Controls) before turning on
+`minimized`. Only the account owner can do this.
+
+### Rehearsal (done 2026-10-24, local Docker stack, final migration)
+
+1. Downgraded to 0005 and inserted legacy rows: two 1–5 check-ins (one with a note), an
+   encrypted conversation and message, a rate event, and a user with saved history on.
+2. Upgraded to 0006. The md5 fingerprints of the mood rows and message ciphertext were
    identical before and after.
-3. Old rows became `entry_version` 1, the conversation became `emotional`, and the domain
-   backfill matched.
-4. All 19 sources were then ingested and the full e2e suite passed (34 tests).
+3. Defaults were correct: `entry_version` 1, conversation `emotional`, context consent
+   NULL, saved-history opt-in kept, tokens NULL.
+4. All 64 sources were ingested and the full e2e suite passed (35 tests), including all ten
+   assistants answering and the context-consent flow.
+5. Role grants: `tests/test_backend_role.py` applies the 0006 set to a real Postgres and
+   checks the role can UPDATE `tokens` but not `user_id`.
 
 ### Steps (owner connection in `backend/.env`, from `backend/`)
 
 1. **Backup.** Supabase Dashboard → Database → Backups: confirm today's daily backup. Also
-   `pg_dump --schema-only --schema=app "$DATABASE_URL" > app-schema-before-0006.sql`.
+   `pg_dump --schema-only --schema=app "$DATABASE_URL" > app-schema-before-0006.sql`, plus
+   row counts of `users`, `mood_checkins`, `chat_conversations` and `chat_messages` for the
+   after-check.
 2. **Check the target:** `python -m app.ops.check_migration_target`. Expect
    `at_revision_0005`.
 3. **Migrate:** `alembic upgrade head`, then rerun step 2. Expect `at_revision_0006` and
-   `tables_match_revision: true`.
-4. **Verify the role:** `python -m app.ops.backend_role --verify`. Expect `problems: []`.
-   No grant change is needed.
-5. **Re-ingest the knowledge:** `python -m app.knowledge.ingest app/knowledge/sources`.
-   Expect 9 `new` and 10 `unchanged`. Unchanged sources still get their `domains`
-   refreshed.
-6. **Merge** the PR. Vercel deploys both projects.
-7. **Check** with a test account:
-   - `/chat/config` lists ten assistants, three of them `ready`;
-   - `/assistants` opens Career & Work, and a work-stress question cites NIOSH or NHS;
-   - `/check-in` saves a reflection;
-   - `/history` still shows old check-ins.
+   `tables_match_revision: true`. Compare the row counts.
+4. **Grants:** `python -m app.ops.backend_role --print-sql` (review it), then
+   `python -m app.ops.backend_role --grants-only` (keeps the password). Then
+   `python -m app.ops.backend_role --verify`: expect `grant_set: 0006`,
+   `column_updates: {tokens: true, user_id: false}` and `problems: []`.
+5. **Ingest:** `python -m app.knowledge.ingest app/knowledge/sources`. Expect 64 documents.
+6. **Environment:** set the variables above, as decided.
+7. **Merge** the PR. Vercel deploys both projects. Confirm both deployments show the
+   merge commit.
+8. **Smoke test** with the authorized test accounts:
+   - each of the ten assistants answers a question with sources and a follow-up;
+   - saved history works per assistant;
+   - another account can't see the chats;
+   - Daily Reflection saves and insights load;
+   - old 1–5 check-ins and old chats are still there.
 
 ### Rollback
 
 - **Code only:** revert the merge. The old code runs on a 0006 database.
-- **Schema:** `alembic downgrade 0005`. This **deletes Daily Reflection rows**
-  (`entry_version` 2) and assistant ids, and makes `mood_score` required again. Old
-  check-ins and chats are kept.
-
-### What is sent to Groq
-
-Unchanged in kind: composed questions, public passages and earlier model replies, never
-the user's own sentence (D-56). Turning on "contextual mode", which sends the user's
-redacted words, is a separate decision that needs approval.
+- **Provider context only:** unset `CHAT_CONTEXT_MODE`. Everyone returns to `structured`
+  at the next message.
+- **Schema:** `alembic downgrade 0005`. This **deletes Daily Reflection rows**, assistant
+  ids, context consents and token counts, and makes `mood_score` required again. Then run
+  `python -m app.ops.backend_role --grants-only` for the 0005 grants. Old check-ins and
+  chats are kept.

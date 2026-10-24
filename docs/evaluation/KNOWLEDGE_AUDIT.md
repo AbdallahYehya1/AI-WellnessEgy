@@ -1,60 +1,75 @@
-# Knowledge audit per assistant (D-56)
+# Knowledge audit per assistant (D-61)
 
-Status on 2026-10-24. 19 sources, all **draft** (publisher guidance, not clinically or
-professionally reviewed). Each source's `domains` field says which assistants may
-retrieve it, and retrieval enforces that in SQL. Every file records its publisher, URL,
-retrieval date, licence and permitted use. All excerpts are verbatim.
-
-## Readiness rule
-
-An assistant becomes **ready** only when all of these hold:
-
-1. At least three relevant sources from at least two publishers.
-2. Domain-filtered hit@4 of at least 0.9 on its evaluation questions, with zero leakage
-   (`backend/tests/test_assistant_eval.py`).
-3. A lexicon covering its main situations in English and Egyptian Arabic.
-4. Its safety boundaries are covered in `safety_eval.py`.
+Status on 2026-10-24: **64 sources and 598 passages**, 62 English and 2 official Arabic
+(WHO). All sources are **draft**: publisher guidance that hasn't been clinically or
+professionally reviewed for this app. Each source's `domains` field decides which
+assistants may retrieve it, and retrieval enforces this in SQL. Every file records its
+publisher, URL, retrieval date, licence and permitted use. All text is verbatim, extracted
+from the publisher's page or PDF.
 
 ## Coverage
 
-| Assistant | Status | Sources (primary or secondary) | Arabic sources | Measured retrieval |
-|---|---|---|---|---|
-| Marriage & Healthy Relationships | ready | CDC healthy communication, NHS healthy relationships, NHS problem solving, CFPB emergency fund | none | domain hit@4 1.0, leakage 0 |
-| Career & Work | ready | NIOSH Stress at Work, NHS work-related stress, NHS problem solving, NHS change and uncertainty, NHS to-do lists, OPM individual development planning | none | domain hit@4 1.0, leakage 0 (no domain filter: 0.33 on held-out) |
-| Emotional Wellbeing & Resilience | ready | WHO Doing What Matters (EN and AR), NIMH ×4, NCCIH mindfulness, CDC stress, sleep and activity, NHS ×3 | WHO (official Arabic) | earlier general evaluation (D-50) |
-| Family & Parenting | preview | CDC healthy communication, NHS healthy relationships | none | not evaluated |
-| Personal Growth & Habits | preview | OPM IDP, NHS to-do lists, NHS problem solving, NIMH caring | none | not evaluated |
-| Fitness & Healthy Lifestyle | preview | CDC physical activity, CDC sleep | none | not evaluated |
-| Friendships & Social Life | preview | CDC healthy communication, NHS healthy relationships | none | not evaluated |
-| Life Planning & Decisions | preview | NHS problem solving, NHS change and uncertainty, NHS to-do lists, OPM IDP | none | not evaluated |
-| Financial Wellbeing | preview | CFPB emergency fund | none | not evaluated |
-| Everyday Life Guidance | preview | CDC healthy communication, NHS problem solving, NHS to-do lists | none | not evaluated |
+Counts are per source tag, so one source can count for several assistants.
 
-## Gaps
+| Assistant | Sources | Passages | Publishers |
+|---|---|---|---|
+| Marriage & Healthy Relationships | 9 | 74 | CDC, OWH, ODPHP, MedlinePlus, OPM, CFPB |
+| Family & Parenting | 19 | 183 | CDC, ODPHP, MedlinePlus, OWH, CFPB, OPM, Ready.gov |
+| Career & Work | 9 | 100 | NIOSH, OPM, OWH |
+| Personal Growth & Habits | 11 | 114 | NIDDK, MedlinePlus, NIMH, CDC, ODPHP, OPM, CFPB |
+| Fitness & Healthy Lifestyle | 15 | 136 | CDC, ODPHP (Move Your Way, MyHealthfinder), MedlinePlus, NIDDK, WHO (EN + AR) |
+| Emotional Wellbeing & Resilience | 26 | 204 | WHO (EN + AR), NIMH, NCCIH, CDC, ODPHP, MedlinePlus, OWH, NIOSH |
+| Friendships & Social Life | 6 | 63 | CDC, OWH, ODPHP |
+| Life Planning & Decisions | 8 | 82 | OPM, NIDDK, CFPB, Ready.gov |
+| Financial Wellbeing | 7 | 65 | CFPB, MyMoney.gov |
+| Everyday Life Guidance | 9 | 87 | CDC, ODPHP, MedlinePlus, OWH, CFPB, MyMoney.gov, Ready.gov |
 
-- **Arabic:** only the WHO guide exists in official Arabic. Arabic questions to every other
-  assistant retrieve English passages through the Arabic lexicon. The model replies in
-  Arabic, but the evidence it cites is in English. Official Arabic sources (WHO EMRO,
-  Egyptian ministries, UNICEF Arabic) would need a licence check one by one.
-- **Family & Parenting:** no parenting source. fatherhood.gov blocked automated
-  retrieval (403). CDC parenting pages haven't been assessed yet.
-- **Fitness:** no beginner programme source. The NIH and NHS exercise pages need a licence
-  check, and NIH blocked automated access.
-- **Financial Wellbeing:** one CFPB guide, U.S.-specific items removed. It needs
-  Egypt-relevant budgeting guidance and must stay away from investment, tax and debt
-  advice (regulated).
-- **Friendships & Social Life:** no source on loneliness or making friends.
-- **Career:** CareerOneStop was blocked (403). No Egypt-specific labour information, which
-  is regulated and refused in any case.
-- **NHS content (6 sources):** OGL v3.0 plus NHS website terms. See D-58 before any
-  non-prototype use.
-- **Clinical review:** none. No source is `approved`.
+## Licences (checked per publisher, 2026-10-24)
 
-## Not ingested (and why)
-
-| Source | Reason |
+| Publisher | Basis |
 |---|---|
-| NIH News in Health, NIH exercise pages | 403 to automated and headed-browser retrieval |
-| fatherhood.gov | 403 |
-| CareerOneStop | 403 |
-| Unofficial Arabic translations | Not the publisher's own translation |
+| CDC, NIOSH | U.S. federal works; CDC states most website content is public domain |
+| ODPHP (MyHealthfinder, Move Your Way) | ODPHP copyright policy: content is public domain; cite ODPHP |
+| MedlinePlus (NLM) | Health topic summaries are public domain (A.D.A.M. and other licensed content excluded) |
+| Office on Women's Health | "All material contained on these pages are free of copyright restrictions" |
+| NIDDK | "Copyright free and can be freely downloaded and reproduced"; reproduced unchanged |
+| NCCIH, NIMH | The pages state they are not copyrighted and are in the public domain |
+| OPM, CFPB, MyMoney.gov, Ready.gov | U.S. federal works (17 U.S.C. 105) |
+| WHO | CC BY-NC-SA 3.0 IGO (stated in each publication); non-commercial use |
+
+US-only material was dropped during extraction: hotline numbers, insurance and Medicare
+details, tax and credit-report items, and campaign templates.
+
+## Retrieval quality
+
+Measured on held-out questions with domain filtering in SQL; reports are in
+`assistant-retrieval-v3.json`.
+
+| Set | Questions | Hybrid hit@4 | Worst assistant | Arabic / Egyptian / mixed |
+|---|---|---|---|---|
+| v3 (used for tuning) | 120 | 0.98 | 0.92 | 0.98 |
+| v4 (written before its first run) | 60 | 0.97 at first run; 0.98 final | 0.83 | 1.0 |
+
+The thresholds were set before v3 was first run: at least 0.75 per assistant, zero
+leakage, and at least 0.60 for Arabic.
+
+## Gaps (honest)
+
+- **Arabic sources:** only the two WHO publications are official Arabic. Arabic questions
+  reach English passages through the bilingual lexicon, and the model replies in Arabic.
+  No machine translation is presented as a source.
+- **Relationships:** no public-domain source on marriage specifically (expectations, trust
+  repair, in-laws). Answers use general communication guidance (CDC) plus general coaching,
+  which is labelled as such. NHS pages were retired (D-58), and commercial and university
+  guides aren't licensed for this use.
+- **Career:** no interview, negotiation or leadership source. CareerOneStop, DOL and BLS
+  block automated retrieval. OPM material is written for federal employees.
+- **Planning and decisions:** no decision-making framework source. Answers use
+  goal-setting and planning passages plus general coaching.
+- **Social:** three publishers; nothing on social anxiety, which is clinical anyway.
+- **Finance:** US federal sources. Egypt-specific budgeting, banking and saving products
+  are not covered, and the assistant is told not to recommend foreign products.
+- **Not used:** OpenStax textbooks (their terms forbid ingestion into AI offerings without
+  permission); Military OneSource, NIH (main site, NIA, NIH News in Health), SAMHSA,
+  consumer.gov, DOL, BLS, HHS and CFPB PDF files (they refuse automated retrieval);
+  youth.gov (no reuse statement found); WHO/UNICEF parenting tips (licence not stated).

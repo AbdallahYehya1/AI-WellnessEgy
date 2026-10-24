@@ -744,7 +744,7 @@ Limits:
 
 ## M. Raised in the assistants and Daily Reflection upgrade (2026-10-23)
 
-### D-56. Ten specialised assistants on one pipeline — DECIDED (engineering); 3 ready, 7 preview
+### D-56. Ten specialised assistants on one pipeline — DECIDED (engineering); all ten ready since D-61
 
 **One pipeline, many assistants.** The registry (`backend/app/assistants/registry.py`)
 defines ten assistants. They share one database, safety layer, retrieval code, history
@@ -753,8 +753,9 @@ instructions, starters and a `ready` or `preview` status.
 
 - **Ready:** Marriage & Healthy Relationships (`relationships`), Career & Work (`career`)
   and Emotional Wellbeing & Resilience (`emotional`, the legacy chat).
-- **Preview:** family, growth, fitness, social, planning, finance and everyday. Each is
-  listed as "Coming soon" and can't be opened. The API refuses them with
+- **Update 2026-10-24 (D-61):** all ten are ready. The text below describes the first
+  release. Then, family, growth, fitness, social, planning, finance and everyday were
+  previews, listed as "Coming soon" and unable to be opened. The API refuses them with
   `403 assistant_unavailable`, and the frontend falls back to the default assistant.
   An assistant becomes ready only when its knowledge base passes the per-assistant
   evaluation (`docs/evaluation/KNOWLEDGE_AUDIT.md`).
@@ -804,8 +805,8 @@ Groq logs only token counts (`chat_provider_usage`). The composed question is st
 encrypted with the turn (`chat_messages.query_enc`, purpose `query`) so a continued chat
 keeps its context without re-reading the user's words.
 
-**Contextual mode is gated and not implemented.** It would send the user's own
-(redacted) words to Groq. That is a new sensitive-data transfer. It needs explicit founder
+**Contextual mode: superseded by D-59** (implemented, off by default, per-user opt-in).
+The original text follows. Contextual mode would send the user's own (redacted) words to Groq. That is a new sensitive-data transfer. It needs explicit founder
 approval, a privacy review (Egypt PDPL), confirmed provider retention terms (Groq
 zero-data-retention is unconfirmed) and a redaction evaluation. Implementing the
 assistants doesn't turn it on.
@@ -866,10 +867,116 @@ Lists are filtered per assistant. Continuing a chat with a different assistant a
   factors and from anxious, sad or frustrated. The link opens a fresh chat. Nothing from
   the reflection is put in the URL or sent to the assistant.
 
-### D-58. NHS website content terms — OPEN (legal)
+### D-58. NHS website content terms — RESOLVED 2026-10-24: NHS sources retired
 
 Six sources are verbatim excerpts from NHS Every Mind Matters pages (Open Government
 Licence v3.0). The NHS website terms also ask syndicators to accept a content licensing
 agreement and forbid attributing adapted text to the NHS. The excerpts are verbatim and
 attributed, which is acceptable for a prototype. **Before any non-prototype use**, confirm
 whether the agreement applies, or replace these sources.
+
+**Resolution:** the excerpts were removed before any production ingestion and replaced by
+public-domain US federal sources (D-61). The NHS pages were never in production.
+
+### D-59. Privacy-minimised provider context — DECIDED (engineering); production use needs founder approval
+
+**Why:** structured mode re-expresses a message as a generic topic question, so the model
+loses the situation ("my wife feels neglected because I work late to save for our
+future"). The answers were generic.
+
+**Three modes** (`CHAT_CONTEXT_MODE`; code in `app/assistants/context.py`):
+
+| Mode | What Groq receives | Who |
+|---|---|---|
+| `structured` (default) | A question composed from recognised subtopics. No user words. | Everyone, and anyone who hasn't opted in |
+| `minimized` | The user's message with identifiers removed, plus recognised themes and up to 4 earlier turns re-derived the same way | Only users who accepted notice `chat-context-v1` |
+| `original` | The user's own words | Only if `CHAT_ORIGINAL_WORDING_REVIEW` names a completed privacy/legal review, and the user opted in. **Not enabled.** |
+
+- **Redaction:** e-mail addresses, links, handles, numbers of 6+ digits (including
+  Arabic-Indic), names introduced by a relationship word ("my wife Sara"), "my name is",
+  "اسمها", and street names. It can miss names without such cues, places and employers;
+  the consent notice says so. Short numbers (ages, hours) stay because they carry meaning.
+- **Consent:** `PUT /chat/context {enabled, consent_version}` stores
+  `users.chat_context_consent_version`. The notice states:
+  - what is sent;
+  - that removal can miss things;
+  - the provider (Groq), the model, and processing in the United States;
+  - Groq retention (up to 30 days for abuse/reliability unless Zero Data Retention is on);
+  - why it's needed, and that it can be stopped at any time.
+  Withdrawal takes effect at the next message: earlier turns are re-derived in structured
+  form.
+- **Never sent, in any mode:** crisis, safety and medical messages; account data; Daily
+  Reflections; other conversations.
+- **Transparency:** each opted-in turn shows "Shared with the AI (details removed): …".
+  The mode note in the chat changes too.
+- **Retrieval uses the user's (redacted) words in every mode.** Retrieval runs in our own
+  database, so nothing extra leaves the backend.
+- **Budget:** `CHAT_DAILY_TOKEN_BUDGET` (default 150,000 tokens per 24 hours, all users and
+  assistants). It is recorded per request in `chat_rate_events.tokens` (column-level
+  UPDATE grant only). `CHAT_USER_DAILY_LIMIT` defaults to 25.
+- **Open:** legal and privacy review (Egypt PDPL) of sending minimised personal
+  descriptions to a US provider; enabling Groq Zero Data Retention (a console setting
+  only the account owner can change).
+
+### D-60. Safety beyond keyword lists — DECIDED (engineering); not clinically validated
+
+- **Separate from topic recognition.** Pattern screens run before anything else:
+  - suicide and self-harm, including indirect phrasing;
+  - physical violence: verb + "me/my children", excluding "beat me at chess";
+  - sexual violence and threats;
+  - coercive control: phone and message monitoring, "decides who I can talk to";
+  - danger to others;
+  - medical emergencies;
+  - prompt injection.
+  Everyday idioms ("my boss will kill me if I'm late", "this deadline is killing me")
+  are kept as regression cases.
+- **Second layer:** the model returns `risk` (none, self_harm, abuse, medical_emergency,
+  danger). A risky reading replaces the reply with the matching support response.
+- **Supportive responses, not refusals:**
+  - crisis → ambulance 123 and the Ministry of Health mental health line 16328 (24 h);
+  - harm, abuse or control → police 122 and ambulance 123, the National Council for
+    Women's complaints office 15115, and the Child Helpline 16000, plus up to 3 vetted
+    sources (OWH, ODPHP, CDC, MedlinePlus) retrieved without the model;
+  - medical → 123 or emergency department;
+  - danger to others → 122 and 16328.
+  Numbers were corroborated by Egyptian state media (Maspero 2026 for 16328; Al-Ahram
+  for 15115) and Child Helpline International (16000). Re-verify them before any public
+  launch.
+- **Abuse pages stay out of ordinary advice.** Unless the message has safety cues, they
+  are reached only through the safety notice.
+- **Measured** (each set written before its first run; current state, all sets):
+
+  | Set | False refusals | Missed risks |
+  |---|---|---|
+  | v1 | 0/27 | 3/21 |
+  | v2 | 0/10 | 9/12 |
+  | v3 | 1/10 | 1/12 |
+  | v4 (new categories; thresholds 0.10/0.10 set beforehand) | 1/20 | 2/20 |
+  | All sets now | 0/74 | 0/65 |
+
+  Still keyword and pattern based, so new phrasing will slip through. Clinical review of
+  the lists and the support text is still required (D-13).
+
+### D-61. Ten assistants with licensed knowledge — DECIDED (engineering)
+
+- **All ten assistants are ready.** Emotional Wellbeing runs the assistant pipeline when
+  the client names it (the web app always does); old clients keep the seven-topic chat.
+- **Knowledge:** 64 sources, 598 passages, all verbatim and licence-checked (see
+  `docs/evaluation/KNOWLEDGE_AUDIT.md`).
+- **Retrieval:** hybrid. Subtopic terms and the message's words are searched separately,
+  both filtered to the assistant's domains in SQL, then merged with reciprocal-rank
+  fusion. Semantic embeddings were not adopted: there is no query-time embedding service
+  within the existing free infrastructure, and adding one would mean a new data processor.
+- **Evaluation:** thresholds were fixed before the first run (at least 0.75 per assistant,
+  zero leakage, at least 0.60 Arabic).
+
+  | Set | Status | Hybrid hit@4 | Worst assistant | Arabic / Egyptian / mixed |
+  |---|---|---|---|---|
+  | v3 (120) | tuned | 0.98 | 0.92 | 0.98 |
+  | v4 (60) | held-out | 0.97 first run; 0.98 final | 0.83 | 1.0 |
+
+- **Answers:** evidence-cited facts plus clearly labelled general coaching. Uncited replies
+  are shown as "General guidance". Coaching may answer when no passage matches.
+- **Not measured yet:** answer faithfulness and citation support with the real model, and
+  multi-turn quality with Groq. These need production smoke tests after deployment.
+

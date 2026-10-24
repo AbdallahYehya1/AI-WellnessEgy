@@ -98,6 +98,8 @@ which assistants may retrieve it; retrieval enforces this in SQL.
 11. cdc-healthy-communication-en.md  [relationships, family, social, everyday]
     CDC, Tips for Effective & Healthy Communication (Dating Matters), 2015.
     https://stacks.cdc.gov/view/cdc/129149  U.S. federal work. Verbatim excerpts.
+12-16. RETIRED 2026-10-24 (D-58): the NHS Every Mind Matters excerpts below were removed
+    before any production ingestion; the NHS terms could not be confirmed for this use.
 12. nhs-healthy-relationships-en.md  [relationships, social, family, emotional]
 13. nhs-work-related-stress-en.md    [career, emotional]
 14. nhs-problem-solving-en.md        [planning, career, everyday, growth, relationships]
@@ -125,3 +127,165 @@ NOT INGESTED (2026-10-23), and why:
 - No official Arabic editions exist for any of the sources above; Arabic and Egyptian
   Arabic questions retrieve these English passages through the bilingual lexicon and are
   answered in Arabic by the model.
+
+ADDED 2026-10-24 FOR ALL TEN ASSISTANTS (D-61). Verbatim page or PDF text; licence basis
+per publisher in docs/evaluation/KNOWLEDGE_AUDIT.md. US-only items (hotlines, insurance,
+tax, credit reports, campaign templates) were dropped during extraction.
+
+20. cdc-caregiving-caring-for-yourself-en.md  [family, emotional]
+    U.S. Centers for Disease Control and Prevention (CDC): Caring for Yourself When Caring for Others
+    https://www.cdc.gov/caregiving/caring-for-yourself/index.html
+21. cdc-caring-for-mental-health-en.md  [emotional, growth]
+    U.S. Centers for Disease Control and Prevention (CDC): Caring for Your Mental Health
+    https://www.cdc.gov/mental-health/caring/index.html
+22. cdc-healthy-eating-tips-en.md  [fitness]
+    U.S. Centers for Disease Control and Prevention (CDC): Healthy Eating Tips
+    https://www.cdc.gov/nutrition/features/healthy-eating-tips.html
+23. cdc-intimate-partner-violence-about-en.md  [relationships]
+    U.S. Centers for Disease Control and Prevention (CDC): About Intimate Partner Violence
+    https://www.cdc.gov/intimate-partner-violence/about/index.html
+24. cdc-parenting-connecting-communicating-en.md  [family]
+    U.S. Centers for Disease Control and Prevention (CDC): Essentials for Parenting: Connecting and Communicating; Understanding the Early Years
+    https://www.cdc.gov/parenting-toddlers/communication/index.html
+25. cdc-parenting-noticing-naming-emotions-en.md  [family, emotional]
+    U.S. Centers for Disease Control and Prevention (CDC): Essentials for Parenting: Noticing and Naming Emotions
+    https://www.cdc.gov/parenting-toddlers/noticing-and-naming/emotion-coaching.html
+26. cdc-parenting-routines-behavior-en.md  [family]
+    U.S. Centers for Disease Control and Prevention (CDC): Essentials for Parenting: Relying on Routines and Rules; Responding to Behavior
+    https://www.cdc.gov/parenting-toddlers/structure-rules/index.html
+27. cdc-physical-activity-adults-en.md  [fitness]
+    U.S. Centers for Disease Control and Prevention (CDC): Physical Activity for Adults: Guidelines, Adding Activity, Measuring Intensity
+    https://www.cdc.gov/physical-activity-basics/guidelines/adults.html
+28. cdc-positive-parenting-tips-en.md  [family]
+    U.S. Centers for Disease Control and Prevention (CDC): Positive Parenting Tips: Preschoolers (3-5) and Young Teens (12-14)
+    https://www.cdc.gov/child-development/positive-parenting-tips/index.html
+29. cdc-social-connectedness-en.md  [social, emotional]
+    U.S. Centers for Disease Control and Prevention (CDC): About Social Connection; How to Improve Social Connectedness
+    https://www.cdc.gov/social-connectedness/about/index.html
+30. cfpb-budgeting-en.md  [finance, everyday, planning]
+    U.S. Consumer Financial Protection Bureau (CFPB): Budgeting: How to Create a Budget and Stick with It
+    https://www.consumerfinance.gov/archive/blog/budgeting-how-to-create-a-budget-and-stick-with-it/
+31. cfpb-managing-spending-en.md  [finance, planning]
+    U.S. Consumer Financial Protection Bureau (CFPB): Managing Your Spending to Achieve Your Goals
+    https://www.consumerfinance.gov/archive/blog/managing-your-spending-achieve-your-goals/
+32. cfpb-money-as-you-grow-en.md  [finance, family]
+    U.S. Consumer Financial Protection Bureau (CFPB): Money as You Grow
+    https://www.consumerfinance.gov/consumer-tools/money-as-you-grow/
+33. cfpb-money-smart-tips-en.md  [finance, everyday]
+    U.S. Consumer Financial Protection Bureau (CFPB): Get Money Smart: Tips to Improve Your Financial Well-Being
+    https://www.consumerfinance.gov/archive/blog/get-money-smart-25-tips-improve-your-financial-well-being/
+34. cfpb-savings-habit-en.md  [finance, planning, growth]
+    U.S. Consumer Financial Protection Bureau (CFPB): Set a Goal and Start a Savings Habit; Six Ways to Save This Year
+    https://www.consumerfinance.gov/archive/blog/set-a-goal-and-start-a-savings-habit/
+35. medlineplus-caregivers-en.md  [family, emotional]
+    MedlinePlus, U.S. National Library of Medicine (NLM): Caregivers (health topic summary)
+    https://medlineplus.gov/caregivers.html
+36. medlineplus-domestic-violence-en.md  [relationships, family]
+    MedlinePlus, U.S. National Library of Medicine (NLM): Domestic Violence (health topic summary)
+    https://medlineplus.gov/domesticviolence.html
+37. medlineplus-exercise-en.md  [fitness]
+    MedlinePlus, U.S. National Library of Medicine (NLM): Exercise and Physical Fitness; Exercise for Older Adults (health topic summaries)
+    https://medlineplus.gov/exerciseandphysicalfitness.html
+38. medlineplus-healthy-living-en.md  [growth, fitness, everyday]
+    MedlinePlus, U.S. National Library of Medicine (NLM): Healthy Living (health topic summary)
+    https://medlineplus.gov/healthyliving.html
+39. medlineplus-improve-mental-health-en.md  [emotional, growth]
+    MedlinePlus, U.S. National Library of Medicine (NLM): How to Improve Mental Health (health topic summary)
+    https://medlineplus.gov/howtoimprovementalhealth.html
+40. medlineplus-nutrition-en.md  [fitness]
+    MedlinePlus, U.S. National Library of Medicine (NLM): Nutrition (health topic summary)
+    https://medlineplus.gov/nutrition.html
+41. medlineplus-parenting-en.md  [family]
+    MedlinePlus, U.S. National Library of Medicine (NLM): Parenting (health topic summary)
+    https://medlineplus.gov/parenting.html
+42. medlineplus-stress-en.md  [emotional]
+    MedlinePlus, U.S. National Library of Medicine (NLM): Stress (health topic summary)
+    https://medlineplus.gov/stress.html
+43. mymoney-gov-five-principles-en.md  [finance, everyday]
+    MyMoney.gov (U.S. Financial Literacy and Education Commission): MyMoney Five: Spend and Borrow principles
+    https://www.mymoney.gov/spend
+44. nccih-relaxation-techniques-en.md  [emotional]
+    National Center for Complementary and Integrative Health (NCCIH), NIH: Relaxation Techniques: What You Need To Know
+    https://www.nccih.nih.gov/health/relaxation-techniques-what-you-need-to-know
+45. niddk-changing-habits-en.md  [growth, fitness, planning]
+    National Institute of Diabetes and Digestive and Kidney Diseases (NIDDK), NIH: Changing Your Habits for Better Health
+    https://www.niddk.nih.gov/health-information/diet-nutrition/changing-habits-better-health
+46. niddk-tips-to-get-active-en.md  [fitness, growth]
+    National Institute of Diabetes and Digestive and Kidney Diseases (NIDDK), NIH: Tips to Help You Get Active
+    https://www.niddk.nih.gov/health-information/weight-management/tips-get-active
+47. niosh-stress-at-work-page-en.md  [career, emotional]
+    National Institute for Occupational Safety and Health (NIOSH), CDC: About Stress at Work
+    https://www.cdc.gov/niosh/stress/about/index.html
+48. niosh-total-worker-health-en.md  [career]
+    National Institute for Occupational Safety and Health (NIOSH), CDC: About Total Worker Health
+    https://www.cdc.gov/niosh/twh/about/index.html
+49. odphp-caregiver-support-en.md  [family, emotional]
+    Office of Disease Prevention and Health Promotion (ODPHP), HHS: Get Support If You're a Caregiver
+    https://odphp.health.gov/myhealthfinder/healthy-living/mental-health-and-relationships/get-support-if-youre-caregiver
+50. odphp-get-enough-sleep-en.md  [emotional, fitness, everyday]
+    Office of Disease Prevention and Health Promotion (ODPHP), HHS: Get Enough Sleep
+    https://odphp.health.gov/myhealthfinder/healthy-living/mental-health-and-relationships/get-enough-sleep
+51. odphp-healthy-snacks-parents-en.md  [family, fitness]
+    Office of Disease Prevention and Health Promotion (ODPHP), HHS: Healthy Snacks: Quick Tips for Parents
+    https://odphp.health.gov/myhealthfinder/healthy-living/nutrition/healthy-snacks-quick-tips-parents
+52. odphp-manage-stress-en.md  [emotional, everyday]
+    Office of Disease Prevention and Health Promotion (ODPHP), HHS: Manage Stress
+    https://odphp.health.gov/myhealthfinder/health-conditions/heart-health/manage-stress
+53. odphp-move-your-way-en.md  [fitness, growth]
+    Office of Disease Prevention and Health Promotion (ODPHP), HHS: Move Your Way: Activity for Adults and Tips for Getting Active
+    https://odphp.health.gov/moveyourway/adults
+54. odphp-relationship-violence-warning-signs-en.md  [relationships, social, family]
+    Office of Disease Prevention and Health Promotion (ODPHP), HHS: Watch for Warning Signs of Relationship Violence
+    https://odphp.health.gov/myhealthfinder/healthy-living/mental-health-and-relationships/watch-warning-signs-relationship-violence
+55. odphp-stay-active-as-you-age-en.md  [fitness]
+    Office of Disease Prevention and Health Promotion (ODPHP), HHS: Protect Your Health as You Grow Older (physical activity)
+    https://odphp.health.gov/myhealthfinder/healthy-living/physical-activity/protect-your-health-you-grow-older
+56. odphp-support-a-loved-one-en.md  [social, family]
+    Office of Disease Prevention and Health Promotion (ODPHP), HHS: Support a Loved One: Quick Tips
+    https://odphp.health.gov/myhealthfinder/healthy-living/mental-health-and-relationships/support-loved-one-doctor-quick-tips
+57. odphp-talk-kids-healthy-relationships-en.md  [family]
+    Office of Disease Prevention and Health Promotion (ODPHP), HHS: Talk with Your Kids About Sex and Healthy Relationships
+    https://odphp.health.gov/myhealthfinder/healthy-living/sexual-health/talk-your-kids-about-sex-and-healthy-relationships
+58. odphp-talk-kids-tobacco-alcohol-drugs-en.md  [family]
+    Office of Disease Prevention and Health Promotion (ODPHP), HHS: Talk with Your Kids About Tobacco, Alcohol, and Drugs
+    https://odphp.health.gov/myhealthfinder/healthy-living/mental-health-and-relationships/talk-your-kids-about-tobacco-alcohol-and-drugs
+59. opm-career-development-en.md  [career, growth, planning]
+    U.S. Office of Personnel Management (OPM): Career Development
+    https://www.opm.gov/policy-data-oversight/training-and-development/career-development/
+60. opm-performance-management-cycle-en.md  [career]
+    U.S. Office of Personnel Management (OPM): Performance Management Cycle (planning, monitoring, developing, rating, rewarding)
+    https://www.opm.gov/policy-data-oversight/performance-management/performance-management-cycle/
+61. opm-performance-playbook-en.md  [career, growth, planning]
+    U.S. Office of Personnel Management (OPM): Performance Management Playbook: Planning, Goal Setting, Monitoring and Developing, Mentoring and Coaching
+    https://www.opm.gov/policy-data-oversight/performance-management/performance-management-and-accountability-playbook/
+62. opm-work-life-en.md  [career, relationships, family]
+    U.S. Office of Personnel Management (OPM): Work-Life
+    https://www.opm.gov/policy-data-oversight/worklife/
+63. owh-how-to-help-a-friend-en.md  [social, relationships, everyday]
+    Office on Women's Health (OWH), U.S. Department of Health and Human Services: How to Help a Friend Who Is Being Abused
+    https://womenshealth.gov/relationships-and-safety/get-help/how-help-friend
+64. owh-leaving-an-abusive-relationship-en.md  [relationships]
+    Office on Women's Health (OWH), U.S. Department of Health and Human Services: Leaving an Abusive Relationship
+    https://womenshealth.gov/relationships-and-safety/domestic-violence/leaving-abusive-relationship
+65. owh-signs-of-abuse-en.md  [relationships, family, social, emotional]
+    Office on Women's Health (OWH), U.S. Department of Health and Human Services: Signs of Abuse; Emotional and Verbal Abuse
+    https://womenshealth.gov/relationships-and-safety/signs-abuse
+66. owh-stress-and-your-health-en.md  [emotional, career]
+    Office on Women's Health (OWH), U.S. Department of Health and Human Services: Stress and Your Health
+    https://womenshealth.gov/mental-health/good-mental-health/stress-and-your-health
+67. ready-gov-make-a-plan-en.md  [everyday, planning, family]
+    Ready.gov (FEMA, U.S. Department of Homeland Security): Make a Plan (household emergency planning)
+    https://www.ready.gov/plan
+68. who-physical-activity-guidelines-ar.md  [fitness, emotional]
+    منظمة الصحة العالمية (World Health Organization): موجز المبادئ التوجيهية بشأن النشاط البدني والسلوكيات المنطوية على قلة الحركة
+    https://www.who.int/publications/i/item/9789240014886
+69. who-physical-activity-guidelines-en.md  [fitness, emotional]
+    World Health Organization (WHO): WHO guidelines on physical activity and sedentary behaviour: at a glance
+    https://www.who.int/publications/i/item/9789240014886
+
+NOT USED (2026-10-24), and why:
+- OpenStax textbooks: their terms forbid ingestion into AI offerings without permission.
+- Military OneSource, NIH main site, NIA, NIH News in Health, SAMHSA, consumer.gov, DOL,
+  BLS, HHS (hhs.gov), CFPB PDF files: refuse automated retrieval; not bypassed.
+- youth.gov: no reuse statement found. WHO/UNICEF parenting tips: licence not stated.
+- USA.gov 'budget' page: about the US federal budget, not personal budgeting.
