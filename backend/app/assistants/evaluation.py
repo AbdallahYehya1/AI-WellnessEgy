@@ -34,6 +34,7 @@ from app.knowledge.retrieval import (
     retrieve_hybrid,
     retrieve_safety_resources,
     retrieve_terms,
+    safety_exclusions,
 )
 
 STATUSES = ("approved", "draft")
@@ -448,6 +449,7 @@ def evaluate(session: Session, cases: tuple[Case, ...] = CASES) -> dict[str, Any
                 age_band="adult",
                 statuses=STATUSES,
                 domains=(assistant.domain, *u.secondary_domains),
+                exclude=safety_exclusions(case.message),
             )
             if u.outcome in ("accept", "needs_detail", "needs_context")
             else []

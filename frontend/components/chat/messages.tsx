@@ -21,6 +21,15 @@ const LINKABLE_HOSTS = new Set([
   "nccih.nih.gov",
   "www.cdc.gov",
   "cdc.gov",
+  // Publishers added with the ten assistants (D-61), each licence-checked.
+  "odphp.health.gov",
+  "medlineplus.gov",
+  "womenshealth.gov",
+  "www.niddk.nih.gov",
+  "www.opm.gov",
+  "www.consumerfinance.gov",
+  "www.mymoney.gov",
+  "www.ready.gov",
 ]);
 
 export function linkableSource(ref: string): string | null {

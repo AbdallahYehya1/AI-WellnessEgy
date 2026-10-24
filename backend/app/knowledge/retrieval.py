@@ -276,7 +276,7 @@ _SQL = text(
     """
     WITH matches AS (
       SELECT c.id, c.content, s.title, s.publisher, s.source_ref, s.version_label,
-             s.review_status, s.language, s.domains,
+             s.review_status, s.language, s.domains, s.slug,
              (s.domains && CAST(:primary AS text[])) AS in_primary,
              ts_rank_cd(c.search_vector, q.topic) AS topic_rank,
              ts_rank_cd(c.search_vector, q.query) AS query_rank
@@ -297,7 +297,7 @@ _SQL = text(
         -- Assistant domains (D-56): enforced here, never left to the model.
         AND (CAST(:any_domain AS boolean) OR s.domains && CAST(:domains AS text[]))
     )
-    SELECT id, content, title, publisher, source_ref, version_label, review_status, domains
+    SELECT id, content, title, publisher, source_ref, version_label, review_status, domains, slug
     FROM matches
     -- The user's language wins only for passages that actually match the topic, so an
     -- unrelated passage in the user's language never outranks a relevant one.
@@ -319,6 +319,7 @@ class RetrievedChunk:
     synthetic: bool
     review_status: str = "approved"
     domains: tuple[str, ...] = ()
+    slug: str = ""
 
 
 _SIMPLE_STOPWORDS = frozenset(
@@ -498,6 +499,7 @@ def retrieve_hybrid(
     statuses: tuple[str, ...],
     domains: tuple[str, ...],
     limit: int = MAX_PASSAGES,
+    exclude: frozenset[str] = frozenset(),
 ) -> list[RetrievedChunk]:
     """Assistant retrieval with the situation's own words (D-59): the subtopic terms and
     the (redacted) message are searched separately, each filtered to ``domains`` in SQL,
@@ -516,7 +518,7 @@ def retrieve_hybrid(
                 age_band=age_band,
                 statuses=statuses,
                 domains=domains,
-                limit=limit * 2,
+                limit=limit * 3,
             )
         )
     en_words = " ".join(_LATIN_WORD.findall(free_text))
@@ -535,12 +537,13 @@ def retrieve_hybrid(
                 statuses=statuses,
                 domains=domains,
                 primary=domains[:1],
-                limit=limit * 2,
+                limit=limit * 3,
             )
         )
     scores: dict[uuid.UUID, float] = {}
     chunks: dict[uuid.UUID, RetrievedChunk] = {}
     for weight, ranked in zip((1.0, 0.7), lists, strict=False):
+        ranked = [c for c in ranked if c.slug not in exclude]
         for rank, chunk in enumerate(ranked):
             chunks[chunk.chunk_id] = chunk
             scores[chunk.chunk_id] = scores.get(chunk.chunk_id, 0.0) + weight / (RRF_K + rank + 1)
@@ -595,6 +598,7 @@ def _run(
             synthetic=row.review_status == "synthetic",
             review_status=row.review_status,
             domains=tuple(row.domains or ()),
+            slug=row.slug,
         )
         for row in rows
     ]
@@ -626,6 +630,22 @@ _SAFETY_SQL = text(
     LIMIT :limit
     """
 ).bindparams(bindparam("statuses", expanding=True))
+
+
+# Words that make abuse and safety pages relevant to an ordinary question (otherwise they
+# would colour advice about everyday disagreements).
+SAFETY_CUES = re.compile(
+    r"abus|unhealthy|unsafe|control|afraid|scared|fear|threat|violen|hurt me|hurts me|"
+    r"monitor|check\w* my phone|reads? (?:all )?my messages|who i can (?:talk|see)|"
+    r"jealous|safe|danger|"
+    r"إساء|اساء|عنف|يتحكم|بيتحكم|خايف|خايفه|يهدد|بيهدد|مش صحي|غير صحي",
+    re.IGNORECASE,
+)
+
+
+def safety_exclusions(message: str) -> frozenset[str]:
+    """The safety sources to leave out of ordinary retrieval for this message."""
+    return frozenset() if SAFETY_CUES.search(message) else frozenset(SAFETY_SOURCES)
 
 
 def retrieve_safety_resources(

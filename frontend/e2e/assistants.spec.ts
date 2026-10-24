@@ -31,7 +31,7 @@ function sidebar(page: Page) {
 }
 
 test.describe("assistants", () => {
-  test("directory: ten assistants, only ready ones open", async ({ browser }) => {
+  test("directory: ten assistants, all open", async ({ browser }) => {
     const { context, page } = await onboardedUser(browser, "asstdir");
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/dashboard");
@@ -39,10 +39,8 @@ test.describe("assistants", () => {
     await page.waitForURL("**/assistants");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("How can we help you today?");
     await expect(page.locator("main h2")).toHaveCount(10);
-    for (const name of ["Marriage & Healthy Relationships", "Career & Work", "Emotional Wellbeing & Resilience"]) {
-      await expect(page.getByRole("link", { name: new RegExp(name) })).toBeVisible();
-    }
-    await expect(page.getByText("Coming soon")).toHaveCount(7);
+    await expect(page.locator("main ul > li > a[href^='/chat?assistant=']")).toHaveCount(10);
+    await expect(page.getByText("Coming soon")).toHaveCount(0);
     await settle(page);
     await page.screenshot({ path: `${SCREENS}/assistants-desktop.png`, fullPage: true });
 
@@ -69,10 +67,10 @@ test.describe("assistants", () => {
     await ask(page, "My manager keeps changing deadlines and I feel stressed at work. How can I handle it?");
     await expect(log(page).getByRole("note")).toHaveCount(0);
     await expect(log(page).getByText(/^Sources \(\d\)$/).last()).toBeVisible();
-    // Career sources only (NIOSH / NHS / OPM), never the general wellbeing set.
+    // Career sources only (NIOSH / OPM / OWH work stress), never the general wellbeing set.
     const hrefs = await log(page).locator("a[href^='http']").evaluateAll((links) => links.map((a) => a.getAttribute("href")!));
     expect(hrefs.length).toBeGreaterThan(0);
-    for (const href of hrefs) expect(href).toMatch(/cdc\.gov\/niosh|nhs\.uk|opm\.gov/);
+    for (const href of hrefs) expect(href).toMatch(/cdc\.gov\/niosh|opm\.gov|womenshealth\.gov/);
     await expect(composer(page)).toHaveAttribute("placeholder", "Describe what's going on, in your own words…");
     await settle(page);
     await page.screenshot({ path: `${SCREENS}/assistant-career-desktop.png` });
@@ -101,6 +99,9 @@ test.describe("assistants", () => {
     const safety = log(page).getByRole("note").last();
     await expect(safety).toContainText("not your fault");
     await expect(safety).toContainText("122");
+    await expect(safety).toContainText("15115");
+    // Vetted sources about abuse and getting help come with the notice.
+    expect(await safety.locator("a[href^='https://']").count()).toBeGreaterThan(0);
 
     await ask(page, "I want to kill myself");
     await expect(log(page).getByRole("note").last()).toHaveAttribute("data-status", "support");
@@ -111,11 +112,51 @@ test.describe("assistants", () => {
     await context.close();
   });
 
-  test("a preview assistant can't be opened by URL", async ({ browser }) => {
-    const { context, page } = await onboardedUser(browser, "asstpreview");
-    await page.goto("/chat?assistant=finance");
-    await expect(page.getByText("Topics I can answer right now")).toBeVisible(); // default assistant
-    await expect(page.getByText("Financial Wellbeing")).toHaveCount(0);
+  test("every one of the ten assistants answers a natural question", async ({ browser }) => {
+    const { context, page } = await onboardedUser(browser, "asstall");
+    const questions: [string, string][] = [
+      ["relationships", "My wife and I keep arguing about chores. How do we talk about it calmly?"],
+      ["family", "My toddler has tantrums every evening. How should I respond?"],
+      ["career", "How do I ask my manager for regular feedback?"],
+      ["growth", "I keep quitting new habits after a week. How do I stick with them?"],
+      ["fitness", "How much exercise should an adult do each week?"],
+      ["emotional", "I feel overwhelmed and tense most days. What can I do?"],
+      ["social", "How do I make new friends after moving to a new city?"],
+      ["planning", "How do I break a big goal into smaller steps?"],
+      ["finance", "How do I start an emergency fund on a small salary?"],
+      ["everyday", "My flatmate never cleans. How do I bring it up without a fight?"],
+    ];
+    for (const [assistant, question] of questions) {
+      await page.goto(`/chat?assistant=${assistant}`);
+      await expect(composer(page)).toBeEnabled();
+      await ask(page, question);
+      await expect(log(page).getByRole("note"), assistant).toHaveCount(0);
+      await expect(log(page).getByText(/^Sources \(\d\)$/).last(), assistant).toBeVisible();
+    }
+    await context.close();
+  });
+
+  test("sharing the situation with the AI needs an explicit choice", async ({ browser }) => {
+    const { context, page } = await onboardedUser(browser, "asstctx");
+    await page.goto("/chat?assistant=relationships");
+    await expect(composer(page)).toBeEnabled();
+    const share = page.getByRole("button", { name: "Share more detail" });
+    test.skip((await share.count()) === 0, "context sharing isn't enabled on this stack (CHAT_CONTEXT_MODE)");
+    await ask(page, "My wife Sara feels neglected because I work late every night.");
+    await expect(page.getByText("Shared with the AI (details removed):")).toHaveCount(0); // not opted in
+    await share.click();
+    const dialog = page.getByRole("dialog", { name: "Share your situation with the AI?" });
+    await expect(dialog).toContainText("United States");
+    await dialog.getByRole("button", { name: "Share my situation" }).click();
+    await expect(page.getByRole("button", { name: "Stop sharing" })).toBeVisible();
+    await ask(page, "My wife Sara feels neglected because I work late every night.");
+    const shared = page.getByText("Shared with the AI (details removed):").last().locator("..");
+    await expect(shared).toContainText("[name]");
+    await expect(shared).not.toContainText("Sara");
+    await settle(page);
+    await page.screenshot({ path: `${SCREENS}/assistant-context-shared-desktop.png` });
+    await page.getByRole("button", { name: "Stop sharing" }).click();
+    await expect(page.getByRole("button", { name: "Share more detail" })).toBeVisible();
     await context.close();
   });
 

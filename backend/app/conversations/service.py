@@ -82,6 +82,7 @@ from app.knowledge.retrieval import (
     retrieve,
     retrieve_hybrid,
     retrieve_safety_resources,
+    safety_exclusions,
 )
 from app.safety.assessor import SafetyAssessor, assess_safety_risk
 from app.safety.contracts import Assessment, Outcome, RiskLevel, SafetyDecision
@@ -760,6 +761,7 @@ def handle_message(
                     age_band=band.value,
                     statuses=runtime.retrievable_statuses,
                     domains=search_domains,
+                    exclude=safety_exclusions(payload.message),
                 )
             else:
                 chunks = retrieve(
