@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { completeOnboarding, newUser, onboardedUser, outbox, registerAndConfirm, signIn } from "./helpers";
 
 test.describe("first visit and registration", () => {
-  test("landing → sign-up → confirmation → onboarding → consent → check-in → dashboard", async ({ browser }) => {
+  test("landing → sign-up → confirmation → onboarding → consent → reflection → dashboard", async ({ browser }) => {
     const user = newUser("journey");
     const context = await browser.newContext({ locale: "en-US" });
     const page = await context.newPage();
@@ -32,11 +32,12 @@ test.describe("first visit and registration", () => {
     await page.getByRole("button", { name: "Sign in" }).click();
     await completeOnboarding(page);
 
-    await expect(page.getByText(/not a medical assessment/)).toBeVisible();
-    await page.locator("label", { hasText: "4" }).first().click();
-    await page.getByRole("button", { name: "Save check-in" }).click();
-    await page.waitForURL("**/dashboard?status=checked-in");
-    await expect(page.getByText("✓ Your check-in was saved.")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Daily Reflection");
+    await page.locator("label", { hasText: "Calm" }).click();
+    await page.getByRole("button", { name: "Save reflection" }).click();
+    await expect(page.getByText("Reflection saved")).toBeVisible();
+    await page.goto("/dashboard");
+    await expect(page.getByText("You checked in today.")).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Welcome");
     await expect(page.getByText(user.email)).toHaveCount(0); // no email shown
     await context.close();
@@ -78,20 +79,38 @@ test.describe("first visit and registration", () => {
 });
 
 test.describe("signed-in product journeys", () => {
-  test("dashboard → check-in → progress → settings", async ({ browser }) => {
+  test("dashboard → reflection → insights → assistant → settings", async ({ browser }) => {
     const { context, page } = await onboardedUser(browser, "product");
-    for (const score of ["3", "5"]) {
+    for (const [feelings, factors] of [[["Anxious", "Tired"], ["Work"]], [["Anxious"], ["Work", "Sleep"]], [["Calm", "Excited"], []]] as const) {
       await page.goto("/check-in");
-      await page.locator("label", { hasText: score }).first().click();
-      await page.getByRole("button", { name: "Save check-in" }).click();
-      await page.waitForURL("**/dashboard?status=checked-in");
+      for (const label of feelings) await page.locator("label", { hasText: label }).click();
+      for (const label of factors) await page.locator("label", { hasText: label }).click();
+      await page.getByRole("button", { name: "Save reflection" }).click();
+      await expect(page.getByText("Reflection saved")).toBeVisible();
+      if ((factors as readonly string[]).includes("Work")) {
+        // The suggestion opens a fresh chat; the reflection itself is never put in the URL.
+        await expect(page.getByRole("link", { name: "Talk it through with Career & Work" })).toHaveAttribute("href", "/chat?assistant=career");
+        await page.screenshot({ path: "test-results/screens/reflection-saved-desktop.png", fullPage: true });
+      } else {
+        await expect(page.getByText(/Good feelings are worth noticing too/)).toBeVisible();
+      }
     }
-    await expect(page.getByText("You checked in today.")).toBeVisible();
 
+    await page.goto("/dashboard");
+    await expect(page.getByText("You checked in today.")).toBeVisible();
     await page.getByRole("link", { name: "See your progress" }).click();
     await page.waitForURL("**/history");
-    await expect(page.getByRole("img", { name: /Mood over your last check-ins/ })).toBeVisible();
-    await expect(page.getByRole("table", { name: "Your check-ins" }).getByRole("row")).toHaveCount(3);
+    // Counts are of days: three reflections on one day count each feeling once.
+    const feelings = page.getByRole("heading", { name: "Feelings you chose most" }).locator("..");
+    await expect(feelings).toContainText("Anxious");
+    await expect(feelings).toContainText("1 day");
+    await expect(feelings).not.toContainText("1 days");
+    await page.screenshot({ path: "test-results/screens/insights-week-desktop.png", fullPage: true });
+    await expect(page.getByRole("list", { name: "Recent check-ins" }).getByRole("listitem")).toHaveCount(3);
+    await expect(page.getByText(/streak/i)).toHaveCount(0);
+    await page.getByRole("link", { name: "This month" }).click();
+    await page.waitForURL("**/history?period=month");
+    await expect(page.getByRole("link", { name: "This month" })).toHaveAttribute("aria-current", "page");
 
     await page.goto("/settings");
     await page.getByLabel("What should we call you?").fill("Nour");

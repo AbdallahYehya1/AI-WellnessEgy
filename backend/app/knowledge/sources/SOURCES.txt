@@ -91,3 +91,37 @@ NOT INGESTED, and why:
 Retrieved: 2026-10-19. Re-check the publisher pages before any clinical review, and
 record the reviewer, date and decision in each file (reviewed_by, reviewed_at,
 clinical_review) before changing review_status to approved.
+
+ADDED 2026-10-23 FOR THE SPECIALISED ASSISTANTS (D-56). Each file's `domains` field says
+which assistants may retrieve it; retrieval enforces this in SQL.
+
+11. cdc-healthy-communication-en.md  [relationships, family, social, everyday]
+    CDC, Tips for Effective & Healthy Communication (Dating Matters), 2015.
+    https://stacks.cdc.gov/view/cdc/129149  U.S. federal work. Verbatim excerpts.
+12. nhs-healthy-relationships-en.md  [relationships, social, family, emotional]
+13. nhs-work-related-stress-en.md    [career, emotional]
+14. nhs-problem-solving-en.md        [planning, career, everyday, growth, relationships]
+15. nhs-change-uncertainty-en.md     [planning, career, emotional]
+16. nhs-to-do-list-en.md             [growth, career, planning, everyday]
+    NHS website, Every Mind Matters pages. Open Government Licence v3.0, subject to the
+    NHS website terms (attribution on every use; adapted text must not be attributed to
+    the NHS). Verbatim excerpts only. OPEN ITEM D-58: confirm the NHS terms, which ask
+    syndicators to accept a licensing agreement, before any non-prototype use.
+17. niosh-stress-at-work-en.md       [career]
+    NIOSH, STRESS...At Work, Publication No. 99-101 (1999). CDC Stacks cdc/6926, public
+    domain. Verbatim excerpts.
+18. opm-individual-development-planning-en.md  [career, growth, planning]
+    U.S. Office of Personnel Management, Individual Development Planning (2005). Federal work.
+19. cfpb-emergency-fund-en.md        [finance, relationships]
+    CFPB, An essential guide to building an emergency fund. Federal work; U.S.-specific
+    items omitted. General financial education only.
+
+NOT INGESTED (2026-10-23), and why:
+- NIH Social/Emotional Wellness Toolkits, NIH News in Health, fatherhood.gov (ACF),
+  CareerOneStop (DOL): public domain, but their servers refuse automated retrieval
+  from this environment; text was not copied from second-hand summaries.
+- Commercial or charity relationship guides (Relate, Gottman, GoodTherapy, universities'
+  counselling pages): copyrighted, no licence for ingestion.
+- No official Arabic editions exist for any of the sources above; Arabic and Egyptian
+  Arabic questions retrieve these English passages through the bilingual lexicon and are
+  answered in Arabic by the model.

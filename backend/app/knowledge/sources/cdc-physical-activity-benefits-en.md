@@ -7,6 +7,7 @@ version_label: page-2025-12-04
 content_type: wellness-education
 language: en
 age_bands: adult
+domains: fitness, emotional
 review_status: draft
 licence: U.S. federal government work (generally public domain in the U.S.; CDC cited as the source; images and linked third-party material excluded)
 permitted_use: attributed short quotations, non-commercial prototype

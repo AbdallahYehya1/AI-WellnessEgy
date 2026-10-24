@@ -392,11 +392,16 @@ def evaluate(
     session: Session,
     statuses: tuple[str, ...] = CURATED_STATUSES,
     cases: tuple[Case, ...] = CASES,
+    domains: tuple[str, ...] | None = ("emotional",),
 ) -> dict[str, object]:
+    """Wellbeing cases, searched as the production Emotional Wellbeing assistant does
+    (its domain only); ``domains=None`` reproduces the earlier all-sources search."""
     slug_of = _slugs_by_chunk(session)
     results = []
     for case in cases:
-        chunks = retrieve(session, case.message, "adult", statuses, context=list(case.history))
+        chunks = retrieve(
+            session, case.message, "adult", statuses, context=list(case.history), domains=domains
+        )
         found = [slug_of[str(c.chunk_id)] for c in chunks]
         if case.expected:
             top1 = bool(found) and found[0] in case.expected

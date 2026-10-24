@@ -391,3 +391,64 @@ API already answers publicly and authenticates every data endpoint itself.
 | Abuse and cost limits | 10 chat messages per user per minute; `CHAT_PROVIDER_DAILY_LIMIT` (60) per day for everyone; Supabase Auth's built-in signup and e-mail rate limits; e-mail confirmation required |
 | No secrets in the browser | Built JavaScript contains only `NEXT_PUBLIC_SUPABASE_URL` and the publishable key |
 | Previews still protected | A preview deployment URL still redirects to Vercel login |
+
+## 15. Specialised assistants and Daily Reflection (migration 0006) — needs founder approval
+
+Nothing here runs until the founder approves it. **Order matters:** the new backend code
+reads the 0006 columns, so migrate and re-ingest *before* merging. The current production
+code keeps working on a 0006 database, because every new column has a default or is
+nullable.
+
+### What changes
+
+| Change | Detail |
+|---|---|
+| `knowledge_sources.domains` | text[] (checked against the 10 assistant ids, GIN index). Backfill: every existing source becomes `emotional`. CDC activity, CDC sleep and NIMH caring also get a second domain. |
+| `chat_conversations.assistant_id` | varchar(40), default `emotional`. Existing chats become Emotional Wellbeing chats. |
+| `chat_messages.query_enc` | Nullable. Holds the encrypted composed question for new assistant turns. |
+| `mood_checkins` | `mood_score` becomes nullable. New columns: `emotions`, `factors`, `note_enc` (unused), `entry_version` (default 1). Checks keep v1 rows score-only and require v2 rows to have at least one feeling. Existing rows are unchanged. |
+| Role grants | Unchanged: the 0005 grant set covers 0006. |
+| Knowledge | 9 new sources: relationships, career, planning, finance. |
+
+### Rehearsal (done 2026-10-24, local Docker stack)
+
+1. Downgraded a database to 0005 and inserted legacy rows: two 1–5 check-ins (one with a
+   note), an encrypted conversation and message, and two knowledge sources.
+2. Upgraded to 0006. Fingerprints (md5) of the mood rows and message ciphertext were
+   identical before and after.
+3. Old rows became `entry_version` 1, the conversation became `emotional`, and the domain
+   backfill matched.
+4. All 19 sources were then ingested and the full e2e suite passed (34 tests).
+
+### Steps (owner connection in `backend/.env`, from `backend/`)
+
+1. **Backup.** Supabase Dashboard → Database → Backups: confirm today's daily backup. Also
+   `pg_dump --schema-only --schema=app "$DATABASE_URL" > app-schema-before-0006.sql`.
+2. **Check the target:** `python -m app.ops.check_migration_target`. Expect
+   `at_revision_0005`.
+3. **Migrate:** `alembic upgrade head`, then rerun step 2. Expect `at_revision_0006` and
+   `tables_match_revision: true`.
+4. **Verify the role:** `python -m app.ops.backend_role --verify`. Expect `problems: []`.
+   No grant change is needed.
+5. **Re-ingest the knowledge:** `python -m app.knowledge.ingest app/knowledge/sources`.
+   Expect 9 `new` and 10 `unchanged`. Unchanged sources still get their `domains`
+   refreshed.
+6. **Merge** the PR. Vercel deploys both projects.
+7. **Check** with a test account:
+   - `/chat/config` lists ten assistants, three of them `ready`;
+   - `/assistants` opens Career & Work, and a work-stress question cites NIOSH or NHS;
+   - `/check-in` saves a reflection;
+   - `/history` still shows old check-ins.
+
+### Rollback
+
+- **Code only:** revert the merge. The old code runs on a 0006 database.
+- **Schema:** `alembic downgrade 0005`. This **deletes Daily Reflection rows**
+  (`entry_version` 2) and assistant ids, and makes `mood_score` required again. Old
+  check-ins and chats are kept.
+
+### What is sent to Groq
+
+Unchanged in kind: composed questions, public passages and earlier model replies, never
+the user's own sentence (D-56). Turning on "contextual mode", which sends the user's
+redacted words, is a separate decision that needs approval.

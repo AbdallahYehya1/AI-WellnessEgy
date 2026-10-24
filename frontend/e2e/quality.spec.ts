@@ -9,7 +9,7 @@ import { onboardedUser } from "./helpers";
 
 const WIDTHS = [320, 375, 390, 768, 1024, 1280, 1440];
 const PUBLIC_PAGES = ["/", "/sign-in", "/sign-up", "/forgot-password", "/auth/check-email", "/reset-password", "/no-such-page"];
-const APP_PAGES = ["/dashboard", "/check-in", "/history", "/settings", "/chat"];
+const APP_PAGES = ["/dashboard", "/check-in", "/history", "/settings", "/assistants", "/chat", "/chat?assistant=career"];
 const SHOTS = process.env.E2E_SCREENSHOTS ?? "test-results/screens";
 
 async function setPrefs(context: BrowserContext, baseURL: string, locale: "ar" | "en", theme: "light" | "dark") {
@@ -79,7 +79,7 @@ for (const locale of ["en", "ar"] as const) {
           expect(overflow, `horizontal overflow on ${path} @${width}`).toBe(0);
           expect(small, `touch targets < 24px on ${path} @${width}`).toEqual([]);
           if (width === 375 || width === 1280) {
-            await page.screenshot({ path: `${SHOTS}/${locale}-${theme}-${width}${path.replace(/\//g, "_")}.png`, fullPage: true });
+            await page.screenshot({ path: `${SHOTS}/${locale}-${theme}-${width}${path.replace(/[/?=]/g, "_")}.png`, fullPage: true });
           }
         }
       }

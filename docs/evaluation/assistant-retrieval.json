@@ -1,0 +1,1724 @@
+{
+  "tuned": {
+    "summary": {
+      "all": {
+        "cases": 22,
+        "baseline": {
+          "hit_at_4": 0.091,
+          "top1": 0.0,
+          "precision": 0.023,
+          "leakage": 0.25
+        },
+        "monolithic": {
+          "hit_at_4": 0.636,
+          "top1": 0.455,
+          "precision": 0.5,
+          "leakage": 0.284
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 0.864,
+          "precision": 0.841,
+          "leakage": 0.0
+        }
+      },
+      "career": {
+        "cases": 11,
+        "baseline": {
+          "hit_at_4": 0.091,
+          "top1": 0.0,
+          "precision": 0.023,
+          "leakage": 0.159
+        },
+        "monolithic": {
+          "hit_at_4": 0.273,
+          "top1": 0.182,
+          "precision": 0.205,
+          "leakage": 0.568
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 0.886,
+          "leakage": 0.0
+        }
+      },
+      "career/ar": {
+        "cases": 1,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.0
+        },
+        "monolithic": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 1.0,
+          "leakage": 0.0
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 1.0,
+          "leakage": 0.0
+        }
+      },
+      "career/arz": {
+        "cases": 3,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.0
+        },
+        "monolithic": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.667
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 0.917,
+          "leakage": 0.0
+        }
+      },
+      "career/en": {
+        "cases": 6,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.167
+        },
+        "monolithic": {
+          "hit_at_4": 0.333,
+          "top1": 0.167,
+          "precision": 0.208,
+          "leakage": 0.625
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 0.833,
+          "leakage": 0.0
+        }
+      },
+      "career/mixed": {
+        "cases": 1,
+        "baseline": {
+          "hit_at_4": 1.0,
+          "top1": 0.0,
+          "precision": 0.25,
+          "leakage": 0.75
+        },
+        "monolithic": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.5
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 1.0,
+          "leakage": 0.0
+        }
+      },
+      "relationships": {
+        "cases": 11,
+        "baseline": {
+          "hit_at_4": 0.091,
+          "top1": 0.0,
+          "precision": 0.023,
+          "leakage": 0.341
+        },
+        "monolithic": {
+          "hit_at_4": 1.0,
+          "top1": 0.727,
+          "precision": 0.795,
+          "leakage": 0.0
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 0.727,
+          "precision": 0.795,
+          "leakage": 0.0
+        }
+      },
+      "relationships/ar": {
+        "cases": 1,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.0
+        },
+        "monolithic": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 0.75,
+          "leakage": 0.0
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 0.75,
+          "leakage": 0.0
+        }
+      },
+      "relationships/arz": {
+        "cases": 3,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.333
+        },
+        "monolithic": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 0.917,
+          "leakage": 0.0
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 0.917,
+          "leakage": 0.0
+        }
+      },
+      "relationships/en": {
+        "cases": 6,
+        "baseline": {
+          "hit_at_4": 0.167,
+          "top1": 0.0,
+          "precision": 0.042,
+          "leakage": 0.292
+        },
+        "monolithic": {
+          "hit_at_4": 1.0,
+          "top1": 0.667,
+          "precision": 0.792,
+          "leakage": 0.0
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 0.667,
+          "precision": 0.792,
+          "leakage": 0.0
+        }
+      },
+      "relationships/mixed": {
+        "cases": 1,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 1.0
+        },
+        "monolithic": {
+          "hit_at_4": 1.0,
+          "top1": 0.0,
+          "precision": 0.5,
+          "leakage": 0.0
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 0.0,
+          "precision": 0.5,
+          "leakage": 0.0
+        }
+      }
+    },
+    "results": [
+      {
+        "case": "rel-listen",
+        "assistant": "relationships",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "communication",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
+          ]
+        }
+      },
+      {
+        "case": "rel-cooldown",
+        "assistant": "relationships",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "communication,conflict",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "cdc-healthy-communication-en"
+          ]
+        }
+      },
+      {
+        "case": "rel-money",
+        "assistant": "relationships",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "conflict,money",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "rel-worklate",
+        "assistant": "relationships",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "money,conflict,time_together",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 1.0,
+          "found": [
+            "who-doing-what-matters-en",
+            "nimh-generalized-anxiety-disorder-en",
+            "nhs-work-related-stress-en",
+            "nimh-caring-for-your-mental-health-en"
+          ]
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en"
+          ]
+        }
+      },
+      {
+        "case": "rel-future",
+        "assistant": "relationships",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "expectations",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": false,
+          "precision": 0.5,
+          "leakage": 0.0,
+          "found": [
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en",
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": false,
+          "precision": 0.5,
+          "leakage": 0.0,
+          "found": [
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en",
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "rel-boundaries",
+        "assistant": "relationships",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "conflict",
+        "baseline": {
+          "hit": true,
+          "top1": false,
+          "precision": 0.25,
+          "leakage": 0.75,
+          "found": [
+            "nhs-work-related-stress-en",
+            "nhs-healthy-relationships-en",
+            "nimh-caring-for-your-mental-health-en",
+            "niosh-stress-at-work-en"
+          ]
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": false,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": false,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
+          ]
+        }
+      },
+      {
+        "case": "rel-ar-fight",
+        "assistant": "relationships",
+        "language": "arz",
+        "understood": "accept",
+        "subtopics": "conflict,communication",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "cdc-healthy-communication-en"
+          ]
+        }
+      },
+      {
+        "case": "rel-ar-listen",
+        "assistant": "relationships",
+        "language": "arz",
+        "understood": "accept",
+        "subtopics": "communication",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
+          ]
+        }
+      },
+      {
+        "case": "rel-ar-msa",
+        "assistant": "relationships",
+        "language": "ar",
+        "understood": "accept",
+        "subtopics": "communication,conflict",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "cdc-healthy-communication-en"
+          ]
+        }
+      },
+      {
+        "case": "rel-ar-money",
+        "assistant": "relationships",
+        "language": "arz",
+        "understood": "accept",
+        "subtopics": "conflict,money",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 1.0,
+          "found": [
+            "who-doing-what-matters-ar",
+            "who-doing-what-matters-en",
+            "nimh-generalized-anxiety-disorder-en",
+            "nhs-work-related-stress-en"
+          ]
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "rel-mixed",
+        "assistant": "relationships",
+        "language": "mixed",
+        "understood": "accept",
+        "subtopics": "expectations",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 1.0,
+          "found": [
+            "who-doing-what-matters-ar",
+            "who-doing-what-matters-en",
+            "nimh-generalized-anxiety-disorder-en",
+            "nhs-work-related-stress-en"
+          ]
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": false,
+          "precision": 0.5,
+          "leakage": 0.0,
+          "found": [
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en",
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": false,
+          "precision": 0.5,
+          "leakage": 0.0,
+          "found": [
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en",
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "car-stuck",
+        "assistant": "career",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "stuck",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.75,
+          "found": [
+            "nhs-problem-solving-en",
+            "cfpb-emergency-fund-en",
+            "cfpb-emergency-fund-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "car-feedback",
+        "assistant": "career",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "manager,colleagues",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 1.0,
+          "found": [
+            "who-doing-what-matters-en",
+            "who-doing-what-matters-en",
+            "nhs-healthy-relationships-en",
+            "cfpb-emergency-fund-en"
+          ]
+        },
+        "monolithic": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 1.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-work-related-stress-en",
+            "niosh-stress-at-work-en",
+            "niosh-stress-at-work-en",
+            "niosh-stress-at-work-en"
+          ]
+        }
+      },
+      {
+        "case": "car-switch",
+        "assistant": "career",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "change_jobs",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-problem-solving-en",
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "car-overload",
+        "assistant": "career",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "workload,balance",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.5,
+          "found": [
+            "nhs-problem-solving-en",
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "niosh-stress-at-work-en",
+            "nhs-work-related-stress-en",
+            "nhs-work-related-stress-en",
+            "nhs-work-related-stress-en"
+          ]
+        }
+      },
+      {
+        "case": "car-colleague",
+        "assistant": "career",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "colleagues,productivity",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 1.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-work-related-stress-en",
+            "niosh-stress-at-work-en",
+            "nhs-to-do-list-en",
+            "nhs-work-related-stress-en"
+          ]
+        }
+      },
+      {
+        "case": "car-focus",
+        "assistant": "career",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "productivity",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": false,
+          "precision": 0.25,
+          "leakage": 0.5,
+          "found": [
+            "nhs-problem-solving-en",
+            "nhs-to-do-list-en",
+            "nimh-generalized-anxiety-disorder-en",
+            "nimh-depression-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.5,
+          "leakage": 0.0,
+          "found": [
+            "nhs-to-do-list-en",
+            "niosh-stress-at-work-en",
+            "nhs-problem-solving-en",
+            "nhs-to-do-list-en"
+          ]
+        }
+      },
+      {
+        "case": "car-ar-stuck",
+        "assistant": "career",
+        "language": "arz",
+        "understood": "accept",
+        "subtopics": "stuck",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.75,
+          "found": [
+            "nhs-problem-solving-en",
+            "cfpb-emergency-fund-en",
+            "cfpb-emergency-fund-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "car-ar-boss",
+        "assistant": "career",
+        "language": "arz",
+        "understood": "accept",
+        "subtopics": "manager",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 1.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-work-related-stress-en",
+            "niosh-stress-at-work-en",
+            "niosh-stress-at-work-en",
+            "nhs-work-related-stress-en"
+          ]
+        }
+      },
+      {
+        "case": "car-ar-pressure",
+        "assistant": "career",
+        "language": "arz",
+        "understood": "accept",
+        "subtopics": "workload",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": [
+            "who-doing-what-matters-ar",
+            "who-doing-what-matters-ar",
+            "who-doing-what-matters-ar",
+            "who-doing-what-matters-ar"
+          ]
+        },
+        "monolithic": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.25,
+          "found": [
+            "nhs-problem-solving-en",
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "niosh-stress-at-work-en",
+            "nhs-work-related-stress-en",
+            "nhs-work-related-stress-en",
+            "nhs-work-related-stress-en"
+          ]
+        }
+      },
+      {
+        "case": "car-ar-msa",
+        "assistant": "career",
+        "language": "ar",
+        "understood": "accept",
+        "subtopics": "change_jobs",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-problem-solving-en",
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "car-mixed",
+        "assistant": "career",
+        "language": "mixed",
+        "understood": "accept",
+        "subtopics": "manager,workload,productivity",
+        "baseline": {
+          "hit": true,
+          "top1": false,
+          "precision": 0.25,
+          "leakage": 0.75,
+          "found": [
+            "who-doing-what-matters-ar",
+            "who-doing-what-matters-en",
+            "nimh-generalized-anxiety-disorder-en",
+            "nhs-work-related-stress-en"
+          ]
+        },
+        "monolithic": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.5,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "niosh-stress-at-work-en",
+            "nhs-work-related-stress-en",
+            "niosh-stress-at-work-en",
+            "nhs-work-related-stress-en"
+          ]
+        }
+      }
+    ]
+  },
+  "held_out_v2": {
+    "summary": {
+      "all": {
+        "cases": 12,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.083
+        },
+        "monolithic": {
+          "hit_at_4": 0.667,
+          "top1": 0.5,
+          "precision": 0.479,
+          "leakage": 0.292
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 0.917,
+          "precision": 0.75,
+          "leakage": 0.0
+        }
+      },
+      "career": {
+        "cases": 6,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.167
+        },
+        "monolithic": {
+          "hit_at_4": 0.333,
+          "top1": 0.167,
+          "precision": 0.208,
+          "leakage": 0.583
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 0.75,
+          "leakage": 0.0
+        }
+      },
+      "career/arz": {
+        "cases": 2,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.5
+        },
+        "monolithic": {
+          "hit_at_4": 1.0,
+          "top1": 0.5,
+          "precision": 0.625,
+          "leakage": 0.25
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 0.75,
+          "leakage": 0.0
+        }
+      },
+      "career/en": {
+        "cases": 4,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.0
+        },
+        "monolithic": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.75
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 0.75,
+          "leakage": 0.0
+        }
+      },
+      "relationships": {
+        "cases": 6,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.0
+        },
+        "monolithic": {
+          "hit_at_4": 1.0,
+          "top1": 0.833,
+          "precision": 0.75,
+          "leakage": 0.0
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 0.833,
+          "precision": 0.75,
+          "leakage": 0.0
+        }
+      },
+      "relationships/arz": {
+        "cases": 2,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.0
+        },
+        "monolithic": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 0.625,
+          "leakage": 0.0
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 1.0,
+          "precision": 0.625,
+          "leakage": 0.0
+        }
+      },
+      "relationships/en": {
+        "cases": 4,
+        "baseline": {
+          "hit_at_4": 0.0,
+          "top1": 0.0,
+          "precision": 0.0,
+          "leakage": 0.0
+        },
+        "monolithic": {
+          "hit_at_4": 1.0,
+          "top1": 0.75,
+          "precision": 0.812,
+          "leakage": 0.0
+        },
+        "domain": {
+          "hit_at_4": 1.0,
+          "top1": 0.75,
+          "precision": 0.812,
+          "leakage": 0.0
+        }
+      }
+    },
+    "results": [
+      {
+        "case": "v2-rel-silent",
+        "assistant": "relationships",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "communication,conflict",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "cdc-healthy-communication-en"
+          ]
+        }
+      },
+      {
+        "case": "v2-rel-respect",
+        "assistant": "relationships",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "conflict",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": false,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": false,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en"
+          ]
+        }
+      },
+      {
+        "case": "v2-rel-plans",
+        "assistant": "relationships",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "expectations",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en",
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en",
+            "cfpb-emergency-fund-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "v2-rel-trust",
+        "assistant": "relationships",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "trust",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en",
+            "nhs-problem-solving-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "v2-rel-arz-inlaws",
+        "assistant": "relationships",
+        "language": "arz",
+        "understood": "accept",
+        "subtopics": "boundaries",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "cdc-healthy-communication-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "cdc-healthy-communication-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "v2-rel-arz-time",
+        "assistant": "relationships",
+        "language": "arz",
+        "understood": "accept",
+        "subtopics": "time_together",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.5,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.5,
+          "leakage": 0.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "v2-car-raise",
+        "assistant": "career",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "manager",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 1.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.5,
+          "leakage": 0.0,
+          "found": [
+            "nhs-work-related-stress-en",
+            "niosh-stress-at-work-en",
+            "niosh-stress-at-work-en",
+            "nhs-work-related-stress-en"
+          ]
+        }
+      },
+      {
+        "case": "v2-car-burnout",
+        "assistant": "career",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "workload,change_jobs,balance",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.25,
+          "found": [
+            "nhs-problem-solving-en",
+            "nhs-problem-solving-en",
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "niosh-stress-at-work-en",
+            "nhs-work-related-stress-en",
+            "nhs-work-related-stress-en",
+            "nhs-work-related-stress-en"
+          ]
+        }
+      },
+      {
+        "case": "v2-car-team",
+        "assistant": "career",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "colleagues",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 1.0,
+          "found": [
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en",
+            "nhs-healthy-relationships-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "nhs-work-related-stress-en",
+            "niosh-stress-at-work-en",
+            "nhs-work-related-stress-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "v2-car-skills",
+        "assistant": "career",
+        "language": "en",
+        "understood": "accept",
+        "subtopics": "stuck",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.75,
+          "found": [
+            "nhs-problem-solving-en",
+            "cfpb-emergency-fund-en",
+            "cfpb-emergency-fund-en",
+            "cdc-healthy-communication-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.75,
+          "leakage": 0.0,
+          "found": [
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "v2-car-arz-quit",
+        "assistant": "career",
+        "language": "arz",
+        "understood": "accept",
+        "subtopics": "change_jobs",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 1.0,
+          "found": [
+            "who-doing-what-matters-ar",
+            "who-doing-what-matters-ar",
+            "who-doing-what-matters-ar",
+            "who-doing-what-matters-ar"
+          ]
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "nhs-problem-solving-en",
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 1.0,
+          "leakage": 0.0,
+          "found": [
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "opm-individual-development-planning-en",
+            "nhs-problem-solving-en"
+          ]
+        }
+      },
+      {
+        "case": "v2-car-arz-tasks",
+        "assistant": "career",
+        "language": "arz",
+        "understood": "accept",
+        "subtopics": "productivity",
+        "baseline": {
+          "hit": false,
+          "top1": false,
+          "precision": 0.0,
+          "leakage": 0.0,
+          "found": []
+        },
+        "monolithic": {
+          "hit": true,
+          "top1": false,
+          "precision": 0.25,
+          "leakage": 0.5,
+          "found": [
+            "nhs-problem-solving-en",
+            "nhs-to-do-list-en",
+            "nimh-generalized-anxiety-disorder-en",
+            "nimh-depression-en"
+          ]
+        },
+        "domain": {
+          "hit": true,
+          "top1": true,
+          "precision": 0.5,
+          "leakage": 0.0,
+          "found": [
+            "nhs-to-do-list-en",
+            "niosh-stress-at-work-en",
+            "nhs-problem-solving-en",
+            "nhs-to-do-list-en"
+          ]
+        }
+      }
+    ]
+  }
+}

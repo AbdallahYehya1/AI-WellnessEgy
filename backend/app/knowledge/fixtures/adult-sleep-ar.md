@@ -7,6 +7,7 @@ version_label: 0.1-synthetic
 content_type: wellness-education
 language: ar
 age_bands: adult
+domains: emotional
 review_status: synthetic
 ---
 محتوى اختباري تجريبي وليس إرشادًا طبيًا. بعض الناس بيلاقوا إن النوم والصحيان في مواعيد ثابتة بيساعدهم يرتاحوا أكتر. ممكن تجرب تقلل استخدام الموبايل قبل النوم بشوية.

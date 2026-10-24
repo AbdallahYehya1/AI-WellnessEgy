@@ -32,6 +32,7 @@ CONTEXT_TURNS = 4  # recent turns sent back to the model, never the whole archiv
 
 TITLE = "title"
 MESSAGE = "message"
+QUERY = "query"  # the re-expressed question the model was asked (assistant mode)
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,7 @@ class StoredTurn:
     model: str | None
     created_at: datetime
     client_message_id: uuid.UUID | None
+    query: str | None = None
 
 
 def clean_title(raw: str) -> str:
@@ -115,10 +117,13 @@ def list_conversations(
     limit: int,
     cursor: str | None = None,
     query: str | None = None,
+    assistant_id: str | None = None,
 ) -> tuple[list[tuple[ChatConversation, str]], str | None]:
     """Newest activity first. Titles are encrypted, so a title search decrypts this
     user's conversations (at most MAX_CONVERSATIONS) in the backend."""
     base = select(ChatConversation).where(ChatConversation.user_id == user_id)
+    if assistant_id is not None:
+        base = base.where(ChatConversation.assistant_id == assistant_id)
     order = (ChatConversation.last_activity_at.desc(), ChatConversation.id.desc())
     if query:
         needle = query.casefold()
@@ -161,6 +166,14 @@ def _turn(cipher: HistoryCipher, message: ChatMessage) -> StoredTurn:
     except HistoryDecryptError:
         logger.error("chat_history_decrypt_failed", extra={"kind": MESSAGE})
         body = ""
+    query: str | None = None
+    if message.query_enc:
+        try:
+            query = cipher.decrypt(
+                message.query_enc, purpose=QUERY, row_id=message.id, owner_id=message.user_id
+            )
+        except HistoryDecryptError:
+            logger.error("chat_history_decrypt_failed", extra={"kind": QUERY})
     return StoredTurn(
         message_id=message.id,
         seq=message.seq,
@@ -172,6 +185,7 @@ def _turn(cipher: HistoryCipher, message: ChatMessage) -> StoredTurn:
         model=message.model,
         created_at=message.created_at,
         client_message_id=message.client_message_id,
+        query=query,
     )
 
 
@@ -239,7 +253,11 @@ def count_conversations(session: Session, user_id: uuid.UUID) -> int:
 
 
 def create_conversation(
-    session: Session, cipher: HistoryCipher, user_id: uuid.UUID, title: str
+    session: Session,
+    cipher: HistoryCipher,
+    user_id: uuid.UUID,
+    title: str,
+    assistant_id: str = "emotional",
 ) -> ChatConversation:
     conversation_id = uuid.uuid4()
     conversation = ChatConversation(
@@ -252,6 +270,7 @@ def create_conversation(
             owner_id=user_id,
         ),
         message_count=0,
+        assistant_id=assistant_id,
     )
     session.add(conversation)
     session.flush()
@@ -271,6 +290,7 @@ def append_turn(
     citations: list[dict[str, Any]],
     model: str | None,
     client_message_id: uuid.UUID | None,
+    query_text: str | None = None,
 ) -> tuple[StoredTurn, StoredTurn]:
     """Save one question and its reply. The caller holds the conversation row lock."""
     saved: list[ChatMessage] = []
@@ -292,6 +312,11 @@ def append_turn(
                 body, purpose=MESSAGE, row_id=message_id, owner_id=conversation.user_id
             ),
             intent_id=intent,
+            query_enc=cipher.encrypt(
+                query_text, purpose=QUERY, row_id=message_id, owner_id=conversation.user_id
+            )
+            if role == "user" and query_text
+            else None,
             language=language,
             citations=cites,
             model=model_name,

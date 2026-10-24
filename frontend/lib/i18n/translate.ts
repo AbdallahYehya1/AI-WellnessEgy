@@ -39,8 +39,6 @@ const AR: Record<string, string> = {
   "The name contains characters that aren't allowed.": "الاسم فيه حروف مش مسموحة.",
   [`Use at most ${DISPLAY_NAME_MAX_LENGTH} characters.`]: `استخدم ${DISPLAY_NAME_MAX_LENGTH} حرف بالكتير.`,
   // Mood
-  "Choose a number from 1 to 5.": "اختار رقم من ١ لـ ٥.",
-  "We couldn't save your check-in right now. Please try again.": "مقدرناش نحفظ تسجيلك دلوقتي. حاول تاني.",
   // Chat
   "The assistant couldn't respond right now. Please try again.": "المساعد مقدرش يرد دلوقتي. حاول تاني.",
   "This conversation couldn't be verified. Please start over.": "مقدرناش نتأكد من المحادثة دي. ابدأ من جديد.",
@@ -53,6 +51,10 @@ const AR: Record<string, string> = {
   "Saved chats are switched off, so this saved chat can't continue.": "حفظ المحادثات مقفول، فالمحادثة المحفوظة دي مينفعش تكمل.",
   "You've reached the number of saved chats. Delete some older chats to save more.": "وصلت للحد الأقصى من المحادثات المحفوظة. امسح محادثات قديمة علشان تحفظ أكتر.",
   "This chat no longer exists.": "المحادثة دي مبقتش موجودة.",
+  "This assistant isn't available yet.": "المساعد ده مش متاح لسه.",
+  "This chat belongs to another assistant. Please start a new chat.": "المحادثة دي تبع مساعد تاني. ابدأ محادثة جديدة.",
+  "Choose at least one feeling.": "اختار إحساس واحد على الأقل.",
+  "We couldn't save your reflection right now. Please try again.": "مقدرناش نحفظ تأملك دلوقتي. حاول تاني.",
   "Saved chats couldn't be loaded right now. Please try again.": "مقدرناش نحمّل المحادثات المحفوظة دلوقتي. حاول تاني.",
   "The chat couldn't be renamed. Please try again.": "مقدرناش نغيّر اسم المحادثة. حاول تاني.",
   "The chat couldn't be deleted. Please try again.": "مقدرناش نمسح المحادثة. حاول تاني.",

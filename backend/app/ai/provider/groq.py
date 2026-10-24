@@ -22,6 +22,7 @@ import urllib.request
 from typing import Any
 
 from app.ai.provider.base import GenerationRequest, GenerationResult, ProviderError
+from app.core.logging import get_logger
 from app.safety.gate import GenerationPermit
 
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -54,10 +55,45 @@ Rules you must follow:
   passage ids you used. Keep the reply under {max_chars} characters."""
 
 
+# Assistant mode (D-56): evidence for factual claims, clearly general coaching otherwise.
+COACHING_RULES = """You are a practical life-guidance assistant in a prototype.
+Rules you must follow:
+- Use the numbered passages for factual, health or evidence-based statements, and list the
+  passage ids you used. Never invent facts, figures or sources.
+- You may add everyday, low-risk practical suggestions that are not in the passages (how to
+  phrase something, how to plan a conversation, small next steps), but never present them
+  as facts from a source.
+- If the passages do not cover something, say what you are unsure about instead of guessing.
+- The question summarises the person's situation; do not invent personal details about them.
+- Never diagnose, never suggest or discuss medication, and never give legal, tax or
+  investment advice. Never claim to be a therapist, doctor, counsellor or lawyer.
+- Use short paragraphs or a short list. You may end with one follow-up question.
+- In Arabic, write every word in Arabic script: never mix in English words.
+- Respond with a JSON object only: {"reply": "<text>", "citations": ["P1", ...]} listing the
+  passage ids you used. Keep the reply under {max_chars} characters."""
+
+
 def _json_object(content: str) -> str:
     """The JSON object in the reply, tolerating stray text or code fences around it."""
     start, end = content.find("{"), content.rfind("}")
     return content[start : end + 1] if 0 <= start < end else content
+
+
+logger = get_logger(__name__)
+
+
+def _log_usage(body: Any) -> None:
+    """Token counts only (to size the free quota); never prompts or replies."""
+    usage = body.get("usage") if isinstance(body, dict) else None
+    if isinstance(usage, dict):
+        logger.info(
+            "chat_provider_usage",
+            extra={
+                k: usage[k]
+                for k in ("prompt_tokens", "completion_tokens", "total_tokens")
+                if isinstance(usage.get(k), int)
+            },
+        )
 
 
 class GroqProvider:
@@ -75,11 +111,8 @@ class GroqProvider:
         passages = "\n\n".join(
             f"[{pid}] {p.text}" for pid, p in zip(ids, request.passages, strict=True)
         )
-        system = (
-            SYSTEM_RULES.replace("{max_chars}", str(request.max_chars))
-            + "\n"
-            + request.instructions
-        )
+        rules = COACHING_RULES if request.coaching else SYSTEM_RULES
+        system = rules.replace("{max_chars}", str(request.max_chars)) + "\n" + request.instructions
         if request.reply_language in _REPLY_LANGUAGE:
             system += "\n" + _REPLY_LANGUAGE[request.reply_language]
         messages: list[dict[str, str]] = [
@@ -126,6 +159,7 @@ class GroqProvider:
             raise ProviderError("quota" if exc.code == 429 else f"http_{exc.code}") from None
         except (urllib.error.URLError, TimeoutError, ValueError, OSError):
             raise ProviderError("unreachable") from None
+        _log_usage(body)
         return self._parse(body, ids)
 
     @staticmethod

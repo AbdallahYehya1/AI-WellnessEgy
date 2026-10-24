@@ -40,6 +40,8 @@ def test_only_expected_routes_are_exposed() -> None:
         "/consents/me",
         "/mood/checkins",
         "/mood/history",
+        "/mood/reflections",
+        "/mood/insights",
         "/chat/config",
         "/chat/messages",
         "/chat/history",

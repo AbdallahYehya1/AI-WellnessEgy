@@ -256,7 +256,8 @@ def test_synthetic_content_is_excluded_under_a_non_synthetic_policy(
         db_engine,
         "---\nslug: test-approved\ntitle: Approved test doc\npublisher: fixtures\n"
         "source_ref: fixture:approved\nversion_label: 1\ncontent_type: x\nlanguage: en\n"
-        "age_bands: adult\nreview_status: approved\nreviewed_by: test reviewer\n"
+        "age_bands: adult\ndomains: emotional\nreview_status: approved\n"
+        "reviewed_by: test reviewer\n"
         "reviewed_at: 2026-01-01T00:00:00+00:00\nlicence: test\npermitted_use: test\n"
         "retrieved_on: 2026-01-01\nclinical_review: test reviewer sign-off\n"
         "---\nSlow breathing can feel calming.\n",
@@ -426,6 +427,7 @@ def test_config_reports_the_adult_prototype(client: TestClient) -> None:
             "retention_days": 90,
             "max_conversations": 200,
         },
+        "assistants": [],  # listed only in curated (assistant) mode
     }
     assert [t["prompt_id"] for t in body["supported_topics"]] == [
         "stress",

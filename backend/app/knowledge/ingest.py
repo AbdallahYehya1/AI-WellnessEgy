@@ -24,6 +24,7 @@ from pathlib import Path
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.assistants.registry import DOMAINS
 from app.knowledge.models import REVIEW_STATUSES, KnowledgeChunk, KnowledgeSource
 
 CHUNK_TARGET_CHARS = 800
@@ -85,6 +86,11 @@ def parse(text: str) -> ParsedDocument:
             raise IngestError(f"missing provenance: {', '.join(missing_provenance)}")
         if meta["review_status"] == "approved" and meta["clinical_review"] == "none":
             raise IngestError("approved sources cannot have clinical_review: none")
+    domains = [d.strip() for d in meta.get("domains", "").split(",") if d.strip()]
+    if not set(domains) <= set(DOMAINS):
+        raise IngestError("unknown domain")
+    if meta["review_status"] in ("draft", "approved") and not domains:
+        raise IngestError("missing provenance: domains")  # every real source has a domain
     body = match.group(2).strip()
     if _INJECTION.search(body):
         raise IngestError("document contains instruction-like text")
@@ -179,6 +185,7 @@ def ingest_document_result(
     )
     source.source_verified = meta.get("source_verified", "").lower() == "true"
     source.clinical_review = meta.get("clinical_review") or "none"
+    source.domains = [d.strip() for d in meta.get("domains", "").split(",") if d.strip()]
     source.content_sha256 = body_hash
     session.add(source)
     session.flush()

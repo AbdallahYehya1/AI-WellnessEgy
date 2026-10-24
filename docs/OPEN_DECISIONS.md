@@ -741,3 +741,135 @@ Limits:
 - Arabizi isn't recognised;
 - the support response is a placeholder (D-13);
 - unrestricted chat still needs everything in D-52.
+
+## M. Raised in the assistants and Daily Reflection upgrade (2026-10-23)
+
+### D-56. Ten specialised assistants on one pipeline — DECIDED (engineering); 3 ready, 7 preview
+
+**One pipeline, many assistants.** The registry (`backend/app/assistants/registry.py`)
+defines ten assistants. They share one database, safety layer, retrieval code, history
+store and provider gate. Each has a primary domain, optional secondary domains, its own
+instructions, starters and a `ready` or `preview` status.
+
+- **Ready:** Marriage & Healthy Relationships (`relationships`), Career & Work (`career`)
+  and Emotional Wellbeing & Resilience (`emotional`, the legacy chat).
+- **Preview:** family, growth, fitness, social, planning, finance and everyday. Each is
+  listed as "Coming soon" and can't be opened. The API refuses them with
+  `403 assistant_unavailable`, and the frontend falls back to the default assistant.
+  An assistant becomes ready only when its knowledge base passes the per-assistant
+  evaluation (`docs/evaluation/KNOWLEDGE_AUDIT.md`).
+
+**Domain isolation in SQL.** `knowledge_sources.domains` (text[], checked against the ten
+ids, GIN-indexed) says which assistants may retrieve a source. Retrieval adds
+`s.domains && :domains` to the WHERE clause, and an assistant always searches its own
+domain only. Measured on 12 held-out questions written before the final run
+(`docs/evaluation/assistant-retrieval.json`):
+
+| Mode | Hit@4 | Top-1 | Cross-domain leakage |
+|---|---|---|---|
+| Old general retrieval (baseline) | 0.00 | 0.00 | 0.08 |
+| New knowledge, no domain filter | 0.67 | 0.50 | 0.23–0.27 (tied passages come back in arbitrary order) |
+| New knowledge, domain-filtered | 1.00 | 0.92 | 0.00 |
+
+These are engineering retrieval metrics on a small set. They don't show clinical accuracy
+or answer quality.
+
+**Understanding, not presets.** `understanding.py` reads a free-text message in English,
+MSA or Egyptian Arabic. It runs screens for crisis, harm in relationships, clinical,
+fitness-medical, regulated (legal, tax, investment), sensitive, personal-details and
+prompt-injection content. Then it scores the assistant's subtopic lexicon, keeping at most
+3 subtopics. If another ready assistant clearly fits better (at least 2 points higher), it
+suggests a **handoff**: a link to a new chat with that assistant, with nothing carried over.
+
+**Two response strategies**, both from one generation call:
+
+1. Evidence-grounded statements that cite the retrieved passages.
+2. Low-risk, everyday coaching suggestions that are clearly identified as general
+   suggestions and not cited.
+
+Replies are limited to 1,600 characters. Health, legal and financial facts must come from
+passages.
+
+**What is sent to Groq (structured mode, the only mode implemented):**
+
+| Sent | Not sent |
+|---|---|
+| The assistant's fixed instructions and the shared rules | The user's own sentence, in any form |
+| A composed question built from the matched subtopics' reviewed phrases plus at most two allow-listed context labels, e.g. *"At work, what are practical ways to manage workload and pressure at work…? (Context: work)"* | Names, numbers, e-mail addresses, places or other details from the message |
+| Up to 4 retrieved public passages (numbered) | User id, e-mail, account data, reflections, mood history |
+| Up to 4 earlier turns, each a composed question or a model reply | Refused or support-routed messages |
+| The reply language (`en` or `ar`) | Safety diagnostics |
+
+Groq logs only token counts (`chat_provider_usage`). The composed question is stored
+encrypted with the turn (`chat_messages.query_enc`, purpose `query`) so a continued chat
+keeps its context without re-reading the user's words.
+
+**Contextual mode is gated and not implemented.** It would send the user's own
+(redacted) words to Groq. That is a new sensitive-data transfer. It needs explicit founder
+approval, a privacy review (Egypt PDPL), confirmed provider retention terms (Groq
+zero-data-retention is unconfirmed) and a redaction evaluation. Implementing the
+assistants doesn't turn it on.
+
+**Safety boundaries kept:**
+- Crisis messages route to the support response.
+- Harm in a relationship (hitting, threats, control) gets a dedicated notice with Egypt
+  police 122 and ambulance 123. The NCW hotline 15115 is not shown until it is verified.
+- Clinical, medication, legal, tax and investment requests are refused, with a pointer to
+  a professional.
+
+**False refusals and missed risks are measured separately**
+(`app/assistants/safety_eval.py`, report in `docs/evaluation/assistant-safety.json`).
+Labelled benign and risky sets are written in English, MSA and Egyptian Arabic. Each set
+was measured once before the screens were adjusted for it:
+
+| Set | False refusals | Missed risks | Screens at the time |
+|---|---|---|---|
+| v1 (27 benign, 21 risky) | 0/27 | 3/21 | original |
+| v2 (10, 12) | 0/10 | **9/12** | after fixing v1's misses |
+| v3 (10, 12) | 1/10 | 1/12 | after widening by phrase families |
+
+All sets and a guard set of everyday look-alike phrases now pass. **v2 is the key
+finding:** keyword screens missed most indirect crisis and violence phrasing. The
+widening is shared with the legacy chat's crisis screen, which was equally weak. Expect
+new phrasings to slip through. Before wider release this needs:
+
+- a classifier;
+- clinical review of the risk lists and of the support response (D-13);
+- a larger evaluation written by people other than the screen's author.
+
+**Fair use:** 25 answered messages per user per day, under the global
+`CHAT_PROVIDER_DAILY_LIMIT` (60), so one account can't use up the shared free quota.
+
+**History:** conversations carry `assistant_id`, default `emotional` for existing rows.
+Lists are filtered per assistant. Continuing a chat with a different assistant answers
+`409 assistant_mismatch`.
+
+### D-57. Daily Reflection replaces the 1–5 check-in — DECIDED (engineering)
+
+- **Entry:** one or more of nine feelings (happy, calm, good, okay, anxious, sad,
+  frustrated, tired, excited) with emoji *and* text labels. Factors are optional, from
+  eleven choices. There is no score.
+- **Stored** in `mood_checkins` as `entry_version = 2` with `emotions` and `factors`, and
+  `mood_score` NULL. Legacy 1–5 rows (`entry_version = 1`) are unchanged and still shown,
+  with their chart and table.
+- **Private note: off.** `note_enc` exists (encrypted like chat history) but the API doesn't
+  accept a note. A free-text note about how someone feels is sensitive data. It needs the
+  same privacy review as D-54 before it is collected.
+- **Insights** (`GET /mood/insights?period=week|month`) are descriptive counts of *days*
+  in the user's time zone:
+  - which feelings and factors were chosen;
+  - which pairs occurred together on at least 2 days, with the caveat "They don't show
+    causes".
+  - No scores, trends, diagnoses or streaks.
+  - Fewer than 3 reflections in the period shows a gentle "not enough yet" note.
+- **Handoff:** after saving, up to 3 ready assistants may be offered, chosen from the
+  factors and from anxious, sad or frustrated. The link opens a fresh chat. Nothing from
+  the reflection is put in the URL or sent to the assistant.
+
+### D-58. NHS website content terms — OPEN (legal)
+
+Six sources are verbatim excerpts from NHS Every Mind Matters pages (Open Government
+Licence v3.0). The NHS website terms also ask syndicators to accept a content licensing
+agreement and forbid attributing adapted text to the NHS. The excerpts are verbatim and
+attributed, which is acceptable for a prototype. **Before any non-prototype use**, confirm
+whether the agreement applies, or replace these sources.

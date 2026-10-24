@@ -28,7 +28,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.assistants.registry import DOMAINS
 from app.core.db import Base
+
+DOMAIN_ARRAY_SQL = "ARRAY[" + ", ".join(f"'{d}'" for d in DOMAINS) + "]::text[]"
 
 REVIEW_STATUSES = ("synthetic", "draft", "approved", "withdrawn")
 SEARCH_VECTOR_SQL = (
@@ -58,6 +61,8 @@ class KnowledgeSource(Base):
             "review_status <> 'approved' OR clinical_review <> 'none'",
             name="approved_requires_clinical_review",
         ),
+        CheckConstraint(f"domains <@ {DOMAIN_ARRAY_SQL}", name="domains_valid"),
+        Index("ix_knowledge_sources_domains", "domains", postgresql_using="gin"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -85,6 +90,8 @@ class KnowledgeSource(Base):
     source_verified: Mapped[bool] = mapped_column(Boolean, server_default=false())
     clinical_review: Mapped[str] = mapped_column(String(200), server_default="none")
     content_sha256: Mapped[str | None] = mapped_column(String(64))
+    # Assistant domains this source may be retrieved for (D-56), enforced in SQL.
+    domains: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
 
 
 class KnowledgeChunk(Base):

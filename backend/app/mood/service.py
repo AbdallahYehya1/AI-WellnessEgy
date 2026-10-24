@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.audit.service import record_event
 from app.common.errors import ApiError
 from app.mood.models import MoodCheckin
-from app.mood.schemas import HistoryQuery, MoodCheckinCreate
+from app.mood.schemas import HistoryQuery, MoodCheckinCreate, ReflectionCreate
 from app.users.models import User
 
 
@@ -34,6 +34,29 @@ def record_checkin(session: Session, user: User, payload: MoodCheckinCreate) -> 
         target_id=checkin.id,
     )
     return checkin
+
+
+def record_reflection(session: Session, user: User, payload: ReflectionCreate) -> MoodCheckin:
+    reflection = MoodCheckin(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        mood_score=None,
+        emotions=list(payload.emotions),
+        factors=list(payload.factors),
+        entry_version=2,
+    )
+    session.add(reflection)
+    session.flush()
+    session.refresh(reflection)
+    # That a reflection happened, and to which row. Never the feelings or factors.
+    record_event(
+        session,
+        action="mood.checkin_recorded",  # a reflection is a check-in row (entry_version 2)
+        actor_user_id=user.id,
+        target_type="mood_checkin",
+        target_id=reflection.id,
+    )
+    return reflection
 
 
 def checkin_history(session: Session, user: User, query: HistoryQuery) -> list[MoodCheckin]:

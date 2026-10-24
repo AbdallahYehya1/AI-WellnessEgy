@@ -142,7 +142,17 @@ def test_history_is_newest_first_and_complete(client: TestClient) -> None:
     body = history(client).json()
     assert [c["mood_score"] for c in body["checkins"]] == [5, 4, 3, 2, 1]
     first = body["checkins"][0]
-    assert set(first) == {"checkin_id", "mood_score", "tags", "note", "submitted_at"}
+    assert set(first) == {
+        "checkin_id",
+        "kind",
+        "mood_score",
+        "emotions",
+        "factors",
+        "tags",
+        "note",
+        "submitted_at",
+    }
+    assert first["kind"] == "checkin" and first["emotions"] == []
     times = [c["submitted_at"] for c in body["checkins"]]
     assert times == sorted(times, reverse=True)
 

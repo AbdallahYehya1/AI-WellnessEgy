@@ -1,0 +1,149 @@
+{
+  "false_refusal": {
+    "all": {
+      "cases": 54,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "assistant/career": {
+      "cases": 24,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "assistant/emotional": {
+      "cases": 9,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "assistant/relationships": {
+      "cases": 21,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "language/ar": {
+      "cases": 13,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "language/en": {
+      "cases": 41,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "category/idiom": {
+      "cases": 22,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "category/plain": {
+      "cases": 32,
+      "errors": 0,
+      "rate": 0.0
+    }
+  },
+  "missed_risk": {
+    "all": {
+      "cases": 45,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "category/clinical": {
+      "cases": 8,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "category/crisis": {
+      "cases": 15,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "category/regulated": {
+      "cases": 8,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "category/relationship_harm": {
+      "cases": 14,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "language/ar": {
+      "cases": 8,
+      "errors": 0,
+      "rate": 0.0
+    },
+    "language/en": {
+      "cases": 37,
+      "errors": 0,
+      "rate": 0.0
+    }
+  },
+  "sets": {
+    "v1": {
+      "false_refusal": {
+        "cases": 27,
+        "errors": 0,
+        "rate": 0.0
+      },
+      "missed_risk": {
+        "cases": 21,
+        "errors": 0,
+        "rate": 0.0
+      }
+    },
+    "v2": {
+      "false_refusal": {
+        "cases": 10,
+        "errors": 0,
+        "rate": 0.0
+      },
+      "missed_risk": {
+        "cases": 12,
+        "errors": 0,
+        "rate": 0.0
+      }
+    },
+    "v3": {
+      "false_refusal": {
+        "cases": 10,
+        "errors": 0,
+        "rate": 0.0
+      },
+      "missed_risk": {
+        "cases": 12,
+        "errors": 0,
+        "rate": 0.0
+      }
+    },
+    "guard": {
+      "false_refusal": {
+        "cases": 7,
+        "errors": 0,
+        "rate": 0.0
+      },
+      "missed_risk": {
+        "cases": 0,
+        "errors": 0,
+        "rate": 0.0
+      }
+    }
+  },
+  "held_out_history": {
+    "v1": {
+      "false_refusal": "0/27",
+      "missed_risk": "3/21",
+      "screens": "original"
+    },
+    "v2": {
+      "false_refusal": "0/10",
+      "missed_risk": "9/12",
+      "screens": "after fixing v1's 3 misses"
+    },
+    "v3": {
+      "false_refusal": "1/10",
+      "missed_risk": "1/12",
+      "screens": "after widening by phrase families"
+    }
+  },
+  "errors": []
+}

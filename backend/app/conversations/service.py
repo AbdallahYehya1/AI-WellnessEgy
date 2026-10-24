@@ -41,8 +41,11 @@ from app.ai.provider.base import (
     Passage,
     ProviderError,
 )
+from app.assistants.registry import BY_ID as ASSISTANTS_BY_ID
+from app.assistants.registry import LEGACY_ASSISTANT, Assistant
+from app.assistants.understanding import Understanding, understand
 from app.common.errors import ApiError
-from app.common.ratelimit import allow_request, requests_last_day
+from app.common.ratelimit import allow_request, requests_last_day, user_requests_last_day
 from app.conversations import history as history_store
 from app.conversations.crypto import HistoryCipher
 from app.conversations.demo import DEMO_PROMPTS
@@ -59,12 +62,13 @@ from app.conversations.schemas import (
     HistoryTurn,
     RefusalReason,
     StoredMessageOut,
+    SupportKind,
     TopicOut,
 )
 from app.core.logging import get_logger
-from app.knowledge.retrieval import retrieve
+from app.knowledge.retrieval import retrieve, retrieve_terms
 from app.safety.assessor import SafetyAssessor, assess_safety_risk
-from app.safety.contracts import Outcome, RiskLevel, SafetyDecision
+from app.safety.contracts import Assessment, Outcome, RiskLevel, SafetyDecision
 from app.safety.gate import GenerationGate, PermitError, generate_with_permit
 from app.safety.models import SafetyEvent
 from app.safety.output import validate_output
@@ -89,7 +93,15 @@ NOTICES: dict[str, str] = {
     ),
     "unable_to_answer": "I couldn't put together a safe answer this time. Please try rephrasing.",
     "unavailable": "The assistant is unavailable right now. Please try again in a few minutes.",
+    "relationship_safety": (
+        "What you describe may mean you are being hurt, threatened or controlled. That is not "
+        "your fault, and you deserve to be safe. If you are in immediate danger in Egypt, call "
+        "the police on 122 or an ambulance on 123. Talking to someone you trust can help. This "
+        "assistant can't safely help with this situation, but you can keep using it for other "
+        "questions."
+    ),
 }
+ASSISTANT_REPLY_CHARS = 1600
 
 _PROVIDER_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="llm")
 _ARABIC = re.compile("[؀-ۿ]")
@@ -112,6 +124,8 @@ class ChatRuntime:
     # Saved history (D-54): the cipher when CHAT_HISTORY_KEYS is configured, else None.
     history: HistoryCipher | None = None
     history_retention_days: int = 90
+    # Fair use (D-56): one account's model calls per 24 hours, inside the global cap.
+    user_daily_limit: int = 25
 
     @property
     def retrievable_statuses(self) -> tuple[str, ...]:
@@ -194,6 +208,26 @@ REFUSAL_NOTICES: dict[str, str] = {
         "That's outside what this wellness-education assistant covers. If something is "
         "affecting you, a qualified professional or someone you trust can help."
     ),
+    "regulated": (
+        "I can't give investment, tax or legal advice. A qualified professional can help with "
+        "that. I'm happy to help with the everyday side of it."
+    ),
+    "needs_detail": (
+        "Could you tell me a little more about what's going on? For example, what happened, "
+        "what you'd like to change, or what you've already tried."
+    ),
+    "daily_limit": (
+        "You've reached today's limit for this free prototype. Please come back tomorrow."
+    ),
+}
+_ASSISTANT_REFUSALS: dict[str, RefusalReason] = {
+    "personal_details": "personal_details",
+    "clinical": "clinical",
+    "regulated": "regulated",
+    "sensitive": "sensitive",
+    "needs_detail": "needs_detail",
+    "needs_context": "needs_context",
+    "too_long": "too_long",
 }
 _GATE_REFUSALS: dict[str, RefusalReason] = {
     "unsupported": "unsupported_topic",
@@ -264,6 +298,38 @@ def _stored_context(runtime: ChatRuntime, turns: list[StoredTurn]) -> _Context:
     return context
 
 
+def _assistant_context(
+    assistant: Assistant, stored: list[StoredTurn] | None, history: list[HistoryTurn]
+) -> _Context:
+    """Assistant mode: earlier user turns are their re-expressed questions (saved
+    encrypted, or re-derived from signed browser history); the user's own words never
+    reach the model, and a crisis anywhere earlier still routes to support."""
+    context = _Context()
+    keep = False
+    if stored is not None:
+        for turn in stored:
+            if turn.role == "user":
+                keep = bool(turn.query)
+                if turn.query:
+                    context.search_context.append(turn.query)
+                    context.model_history.append(("user", turn.query))
+            elif keep:
+                context.model_history.append(("assistant", turn.text))
+        return context
+    for item in history:
+        if item.role == "user":
+            u = understand(assistant, item.text, has_history=bool(context.model_history))
+            if u.outcome in ("crisis", "relationship_safety"):
+                context.crisis = True
+            keep = u.outcome == "accept"
+            if keep:
+                context.search_context.append(u.question)
+                context.model_history.append(("user", u.question))
+        elif keep:
+            context.model_history.append(("assistant", item.text))
+    return context
+
+
 def _citation_out(raw: dict[str, Any]) -> Citation:
     return Citation.model_validate(raw)
 
@@ -273,6 +339,7 @@ def conversation_summary(
 ) -> ConversationSummary:
     return ConversationSummary(
         conversation_id=conversation.id,
+        assistant_id=conversation.assistant_id,
         title=history_store.conversation_title(cipher, conversation),
         message_count=conversation.message_count,
         created_at=conversation.created_at,
@@ -292,7 +359,13 @@ def stored_message_out(runtime: ChatRuntime, user: User, turn: StoredTurn) -> St
         role="assistant" if turn.role == "assistant" else "user",
         text=turn.text,
         language="ar" if turn.language == "ar" else "en",
-        topic=_topic(turn.intent_id, turn.language) if turn.role == "user" else None,
+        topic=(
+            TopicOut(prompt_id="assistant", question=turn.query)
+            if turn.query
+            else _topic(turn.intent_id, turn.language)
+        )
+        if turn.role == "user"
+        else None,
         citations=[_citation_out(c) for c in turn.citations],
         model=turn.model,
         signature=sign_turn(runtime.signing_key, user.id, turn.text)
@@ -324,6 +397,7 @@ def _saved_response(
         user_message_id=question.message_id,
         assistant_message_id=answer.message_id,
         created_at=answer.created_at,
+        assistant_id=conversation.assistant_id,
     )
 
 
@@ -345,6 +419,7 @@ def handle_message(
 
     # --- Context: from the verified owner's saved thread, or signed browser history ---
     conversation: ChatConversation | None = None
+    stored_turns: list[StoredTurn] | None = None
     if payload.conversation_id is not None:
         if cipher is None or not saving:
             raise ApiError(
@@ -361,9 +436,8 @@ def handle_message(
         )
         if conversation is None:  # missing, deleted, or another user's: indistinguishable
             raise ApiError(404, "conversation_not_found", "This conversation doesn't exist.")
-        context = _stored_context(
-            runtime, history_store.recent_turns(session, cipher, user.id, conversation.id)
-        )
+        stored_turns = history_store.recent_turns(session, cipher, user.id, conversation.id)
+        context = _stored_context(runtime, stored_turns)
     else:
         for turn in payload.history:
             if turn.role == "assistant" and not _signature_valid(
@@ -380,6 +454,33 @@ def handle_message(
                 return _saved_response(runtime, user, *existing)
         context = _ephemeral_context(runtime, payload.history)
 
+    # --- Which assistant (D-56): a saved conversation keeps its own ---
+    if (
+        conversation is not None
+        and payload.assistant_id is not None
+        and payload.assistant_id != conversation.assistant_id
+    ):
+        raise ApiError(409, "assistant_mismatch", "This conversation belongs to another assistant.")
+    assistant_id = (
+        payload.assistant_id
+        or (conversation.assistant_id if conversation is not None else None)
+        or LEGACY_ASSISTANT
+    )
+    assistant = ASSISTANTS_BY_ID.get(assistant_id)
+    if assistant is None:
+        raise ApiError(422, "unknown_assistant", "This assistant doesn't exist.")
+    if assistant.status != "ready":
+        raise ApiError(403, "assistant_unavailable", "This assistant isn't available yet.")
+    assistant_mode = runtime.demo_curated and assistant.assistant_id != LEGACY_ASSISTANT
+    # Every assistant searches its own domain, in every mode (D-56).
+    search_domains: tuple[str, ...] = (assistant.domain,)
+    understanding: Understanding | None = None
+    search_en = search_ar = ""
+    if assistant_mode:
+        context = _assistant_context(
+            assistant, stored_turns, payload.history if conversation is None else []
+        )
+
     # --- Typed-input gate (topic mode): refused before limits, retrieval or any model ---
     request_id = uuid.uuid4()
     language = "ar" if _ARABIC.search(payload.message) else "en"
@@ -387,7 +488,44 @@ def handle_message(
     message = payload.message  # assessed and searched
     model_question = payload.message  # what the model is asked
     topic_question: str | None = None
-    if runtime.demo_curated:
+    if assistant_mode:
+        u = understand(assistant, payload.message, has_history=bool(context.model_history))
+        if u.outcome in ("crisis", "relationship_safety") or context.crisis:
+            kind: SupportKind = (
+                "relationship_safety" if u.outcome == "relationship_safety" else "crisis"
+            )
+            decision = SafetyDecision(
+                risk_level=RiskLevel.HIGH,
+                outcome=Outcome.SUPPORT,
+                policy_version=runtime.policy.policy_id,
+                reason_code=f"assistant_{kind}",
+            )
+            _record(session, user, request_id, band.value, decision, "support")
+            notice_key = "relationship_safety" if kind == "relationship_safety" else "support"
+            return ChatResponse(
+                status="support",
+                notice=NOTICES[notice_key],
+                support_kind=kind,
+                assistant_id=assistant.assistant_id,
+            )
+        if u.outcome != "accept":
+            logger.info("chat_input_refused", extra={"reason": u.outcome})
+            refusal = _refuse(_ASSISTANT_REFUSALS.get(u.outcome, "needs_detail"))
+            refusal.handoff = u.handoff
+            refusal.assistant_id = assistant.assistant_id
+            return refusal
+        understanding = u
+        language = u.language
+        if u.follow_up and context.search_context:
+            # A follow-up searches the topic of the previous question again.
+            previous = understand(assistant, context.search_context[-1], has_history=False)
+            search_en, search_ar = previous.search_en, previous.search_ar
+            secondary = previous.secondary_domains
+        else:
+            search_en, search_ar, secondary = u.search_en, u.search_ar, u.secondary_domains
+        search_domains = (assistant.domain, *secondary)
+        message = model_question = topic_question = u.question
+    elif runtime.demo_curated:
         gate = classify(payload.message, context.intents)
         if gate.outcome == "crisis" or context.crisis:
             decision = SafetyDecision(
@@ -438,9 +576,29 @@ def handle_message(
         if used > runtime.provider_daily_limit:
             logger.warning("chat_daily_limit_reached")
             return _respond("unavailable")
+        try:
+            with session.begin_nested():
+                mine = user_requests_last_day(session, user.id)
+        except Exception:  # cannot tell: fail closed
+            logger.error("chat_user_limit_unavailable")
+            return _respond("unavailable")
+        if mine > runtime.user_daily_limit:
+            logger.info("chat_user_daily_limit_reached")
+            return ChatResponse(
+                status="unavailable",
+                notice=REFUSAL_NOTICES["daily_limit"],
+                refusal_reason="daily_limit",
+            )
 
-    window = [text for role, text in context.model_history if role == "user"] + [message]
-    decision = assess_safety_risk(runtime.assessor, runtime.policy, window, band.value)
+    if assistant_mode:
+        # Screened by understand() above; the curated assessor only knows the reviewed
+        # wellbeing questions. The policy still makes the decision.
+        decision = runtime.policy.decide(
+            Assessment(RiskLevel.LOW, reason_code="assistant_screened")
+        )
+    else:
+        window = [text for role, text in context.model_history if role == "user"] + [message]
+        decision = assess_safety_risk(runtime.assessor, runtime.policy, window, band.value)
 
     if decision.outcome is not Outcome.GENERATE:
         status: ChatStatus = {
@@ -453,16 +611,28 @@ def handle_message(
 
     try:
         with session.begin_nested():
-            chunks = retrieve(
-                session,
-                message,
-                band.value,
-                runtime.retrievable_statuses,
-                # Follow-ups ("explain that in Arabic") borrow the topic of earlier user
-                # turns (their reviewed questions in topic mode); assistant turns are never
-                # used as search input, so sources are always freshly retrieved.
-                context=context.search_context,
-            )
+            if assistant_mode:
+                chunks = retrieve_terms(
+                    session,
+                    english=search_en,
+                    arabic=search_ar,
+                    language=language,
+                    age_band=band.value,
+                    statuses=runtime.retrievable_statuses,
+                    domains=search_domains,
+                )
+            else:
+                chunks = retrieve(
+                    session,
+                    message,
+                    band.value,
+                    runtime.retrievable_statuses,
+                    # Follow-ups ("explain that in Arabic") borrow the topic of earlier
+                    # user turns (their reviewed questions in topic mode); assistant turns
+                    # are never search input, so sources are always freshly retrieved.
+                    context=context.search_context,
+                    domains=search_domains,
+                )
     except Exception as error:
         logger.error("chat_retrieval_unavailable", extra={"category": _failure_category(error)})
         _record(session, user, request_id, band.value, decision, "unavailable")
@@ -477,9 +647,10 @@ def handle_message(
         message=model_question,
         history=context.model_history[-history_store.CONTEXT_TURNS * 2 :],
         passages=[Passage(chunk_id=str(c.chunk_id), text=c.content) for c in chunks],
-        instructions=band_config.instructions,
-        max_chars=band_config.max_reply_chars,
+        instructions=assistant.instructions if assistant_mode else band_config.instructions,
+        max_chars=ASSISTANT_REPLY_CHARS if assistant_mode else band_config.max_reply_chars,
         reply_language=language,
+        coaching=assistant_mode,
     )
     future = _PROVIDER_EXECUTOR.submit(
         generate_with_permit,
@@ -499,7 +670,8 @@ def handle_message(
         return _respond("unavailable")
 
     retrieved = {str(c.chunk_id): c for c in chunks}
-    if not validate_output(result, set(retrieved), band_config.max_reply_chars):
+    max_chars = ASSISTANT_REPLY_CHARS if assistant_mode else band_config.max_reply_chars
+    if not validate_output(result, set(retrieved), max_chars):
         logger.warning("chat_output_rejected")  # e.g. a citation of an unretrieved passage
         _record(session, user, request_id, band.value, decision, "unable_to_answer")
         return _respond("unable_to_answer")
@@ -526,17 +698,26 @@ def handle_message(
             citations=citations,
             model=model_name,
         ),
-        topic=TopicOut(prompt_id=intent_id, question=topic_question)
-        if intent_id and topic_question
+        topic=TopicOut(prompt_id=intent_id or assistant.assistant_id, question=topic_question)
+        if topic_question
         else _topic(intent_id, language),
+        assistant_id=assistant.assistant_id,
+        handoff=understanding.handoff if understanding is not None else None,
     )
     if not saving or cipher is None:
         return response
 
     # --- Opted in: save the question and the validated reply (never refusals) ---
     if conversation is None:
-        title = _canonical(intent_id, language) if intent_id else payload.message
-        conversation = history_store.create_conversation(session, cipher, user.id, title or "")
+        if understanding is not None and understanding.subtopics:
+            first = understanding.subtopics[0]
+            phrase = first.phrase_ar if language == "ar" else first.phrase_en
+            title = phrase[:1].upper() + phrase[1:]
+        else:
+            title = (_canonical(intent_id, language) if intent_id else payload.message) or ""
+        conversation = history_store.create_conversation(
+            session, cipher, user.id, title, assistant_id=assistant.assistant_id
+        )
         conversation = history_store.get_conversation(session, user.id, conversation.id, lock=True)
         assert conversation is not None  # noqa: S101 - just created in this transaction
     question, answer = history_store.append_turn(
@@ -551,5 +732,6 @@ def handle_message(
         citations=[c.model_dump(mode="json") for c in citations],
         model=model_name,
         client_message_id=payload.client_message_id,
+        query_text=model_question if assistant_mode else None,
     )
     return _saved_response(runtime, user, conversation, question, answer, topic=response.topic)

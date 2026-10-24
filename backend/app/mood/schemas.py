@@ -12,8 +12,8 @@ before anything is written. An omitted or null `note` is still valid.
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Annotated
+from datetime import date, datetime
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictInt, field_validator
@@ -61,12 +61,103 @@ class MoodCheckinCreated(BaseModel):
     submitted_at: datetime
 
 
+# Daily Reflection (D-57). Labels, not a good-to-bad scale; several may apply at once.
+EMOTIONS: tuple[str, ...] = (
+    "happy",
+    "calm",
+    "good",
+    "okay",
+    "anxious",
+    "sad",
+    "frustrated",
+    "tired",
+    "excited",
+)
+FACTORS: tuple[str, ...] = (
+    "work",
+    "relationships",
+    "family",
+    "studies",
+    "finances",
+    "physical_health",
+    "exercise",
+    "sleep",
+    "social",
+    "goals",
+    "other",
+)
+
+
+class ReflectionCreate(BaseModel):
+    """POST /mood/reflections. No free-text note while D-32 is open."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    emotions: list[str] = Field(min_length=1, max_length=len(EMOTIONS))
+    factors: list[str] = Field(default_factory=list, max_length=len(FACTORS))
+
+    @field_validator("emotions")
+    @classmethod
+    def _known_emotions(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != len(value) or any(v not in EMOTIONS for v in value):
+            raise ValueError("Choose feelings from the list, each once.")
+        return value
+
+    @field_validator("factors")
+    @classmethod
+    def _known_factors(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != len(value) or any(v not in FACTORS for v in value):
+            raise ValueError("Choose factors from the list, each once.")
+        return value
+
+
+class ReflectionCreated(BaseModel):
+    checkin_id: UUID
+    submitted_at: datetime
+    # Optional next steps, never a diagnosis: ready assistants related to the factors.
+    suggested_assistants: list[str]
+
+
 class MoodCheckinOut(BaseModel):
     checkin_id: UUID
-    mood_score: int
+    kind: Literal["checkin", "reflection"]
+    mood_score: int | None  # legacy 1-5 check-ins only
+    emotions: list[str]
+    factors: list[str]
     tags: list[str]
     note: str | None
     submitted_at: datetime
+
+
+class CountItem(BaseModel):
+    label: str
+    count: int
+
+
+class FactorLink(BaseModel):
+    emotion: str
+    factor: str
+    days: int
+
+
+class InsightDay(BaseModel):
+    day: date
+    emotions: list[str]
+
+
+class Insights(BaseModel):
+    """Descriptive counts only: no scores, causes or diagnoses."""
+
+    period: Literal["week", "month"]
+    start: date
+    end: date  # exclusive
+    reflections: int
+    days_with_reflections: int
+    enough_data: bool
+    emotions: list[CountItem]
+    factors: list[CountItem]
+    links: list[FactorLink]  # "anxious on 4 days; work was marked on 3 of them"
+    calendar: list[InsightDay]
 
 
 class MoodHistory(BaseModel):

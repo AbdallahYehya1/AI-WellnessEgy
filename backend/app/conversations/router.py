@@ -13,6 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request, Response
 
 from app.ai.prompts.age_bands import AGE_BANDS, band_enabled, resolve_age_band
+from app.assistants.registry import ASSISTANTS, BY_ID
 from app.auth.dependencies import CurrentPrincipal
 from app.common.errors import ApiError, ErrorResponse
 from app.consent.dependencies import ConsentedUser
@@ -20,6 +21,7 @@ from app.conversations import history as history_store
 from app.conversations.crypto import HistoryCipher
 from app.conversations.demo import DEMO_PROMPTS, is_allowed
 from app.conversations.schemas import (
+    AssistantOut,
     ChatConfig,
     ChatRequest,
     ChatResponse,
@@ -47,6 +49,23 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 ERRORS: dict[int | str, dict[str, object]] = {
     code: {"model": ErrorResponse} for code in (401, 403, 404, 409, 422, 429, 503)
 }
+
+
+def _assistants() -> list[AssistantOut]:
+    return [
+        AssistantOut(
+            assistant_id=a.assistant_id,
+            status=a.status,
+            icon=a.icon,
+            name_en=a.name_en,
+            name_ar=a.name_ar,
+            description_en=a.description_en,
+            description_ar=a.description_ar,
+            starters_en=list(a.starters_en),
+            starters_ar=list(a.starters_ar),
+        )
+        for a in ASSISTANTS
+    ]
 
 
 def _runtime(request: Request) -> ChatRuntime | None:
@@ -106,6 +125,7 @@ def read_config(request: Request, user: ConsentedUser, principal: CurrentPrincip
             if not p.follow_up
         ],
         history=_history_settings(runtime, user) if allowed else None,
+        assistants=_assistants() if curated and allowed else [],
     )
 
 
@@ -161,18 +181,28 @@ def list_conversations(
     limit: Limit = 30,
     cursor: Annotated[str | None, Query(max_length=200)] = None,
     q: Annotated[str | None, Query(max_length=80)] = None,
+    assistant: Annotated[str | None, Query(max_length=40)] = None,
 ) -> ConversationPage:
     runtime = _runtime(request)
+    if assistant is not None and assistant not in BY_ID:
+        raise ApiError(422, "unknown_assistant", "This assistant doesn't exist.")
     cipher = _cipher(runtime)
     assert runtime is not None  # noqa: S101 - _cipher checked it
     history_store.purge_expired(session, user.id, runtime.history_retention_days)
     rows, next_cursor = history_store.list_conversations(
-        session, cipher, user.id, limit=limit, cursor=cursor, query=(q or "").strip() or None
+        session,
+        cipher,
+        user.id,
+        limit=limit,
+        cursor=cursor,
+        query=(q or "").strip() or None,
+        assistant_id=assistant,
     )
     return ConversationPage(
         conversations=[
             ConversationSummary(
                 conversation_id=c.id,
+                assistant_id=c.assistant_id,
                 title=title,
                 message_count=c.message_count,
                 created_at=c.created_at,
