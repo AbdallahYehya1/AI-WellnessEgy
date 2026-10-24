@@ -13,7 +13,7 @@
           "hit_at_4": 0.636,
           "top1": 0.545,
           "precision": 0.5,
-          "leakage": 0.25
+          "leakage": 0.227
         },
         "domain": {
           "hit_at_4": 1.0,
@@ -34,7 +34,7 @@
           "hit_at_4": 0.273,
           "top1": 0.182,
           "precision": 0.205,
-          "leakage": 0.5
+          "leakage": 0.455
         },
         "domain": {
           "hit_at_4": 1.0,
@@ -97,7 +97,7 @@
           "hit_at_4": 0.333,
           "top1": 0.167,
           "precision": 0.208,
-          "leakage": 0.542
+          "leakage": 0.458
         },
         "domain": {
           "hit_at_4": 1.0,
@@ -254,9 +254,9 @@
           "leakage": 0.0,
           "found": [
             "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en",
-            "cdc-healthy-communication-en"
+            "nhs-healthy-relationships-en"
           ]
         },
         "domain": {
@@ -266,9 +266,9 @@
           "leakage": 0.0,
           "found": [
             "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en",
-            "cdc-healthy-communication-en"
+            "nhs-healthy-relationships-en"
           ]
         }
       },
@@ -456,7 +456,7 @@
             "nhs-problem-solving-en",
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en"
+            "cdc-healthy-communication-en"
           ]
         },
         "domain": {
@@ -468,7 +468,7 @@
             "nhs-problem-solving-en",
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en"
+            "cdc-healthy-communication-en"
           ]
         }
       },
@@ -530,9 +530,9 @@
           "leakage": 0.0,
           "found": [
             "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en",
-            "cdc-healthy-communication-en"
+            "nhs-healthy-relationships-en"
           ]
         },
         "domain": {
@@ -542,9 +542,9 @@
           "leakage": 0.0,
           "found": [
             "nhs-healthy-relationships-en",
+            "cdc-healthy-communication-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en",
-            "cdc-healthy-communication-en"
+            "nhs-healthy-relationships-en"
           ]
         }
       },
@@ -725,7 +725,7 @@
             "who-doing-what-matters-en",
             "who-doing-what-matters-en",
             "cfpb-emergency-fund-en",
-            "nimh-generalized-anxiety-disorder-en"
+            "nhs-healthy-relationships-en"
           ]
         },
         "monolithic": {
@@ -846,12 +846,12 @@
           "hit": false,
           "top1": false,
           "precision": 0.0,
-          "leakage": 0.75,
+          "leakage": 0.5,
           "found": [
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
             "nhs-problem-solving-en",
-            "nhs-healthy-relationships-en"
+            "nhs-problem-solving-en"
           ]
         },
         "domain": {
@@ -884,12 +884,12 @@
           "hit": true,
           "top1": false,
           "precision": 0.25,
-          "leakage": 0.5,
+          "leakage": 0.25,
           "found": [
             "nhs-problem-solving-en",
             "nhs-to-do-list-en",
-            "nimh-depression-en",
-            "nimh-generalized-anxiety-disorder-en"
+            "nimh-generalized-anxiety-disorder-en",
+            "niosh-stress-at-work-en"
           ]
         },
         "domain": {
@@ -1121,7 +1121,7 @@
           "hit_at_4": 0.667,
           "top1": 0.5,
           "precision": 0.5,
-          "leakage": 0.25
+          "leakage": 0.229
         },
         "domain": {
           "hit_at_4": 1.0,
@@ -1142,7 +1142,7 @@
           "hit_at_4": 0.333,
           "top1": 0.167,
           "precision": 0.208,
-          "leakage": 0.5
+          "leakage": 0.458
         },
         "domain": {
           "hit_at_4": 1.0,
@@ -1163,7 +1163,7 @@
           "hit_at_4": 1.0,
           "top1": 0.5,
           "precision": 0.625,
-          "leakage": 0.25
+          "leakage": 0.125
         },
         "domain": {
           "hit_at_4": 1.0,
@@ -1318,7 +1318,7 @@
             "nhs-problem-solving-en",
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en"
+            "cdc-healthy-communication-en"
           ]
         },
         "domain": {
@@ -1330,7 +1330,7 @@
             "nhs-problem-solving-en",
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en"
+            "cdc-healthy-communication-en"
           ]
         }
       },
@@ -1430,8 +1430,8 @@
           "leakage": 0.0,
           "found": [
             "cdc-healthy-communication-en",
-            "nhs-healthy-relationships-en",
             "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en"
           ]
         },
@@ -1442,8 +1442,8 @@
           "leakage": 0.0,
           "found": [
             "cdc-healthy-communication-en",
-            "nhs-healthy-relationships-en",
             "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en"
           ]
         }
@@ -1583,8 +1583,8 @@
           "found": [
             "nhs-healthy-relationships-en",
             "nhs-healthy-relationships-en",
-            "nhs-healthy-relationships-en",
-            "nhs-problem-solving-en"
+            "nhs-problem-solving-en",
+            "nhs-healthy-relationships-en"
           ]
         },
         "domain": {
@@ -1698,12 +1698,12 @@
           "hit": true,
           "top1": false,
           "precision": 0.25,
-          "leakage": 0.5,
+          "leakage": 0.25,
           "found": [
             "nhs-problem-solving-en",
             "nhs-to-do-list-en",
-            "nimh-depression-en",
-            "nimh-generalized-anxiety-disorder-en"
+            "nimh-generalized-anxiety-disorder-en",
+            "niosh-stress-at-work-en"
           ]
         },
         "domain": {
