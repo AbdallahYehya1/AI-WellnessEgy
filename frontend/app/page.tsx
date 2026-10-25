@@ -150,8 +150,8 @@ export default async function HomePage() {
           </ul>
         </div>
         {/* A small diagram of the routing idea: one question, ten focused knowledge bases. */}
-        <div aria-hidden className="reveal relative mx-auto aspect-square w-full max-w-md">
-          <div className="absolute inset-[8%] rounded-full border border-dashed border-line-strong/40 motion-safe:animate-[orbit_60s_linear_infinite]">
+        <div aria-hidden className="reveal relative mx-auto aspect-square w-full max-w-md overflow-hidden">
+          <div className="absolute inset-[11%] rounded-full border border-dashed border-line-strong/40 motion-safe:animate-[orbit_60s_linear_infinite]">
             {CATALOG.map((a, i) => {
               const angle = (i / CATALOG.length) * Math.PI * 2 - Math.PI / 2;
               return (

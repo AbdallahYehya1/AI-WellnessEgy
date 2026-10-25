@@ -29,7 +29,7 @@ export function PublicShell({
 }) {
   const p = t.v2.publicPanel;
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-x-clip">
+    <div className="relative flex min-h-dvh flex-col">
       <a
         href="#main"
         className="sr-only z-50 rounded-xl bg-primary px-4 py-3 font-semibold text-on-primary focus:not-sr-only focus:fixed focus:start-4 focus:top-4"
@@ -69,7 +69,7 @@ export function PublicShell({
           {wide ? (
             <div className="w-full max-w-4xl">{children}</div>
           ) : (
-            <div className="grid w-full max-w-5xl items-center gap-10 lg:grid-cols-[1fr_minmax(0,28rem)]">
+            <div className="grid w-full min-w-0 max-w-5xl grid-cols-1 items-center gap-10 lg:grid-cols-[1fr_minmax(0,28rem)]">
               <div className="enter hidden space-y-6 lg:block">
                 <p className="inline-flex items-center gap-2 rounded-full border border-line bg-surface/70 px-3 py-1 text-sm font-semibold text-primary-strong">
                   <SparkIcon className="h-4 w-4" />
