@@ -227,3 +227,12 @@ def test_follow_ups_continue_for_every_assistant(curated: None, assistant: str) 
     assert third["status"] == "reply", (assistant, third)
     # The follow-up instruction appears once, however long the chain.
     assert provider.calls[-1].message.count("(A follow-up") == 1
+
+
+def test_an_unrelated_question_mid_chat_is_not_treated_as_a_follow_up(curated: None) -> None:  # noqa: F811
+    c, _, provider = make("structured")
+    first = ask(c, "How can I sleep better at night?", "emotional").json()
+    history = _turns("How can I sleep better at night?", first["reply"])
+    calls = len(provider.calls)
+    body = ask(c, "What is the capital of France?", "emotional", history=history).json()
+    assert body["status"] == "clarify" and len(provider.calls) == calls

@@ -791,3 +791,45 @@ CAUTION_INSTRUCTIONS: dict[str, str] = {
         "professional if the low mood lasts more than two weeks or makes daily life hard."
     ),
 }
+
+
+# A message with nothing recognised continues the earlier situation (structured
+# follow-up) when it refers back to it or speaks about the person's own situation ("What
+# should I do when I miss a day?"). An impersonal question in the middle of a chat ("What
+# is the capital of France?") is not a follow-up: it gets the evidence step or "clarify".
+_REFERS_BACK_EN = re.compile(
+    r"\b(?:it|that|this|those|these|them|then|else|more|also|and|again|instead|first|next|"
+    r"which|one|step|steps|what\s+if|how\s+about|why|start|i|i'm|i've|me|my|we|we're|us|our)\b",
+    re.IGNORECASE,
+)
+_REFERS_BACK_AR = frozenset(
+    (
+        "ده",
+        "دي",
+        "دول",
+        "كده",
+        "طب",
+        "وبعدين",
+        "بعدين",
+        "كمان",
+        "تاني",
+        "لو",
+        "ليه",
+        "اول",
+        "ابدا",
+        "انا",
+        "احنا",
+        "عندي",
+        "اعمل",
+        "نعمل",
+    )
+)
+_SHORT_FOLLOW_UP_WORDS = 3
+
+
+def refers_back(message: str) -> bool:
+    text = " ".join(message.split())
+    if len(text.split()) <= _SHORT_FOLLOW_UP_WORDS or _REFERS_BACK_EN.search(text):
+        return True
+    words = _ARABIC_WORD.findall(normalize_arabic(text.casefold()))
+    return any(_ar_forms(w) & _REFERS_BACK_AR for w in words)

@@ -56,6 +56,7 @@ from app.assistants.understanding import (
     Understanding,
     evidence_overlap,
     evidence_question,
+    refers_back,
     understand,
 )
 from app.common.errors import ApiError
@@ -429,7 +430,7 @@ def _assistant_context(
                     (
                         "user",
                         _follow_up_of(previous)
-                        if previous
+                        if previous and refers_back(text_)
                         else evidence_question(assistant, u.language),
                     )
                 )
@@ -723,7 +724,10 @@ def handle_message(
         # structured mode it is re-expressed from the previous composed question, so the
         # user's words still never reach the provider.
         structured_follow_up = (
-            mode == "structured" and u.outcome in _CONTEXTUAL_OK and bool(context.model_history)
+            mode == "structured"
+            and u.outcome in _CONTEXTUAL_OK
+            and bool(context.model_history)
+            and refers_back(payload.message)
         )
         contextual = structured_follow_up or (
             mode != "structured"
