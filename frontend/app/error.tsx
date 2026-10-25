@@ -20,7 +20,7 @@ export default function ErrorPage({ reset }: { error: Error & { digest?: string 
   return (
     <main id="main" className="flex min-h-dvh items-center justify-center px-4">
       <div className="w-full max-w-md space-y-5 rounded-2xl border border-line bg-surface p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">{t.errors.genericTitle}</h1>
+        <h1 className="text-2xl font-semibold">{t.errors.genericTitle}</h1>
         <p role="alert" className="text-ink-muted">
           {t.errors.genericBody}
         </p>

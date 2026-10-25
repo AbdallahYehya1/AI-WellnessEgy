@@ -20,6 +20,17 @@ async function setPrefs(context: BrowserContext, baseURL: string, locale: "ar" |
 }
 
 async function axe(page: Page, label: string) {
+  // Check the settled page: wait for finite entrance animations (fades change the opacity
+  // axe measures). Infinite ambient ones are decorative and never block.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        // Time-based only: scroll-driven reveals finish when scrolled, not with time.
+        .filter((a) => a.timeline instanceof DocumentTimeline && a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  );
   const result = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .exclude("nextjs-portal")

@@ -75,7 +75,7 @@ export default async function ChatPage({ searchParams }: Props = {}) {
   if (!data.enabled) {
     return (
       <AppShell current="chat" locale={locale} t={t} chatEnabled={false}>
-        <h1 className="text-xl font-bold">{c.title}</h1>
+        <h1 className="text-xl font-semibold">{c.title}</h1>
         <p role="status" className="text-ink-muted">
           {c.unavailableYet}
         </p>

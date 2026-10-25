@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 
+import { AssistantIcon } from "@/components/assistants/icons";
 import { Markdown } from "@/components/chat/markdown";
+import { CheckIcon, CopyIcon } from "@/components/shell/icons";
 import type { Entry } from "@/components/chat/types";
 import type { ChatCitation, ChatStatus } from "@/lib/api/backend";
 import type { Locale } from "@/lib/i18n/config";
@@ -73,12 +75,14 @@ function sameQuestion(a: string, b: string): boolean {
   return norm(a) === norm(b);
 }
 
-export function MessageEntry({ entry, t, locale }: { entry: Entry; t: ChatText; locale: Locale }) {
+/** One chat entry. `icon`: the active assistant's icon for the reply avatar (it takes the
+ * surrounding `.tone`). */
+export function MessageEntry({ entry, t, locale, icon = "leaf" }: { entry: Entry; t: ChatText; locale: Locale; icon?: string }) {
   if (entry.kind === "user") {
     return (
       <div className="flex justify-end">
         <div className="max-w-[85%] space-y-1 sm:max-w-[75%]">
-          <div className="rounded-3xl rounded-ee-md bg-primary px-4 py-3 text-on-primary shadow-sm">
+          <div className="rounded-[1.4rem] rounded-ee-md bg-gradient-to-br from-primary to-primary-strong px-4 py-3 text-on-primary shadow-soft">
             <span className="sr-only">{t.you}: </span>
             <p className="whitespace-pre-wrap break-words leading-7" dir="auto">
               {entry.text}
@@ -104,20 +108,18 @@ export function MessageEntry({ entry, t, locale }: { entry: Entry; t: ChatText; 
   if (entry.kind === "assistant") {
     return (
       <div className="flex gap-3">
-        <div aria-hidden className="mt-1 hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary/40 text-primary-strong sm:flex">
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10Z" />
-          </svg>
+        <div aria-hidden className="mt-0.5 hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--tone-bg,var(--surface-muted))] text-[var(--tone-ink,var(--primary-strong))] ring-1 ring-[var(--tone-line,var(--line))] sm:flex">
+          <AssistantIcon name={icon} className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1 space-y-3">
           <span className="sr-only">{t.assistant}: </span>
-          <div className="text-[0.975rem] text-ink">
+          <div className="text-[0.99rem] leading-7 text-ink">
             <Markdown text={entry.text} />
           </div>
           {entry.citations.length > 0 ? (
             <Citations citations={entry.citations} t={t} />
           ) : (
-            <p className="text-xs text-ink-muted">{t.generalGuidance}</p>
+            <p className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-3 py-1 text-xs text-ink-muted">{t.generalGuidance}</p>
           )}
           <div className="flex items-center gap-3 text-xs text-ink-muted">
             <CopyButton text={entry.text} t={t} />
@@ -138,7 +140,7 @@ export function MessageEntry({ entry, t, locale }: { entry: Entry; t: ChatText; 
           ? t.refusals[entry.reason]
           : translateMessage(locale, entry.text);
   return (
-    <div role="note" data-status={entry.status} className={`rounded-2xl border px-4 py-3 text-sm ${NOTICE_TONE[entry.status]}`}>
+    <div role="note" data-status={entry.status} className={`rounded-3xl border px-5 py-4 text-sm shadow-soft ${NOTICE_TONE[entry.status]}`}>
       <span className="sr-only">{t.assistantNotice}: </span>
       {entry.status !== "reply" ? <p className="font-semibold">{t.noticeTitles[entry.status]}</p> : null}
       <p className="mt-1 leading-6" dir="auto">
@@ -168,65 +170,80 @@ function CopyButton({ text, t }: { text: string; t: ChatText }) {
     <button
       type="button"
       onClick={copy}
-      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 font-medium text-ink-muted hover:bg-surface-muted hover:text-ink"
+      className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-2.5 font-medium text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
     >
-      <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-        {copied ? <path d="m5 12 5 5L20 7" /> : <path d="M9 9h10v10H9zM5 15V5h10" />}
-      </svg>
+      {copied ? <CheckIcon className="h-4 w-4 text-success-ink" /> : <CopyIcon className="h-4 w-4" />}
       <span aria-live="polite">{copied ? t.copied : t.copy}</span>
     </button>
   );
 }
 
+function hostOf(ref: string): string {
+  try {
+    return new URL(ref).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+/** Sources of one reply, as numbered cards: exact title, publisher and edition, and a
+ * link only to the curated publishers' HTTPS pages. Rendered as text, never as HTML. */
 export function Citations({ citations, t }: { citations: ChatCitation[]; t: ChatText }) {
   const sources = uniqueSources(citations);
   if (sources.length === 0) return null;
   return (
-    <details className="group rounded-2xl border border-line bg-surface px-4 py-3 text-sm" open>
-      <summary className="flex min-h-6 cursor-pointer list-none items-center gap-2 font-semibold text-ink">
-        <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4 text-primary transition-transform group-open:rotate-90 rtl:-scale-x-100" fill="none" stroke="currentColor" strokeWidth="2">
+    <details className="group/src rounded-3xl border border-line bg-surface/80 p-1 text-sm shadow-soft" open>
+      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-[1.25rem] px-3 font-semibold text-ink transition-colors hover:bg-surface-muted">
+        <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4 text-primary transition-transform group-open/src:rotate-90 rtl:-scale-x-100" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="m9 6 6 6-6 6" />
         </svg>
         {t.sources} ({sources.length})
       </summary>
-      <ul className="mt-2 space-y-2">
-        {sources.map((c) => {
+      <ol className="grid gap-1.5 p-2 pt-1 sm:grid-cols-2">
+        {sources.map((c, i) => {
           const href = linkableSource(c.source_ref);
+          const host = hostOf(c.source_ref);
           return (
-            <li key={c.chunk_id} className="space-y-0.5 border-t border-line pt-2 first:border-t-0 first:pt-0">
-              {/* Source fields are rendered as text, never as HTML. */}
-              <p className="font-medium text-ink" dir="auto">
-                {c.source_title}
-              </p>
-              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
-                <span dir="auto">{c.publisher}</span>
-                <bdi dir="ltr">v{c.version_label}</bdi>
-                {c.synthetic ? (
-                  <span className="rounded bg-warning-bg px-1.5 font-semibold text-warning-ink">{t.synthetic}</span>
-                ) : c.review_status === "draft" ? (
-                  <span className="rounded bg-info-bg px-1.5 font-semibold text-info-ink">{t.draft}</span>
+            <li key={c.chunk_id} className="flex min-w-0 gap-3 rounded-2xl bg-canvas/70 p-3">
+              <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-xs font-bold text-primary-strong">
+                {i + 1}
+              </span>
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="font-medium leading-snug text-ink" dir="auto">
+                  {c.source_title}
+                </p>
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
+                  <span dir="auto">{c.publisher}</span>
+                  <bdi dir="ltr">{/^\d/.test(c.version_label) ? `v${c.version_label}` : c.version_label}</bdi>
+                  {c.synthetic ? (
+                    <span className="rounded bg-warning-bg px-1.5 font-semibold text-warning-ink">{t.synthetic}</span>
+                  ) : c.review_status === "draft" ? (
+                    <span className="rounded bg-info-bg px-1.5 font-semibold text-info-ink">{t.draft}</span>
+                  ) : null}
+                </p>
+                {href ? (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    dir="ltr"
+                    title={c.source_ref}
+                    className="inline-flex min-h-6 max-w-full items-center gap-1 truncate text-xs font-semibold text-primary-strong underline decoration-primary/40 underline-offset-2 hover:decoration-primary"
+                  >
+                    <span className="truncate">{host || c.source_ref}</span>
+                    <span aria-hidden>↗</span>
+                    <span className="sr-only"> ({t.openSource})</span>
+                  </a>
+                ) : c.source_ref.startsWith("https://") ? (
+                  <span className="block truncate text-xs text-ink-muted" dir="ltr" title={c.source_ref}>
+                    {c.source_ref}
+                  </span>
                 ) : null}
-              </p>
-              {href ? (
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  dir="ltr"
-                  className="block break-all text-xs text-primary-strong underline underline-offset-2"
-                >
-                  {c.source_ref}
-                  <span className="sr-only"> ({t.openSource})</span>
-                </a>
-              ) : c.source_ref.startsWith("https://") ? (
-                <span className="block break-all text-xs text-ink-muted" dir="ltr">
-                  {c.source_ref}
-                </span>
-              ) : null}
+              </div>
             </li>
           );
         })}
-      </ul>
+      </ol>
     </details>
   );
 }

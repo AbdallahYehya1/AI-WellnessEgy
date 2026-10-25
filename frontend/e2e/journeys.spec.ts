@@ -9,7 +9,7 @@ test.describe("first visit and registration", () => {
     const page = await context.newPage();
 
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("A calm space to look after yourself");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Your life has many sides. Get guidance made for each one.");
     await expect(page.getByText(/not a medical service/)).toBeVisible();
     await page.getByRole("link", { name: "Create an account" }).first().click();
     await page.waitForURL("**/sign-up");

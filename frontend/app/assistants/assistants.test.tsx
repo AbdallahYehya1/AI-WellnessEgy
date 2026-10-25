@@ -94,8 +94,9 @@ describe("assistants directory", () => {
     expect(screen.getByText(/not therapy, medical, legal or financial advice/)).toBeTruthy();
     const career = screen.getByRole("link", { name: /Career & Work/ });
     expect(career.getAttribute("href")).toBe("/chat?assistant=career");
-    expect(career.textContent).toContain("Career & Work starter two");
-    expect(career.textContent).not.toContain("starter three"); // two examples only
+    // Each card shows one example; the preview panel (large screens) shows them all.
+    expect(career.textContent).toContain("Career & Work starter one");
+    expect(career.textContent).not.toContain("starter two");
     const finance = screen.getByRole("heading", { name: "Financial Wellbeing" }).closest("li")!;
     expect(within(finance).queryByRole("link")).toBeNull();
     expect(finance.textContent).toContain("Coming soon");

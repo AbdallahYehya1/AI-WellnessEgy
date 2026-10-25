@@ -2,9 +2,10 @@
 
 import { type FormEvent, type KeyboardEvent, type RefObject, useLayoutEffect } from "react";
 
+import { SendIcon } from "@/components/shell/icons";
 import type { Messages } from "@/lib/i18n/messages";
 
-const MAX_HEIGHT_PX = 200;
+const MAX_HEIGHT_PX = 220;
 
 type Props = {
   t: Messages["chat"];
@@ -53,47 +54,52 @@ export function Composer({ t, value, onChange, onSend, pending, maxLength, hint,
   }
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-1.5">
+    <form onSubmit={submit} noValidate className="space-y-2">
       <label htmlFor="chat-message" className="sr-only">
         {t.inputLabel}
       </label>
-      <div className="flex items-end gap-2 rounded-3xl border border-line-strong bg-surface p-2 shadow-sm focus-within:border-primary focus-within:ring-2 focus-within:ring-focus">
-        <textarea
-          ref={inputRef}
-          id="chat-message"
-          name="message"
-          dir="auto"
-          rows={1}
-          maxLength={maxLength}
-          value={value}
-          placeholder={placeholder ?? t.inputPlaceholder}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          onFocus={() => setComposing(true)}
-          onBlur={() => setComposing(false)}
-          aria-describedby="chat-hint"
-          enterKeyHint="send"
-          className="block max-h-[200px] min-h-11 w-full resize-none bg-transparent px-3 py-2.5 text-base leading-6 text-ink outline-none placeholder:text-ink-muted focus-visible:outline-none"
+      <div className="group relative">
+        {/* Soft glow that follows focus (decorative). */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -inset-1 rounded-[2rem] bg-gradient-to-r from-primary/30 via-primary/10 to-accent/30 opacity-0 blur-md transition-opacity duration-500 group-focus-within:opacity-100"
         />
-        <button
-          type="submit"
-          disabled={pending || empty}
-          aria-label={t.send}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary transition-opacity hover:bg-primary-strong disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {pending ? (
-            <span aria-hidden className="h-4 w-4 animate-spin rounded-full border-2 border-on-primary border-t-transparent" />
-          ) : (
-            <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5 rtl:-scale-x-100" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          )}
-        </button>
+        <div className="glass relative flex items-end gap-2 rounded-[1.75rem] p-2 shadow-lifted transition-colors group-focus-within:border-primary/60">
+          <textarea
+            ref={inputRef}
+            id="chat-message"
+            name="message"
+            dir="auto"
+            rows={1}
+            maxLength={maxLength}
+            value={value}
+            placeholder={placeholder ?? t.inputPlaceholder}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            onFocus={() => setComposing(true)}
+            onBlur={() => setComposing(false)}
+            aria-describedby="chat-hint"
+            enterKeyHint="send"
+            className="scroll-quiet block max-h-[220px] min-h-12 w-full resize-none bg-transparent px-3.5 py-3 text-base leading-6 text-ink outline-none placeholder:text-ink-muted focus-visible:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={pending || empty}
+            aria-label={t.send}
+            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary shadow-soft transition-all duration-300 hover:bg-primary-strong enabled:hover:scale-105 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-muted disabled:shadow-none"
+          >
+            {pending ? (
+              <span aria-hidden className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : (
+              <SendIcon />
+            )}
+          </button>
+        </div>
       </div>
-      <div className="flex items-start justify-between gap-3 px-2 text-xs text-ink-muted">
+      <div className="flex items-start justify-between gap-3 px-3 text-xs text-ink-muted">
         <p id="chat-hint">{hint}</p>
         {remaining <= 60 ? (
-          <p aria-live="polite" className={`shrink-0 ${remaining <= 10 ? "font-semibold text-warning-ink" : ""}`}>
+          <p aria-live="polite" className={`shrink-0 tabular-nums ${remaining <= 10 ? "font-semibold text-warning-ink" : ""}`}>
             {t.charsLeft.replace("{n}", String(remaining))}
           </p>
         ) : null}
