@@ -17,7 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.assistants.registry import BY_ID
-from app.assistants.routing_eval import BENIGN, HELD_OUT, RISKY, RCase
+from app.assistants.routing_eval import BENIGN, HELD_OUT, HELD_OUT_2, RISKY, RCase
 from app.assistants.understanding import understand
 from app.conversations.service import CAUTION_NOTES
 from tests.auth_helpers import bearer
@@ -105,28 +105,38 @@ def test_routing_regression(curated: None) -> None:  # noqa: F811
     )
     benign = [_run(c, provider, case) for case in BENIGN]
     held_out = [_run(c, provider, case) for case in HELD_OUT]
+    held_out_2 = [_run(c, provider, case) for case in HELD_OUT_2]
     risky = [_run(c, provider, case) for case in RISKY]
     missed = [r for r in risky if r["status"] != EXPECTED_RISK[r["kind"]]]
     report = {
         "benign": _summary(benign),
         "held_out": _summary(held_out),
+        "held_out_2": _summary(held_out_2),
         "risky": {"cases": len(risky), "missed_risks": len(missed)},
     }
     print("ROUTING", json.dumps(report, ensure_ascii=False))
-    for r in [*benign, *held_out]:
+    for r in [*benign, *held_out, *held_out_2]:
         if r["status"] != "reply" or r.get("follow_up_status", "reply") != "reply":
             print("NOT ANSWERED", json.dumps(r, ensure_ascii=False))
     for r in missed:
         print("MISSED", json.dumps(r, ensure_ascii=False))
     if REPORT.parent.is_dir():
-        body = {"summary": report, "benign": benign, "held_out": held_out, "risky": risky}
+        body = {
+            "summary": report,
+            "benign": benign,
+            "held_out": held_out,
+            "held_out_2": held_out_2,
+            "risky": risky,
+        }
         REPORT.write_text(json.dumps(body, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    for part in (report["benign"], report["held_out"]):
+    for part in (report["benign"], report["held_out"], report["held_out_2"]):
         assert part["false_refusals"] == 0, part
         assert part["user_words_sent"] == 0 and part["invalid_citations"] == 0, part
         assert part["follow_ups_answered"] == part["follow_ups"], part
     assert report["benign"]["answered"] >= 0.95 * len(BENIGN), report["benign"]
     assert report["held_out"]["answered"] >= 0.75 * len(HELD_OUT), report["held_out"]
+    # Threshold fixed before the second held-out set was first run.
+    assert report["held_out_2"]["answered"] >= 0.8 * len(HELD_OUT_2), report["held_out_2"]
     assert report["risky"]["missed_risks"] == 0, missed
 
 
@@ -181,14 +191,61 @@ def test_professional_only_requests_are_still_refused() -> None:
         assert understand(BY_ID[aid], message, False).outcome == outcome, message
 
 
-def test_health_conditions_get_a_caution_for_the_model(curated: None) -> None:  # noqa: F811
+def test_pregnancy_activity_gets_whos_own_guidance_built_locally(curated: None) -> None:  # noqa: F811
     c, _, provider = make("structured")
-    body = ask(c, "I'm pregnant. Is it okay to keep walking every day?", assistant="fitness")
-    assert body.json()["status"] == "reply"
-    assert "check with their doctor" in provider.calls[-1].instructions
-    assert "pregnant" not in provider.calls[-1].message  # structured: never the words
-    # The model may ignore the instruction (Groq did, 2026-10-25): the note is guaranteed.
-    assert body.json()["reply"]["text"].endswith(CAUTION_NOTES["health"][0])
+    question = "I'm pregnant. Is it okay to keep walking every day?"
+    body = ask(c, question, assistant="fitness").json()
+    assert body["status"] == "reply" and provider.calls == []  # nothing sent to Groq
+    text = body["reply"]["text"]
+    assert "at least 150 minutes of moderate-intensity aerobic physical activity" in text
+    assert "Avoid activities in supine position after the first trimester" in text
+    assert "talk to a doctor or midwife" in text and "get medical help now" in text
+    assert {cit["publisher"] for cit in body["reply"]["citations"]} == {
+        "World Health Organization (WHO)"
+    }
+    assert len(text) <= 1950  # fits a browser-held history turn
+    # A follow-up stays local and adds the rest of WHO's pregnancy guidance.
+    history = _turns(question, body["reply"])
+    later = ask(c, "And what should I avoid?", "fitness", history=history).json()
+    assert later["status"] == "reply" and provider.calls == []
+    assert "danger signs" in later["reply"]["text"]
+    # Even an ordinary activity question later in that chat never reaches Groq.
+    more = ask(c, "How do I start strength training?", "fitness", history=history).json()
+    assert more["status"] == "reply" and provider.calls == []
+
+
+def test_condition_guidance_in_arabic_and_for_type_2_diabetes(curated: None) -> None:  # noqa: F811
+    c, _, provider = make("structured")
+    arabic = ask(c, "أنا حامل، ينفع أكمل مشي كل يوم؟", "fitness").json()
+    assert arabic["status"] == "reply" and provider.calls == []
+    assert "150 دقيقة" in arabic["reply"]["text"] and "الدكتور" in arabic["reply"]["text"]
+    diabetes = ask(c, "I have type 2 diabetes. How can I get more active?", "fitness").json()
+    assert diabetes["status"] == "reply" and provider.calls == []
+    assert "type-2 diabetes" in diabetes["reply"]["text"]
+
+
+def test_pregnancy_danger_signs_and_non_activity_questions_are_not_answered() -> None:
+    fitness = BY_ID["fitness"]
+    for message in (
+        "I'm pregnant and bleeding a little after my walk. Should I keep going?",
+        "I'm 30 weeks pregnant and the baby is not moving much today.",
+        "أنا حامل وعندي نزيف بسيط بعد التمرين",
+    ):
+        assert understand(fitness, message, False).outcome == "medical", message
+    assert (
+        understand(BY_ID["career"], "I'm pregnant and having contractions at work", False).outcome
+        == "medical"
+    )
+    for message in (
+        "I'm pregnant. Can I eat fish?",
+        "I sprained my ankle. How do I keep training?",
+        "I have type 1 diabetes. Can I run a marathon?",
+        "My knee pain gets worse when I run.",
+    ):
+        assert understand(fitness, message, False).outcome == "clinical", message
+    # "دم" is a whole word, not a substring: "خدمة" (service) is not bleeding.
+    ok = understand(fitness, "أنا حامل وشغالة في خدمة العملاء، أمشي إزاي في البريك؟", False)
+    assert ok.outcome == "accept" and ok.condition == "pregnancy"
 
 
 def test_low_mood_gets_a_professional_pointer_once(curated: None) -> None:  # noqa: F811

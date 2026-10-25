@@ -683,3 +683,49 @@ def retrieve_safety_resources(
         )
         for row in rows
     ]
+
+
+_SECTIONS_SQL = text(
+    """
+    SELECT c.id, c.content, s.title, s.publisher, s.source_ref, s.version_label,
+           s.review_status, s.domains, s.slug
+    FROM app.knowledge_chunks c
+    JOIN app.knowledge_sources s ON s.id = c.source_id
+    WHERE s.slug = :slug
+      AND CAST(:band AS text) = ANY (s.age_bands)
+      AND s.review_status IN :statuses
+      AND (s.expires_at IS NULL OR s.expires_at > now())
+    """
+).bindparams(bindparam("statuses", expanding=True))
+
+
+def retrieve_sections(
+    session: Session,
+    *,
+    slug: str,
+    headings: tuple[str, ...],
+    age_band: str,
+    statuses: tuple[str, ...],
+) -> list[RetrievedChunk]:
+    """Named sections of one source, in the order asked (D-63). Missing ones are omitted,
+    so callers compare the count."""
+    rows = session.execute(
+        _SECTIONS_SQL, {"slug": slug, "band": age_band, "statuses": list(statuses)}
+    ).all()
+    by_heading: dict[str, RetrievedChunk] = {}
+    for row in rows:
+        for heading in headings:
+            if row.content.startswith(f"{heading}."):
+                by_heading[heading] = RetrievedChunk(
+                    chunk_id=row.id,
+                    content=row.content,
+                    title=row.title,
+                    publisher=row.publisher,
+                    source_ref=row.source_ref,
+                    version_label=row.version_label,
+                    synthetic=row.review_status == "synthetic",
+                    review_status=row.review_status,
+                    domains=tuple(row.domains or ()),
+                    slug=row.slug,
+                )
+    return [by_heading[h] for h in headings if h in by_heading]

@@ -1062,3 +1062,65 @@ For the same reason, a cautioned answer addresses the matched activity theme (fo
 example "sit less and move more") rather than the specific condition.
 Answering those from the user's own words needs minimized mode, which is opt-in and off
 in production (D-59).
+
+### D-63. Health conditions answered locally; fewer clarifications — DECIDED (engineering, 2026-10-25)
+
+**Why.** The production check of D-62 showed two gaps.
+
+- *Pregnancy.* The guidance itself didn't fit. "I'm pregnant. Is it okay to keep walking
+  every day?" got generic "sit less, move more" tips with a note appended. A disclaimer on
+  top of advice that ignores the condition is not acceptable. Sending the condition to
+  the provider, even as a composed topic, would be a new transfer of health data, which
+  stays off without privacy approval.
+- *Clarifications.* All six held-out questions that got "Tell me a bit more" were routing
+  failures, not unclear questions:
+  - three Egyptian Arabic verbs whose prefixes weren't recognised ("بتتجاهل", "بتقارني");
+  - missing vocabulary: "tidy", "toddlers", "study", "forget", "appointments", "أوفر".
+
+**Decisions.**
+
+1. **WHO's guidance, built locally.** In Fitness, pregnancy, type-2 diabetes or high blood
+   pressure, together with an activity question, gets WHO's guidance for that group:
+   - quoted verbatim from the WHO guidelines (English or official Arabic);
+   - cited, and followed by a fixed note to check with a doctor or midwife, with the
+     warning signs that mean stopping now;
+   - built with **no provider call**.
+
+   Later Fitness turns in that conversation also stay local (the safety and good-practice
+   sections), and those turns are never part of the provider's history. The six sections
+   for each language were added to the knowledge base from the same licensed publication.
+2. **Danger signs go to urgent care.** Danger signs in pregnancy (bleeding, fluid
+   leaking, contractions, dizziness, headache, swelling, the baby not moving) get the
+   urgent medical support response in every assistant. Arabic danger words match whole
+   words, so "خدمة" does not match "دم".
+3. **Other health issues go to a clinician.** In Fitness, injuries, pain, type-1
+   diabetes, heart conditions and surgery are refused with a pointer to a clinician, as
+   are pregnancy or chronic-condition questions that aren't about activity (for example
+   diet). The instruction-only health caution from D-62 is removed; the low-mood note
+   stays.
+4. **Egyptian Arabic morphology.** The matcher now strips verb prefixes (بي/بت/بن,
+   هي/هت/هن, مبي/مبت) and the negation suffix ش, keeping at least three letters of the stem.
+5. **Context preservation without new transfers.** The structured question carries more
+   of the situation's meaning through finer **topic** phrases, the existing approved
+   mechanism. New subtopics: in-laws, grief, moving abroad; jealousy goes to trust;
+   mornings, work–home balance and hesitation gain vocabulary.
+   - Passages are still chosen locally with the redacted words.
+   - Richer situational labels ("in-laws", "young children", "after a bereavement") would
+     be a new category of personal context sent to the provider. They are **not**
+     implemented and need privacy approval.
+
+**Results** (`docs/evaluation/routing-regression.json`):
+
+| Set | Answered | Clarify | False refusals | Note |
+|---|---|---|---|---|
+| Regression (66) | 64 | 1 | 0 | tuned |
+| Held-out 1 (37) | 37 | 0 | 0 | was 31 + 6 clarify; the six were fixed, so now tuned |
+| Held-out 2 (25) | 25 | 0 | 0 | first run 21 + 4 clarify, before its fixes; now tuned |
+| Risky (12) | — | — | — | 0 missed |
+
+Structured mode still sent the user's words to the provider in 0 cases. No reply cited
+a passage the model wasn't given.
+
+**Limits.** The local answers quote WHO's text rather than answering conversationally.
+They cover only pregnancy, type-2 diabetes and high blood pressure. Arabic answers quote
+WHO's Modern Standard Arabic, with an Egyptian Arabic introduction and note.
