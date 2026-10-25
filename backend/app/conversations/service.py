@@ -156,6 +156,22 @@ CLARIFY_NOTICE_AR = (
     "عايز أتأكد إني بجاوب على اللي تقصده. ممكن تقول تفاصيل أكتر شوية، زي إيه اللي حصل أو "
     "إيه اللي عايز تغيره؟ أو اختار حاجة من دول:"
 )
+# Added to a reply when the message mentioned a health condition or low mood (D-62).
+CAUTION_NOTES: dict[str, tuple[str, str]] = {
+    "health": (
+        "Because you mentioned a health condition, pregnancy or an injury, please check with "
+        "your doctor before starting or changing any activity.",
+        "بما إنك ذكرت حالة صحية أو حمل أو إصابة، من فضلك اسأل دكتورك الأول قبل ما تبدأ أو "
+        "تغير أي نشاط.",
+    ),
+    "low_mood": (
+        "If the low mood lasts more than two weeks or makes daily life hard, talking to a doctor "
+        "or a mental-health professional can help.",
+        "لو المود الواطي استمر أكتر من أسبوعين أو بقى مصعب عليك حياتك اليومية، الكلام مع دكتور "
+        "أو متخصص في الصحة النفسية ممكن يساعد.",
+    ),
+}
+_PROFESSIONAL_WORDS = ("professional", "doctor", "therapist", "counsel", "متخصص", "دكتور", "طبيب")
 _SENTENCE_END = re.compile(r"[.!?؟]\s")
 
 
@@ -560,6 +576,16 @@ def _follow_up_of(previous_question: str) -> str:
     """A structured follow-up: the previous composed question plus a fixed instruction
     (once, however long the chain of follow-ups)."""
     return f"{previous_question.removesuffix(f' {STRUCTURED_FOLLOW_UP}')} {STRUCTURED_FOLLOW_UP}"
+
+
+def _caution_note(u: Understanding | None, language: str, reply: str) -> str | None:
+    """The fixed safety note for a cautioned reply. Health: always. Low mood: unless the
+    reply already suggests a professional."""
+    if u is None or u.caution is None:
+        return None
+    if u.caution == "low_mood" and any(w in reply.casefold() for w in _PROFESSIONAL_WORDS):
+        return None
+    return CAUTION_NOTES[u.caution][1 if language == "ar" else 0]
 
 
 def _sentence(phrase: str) -> str:
@@ -1007,6 +1033,16 @@ def handle_message(
             result = GenerationResult(
                 text=_fit(result.text, max_chars),
                 cited_chunk_ids=[c for c in result.cited_chunk_ids if c in retrieved],
+                risk=result.risk,
+                total_tokens=result.total_tokens,
+            )
+        note = _caution_note(understanding, language, result.text)
+        if note:
+            # Guaranteed, not left to the model: in structured mode it never sees the
+            # condition the person mentioned (verified with Groq, 2026-10-25).
+            result = GenerationResult(
+                text=f"{_fit(result.text, max_chars - len(note) - 2)}\n\n{note}",
+                cited_chunk_ids=result.cited_chunk_ids,
                 risk=result.risk,
                 total_tokens=result.total_tokens,
             )

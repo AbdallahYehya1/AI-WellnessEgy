@@ -1049,7 +1049,16 @@ and related wording is limited to approved domains. No vocabulary was tuned on i
 That is conservative but supportive, and is reported as an over-trigger rather than
 loosened. Changing the distress screen needs a clinical decision (D-52/D-60).
 
+**Found in production (2026-10-25).** With real Groq, the instruction-only caution was
+ignored: "I'm pregnant. Is it okay to keep walking every day?" got general activity tips
+with no "check with your doctor". The model never sees the condition in structured mode.
+The service now appends a fixed, localised note to the reply itself. The health note is
+always added. The low-mood note is added unless the reply already suggests a
+professional.
+
 **Not solved by this.** In structured mode, a question that matches no lexicon entry and
 no passage is asked for more detail instead of answered (6 of 37 held-out questions).
+For the same reason, a cautioned answer addresses the matched activity theme (for
+example "sit less and move more") rather than the specific condition.
 Answering those from the user's own words needs minimized mode, which is opt-in and off
 in production (D-59).

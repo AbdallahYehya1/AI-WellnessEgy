@@ -7,6 +7,7 @@ and missed risks are counted separately. Writes docs/evaluation/routing-regressi
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from collections import Counter
 from pathlib import Path
@@ -18,6 +19,7 @@ from fastapi.testclient import TestClient
 from app.assistants.registry import BY_ID
 from app.assistants.routing_eval import BENIGN, HELD_OUT, RISKY, RCase
 from app.assistants.understanding import understand
+from app.conversations.service import CAUTION_NOTES
 from tests.auth_helpers import bearer
 from tests.test_assistants import curated, opt_in  # noqa: F401 - fixture
 from tests.test_context import SituationProvider, ask, make
@@ -185,6 +187,30 @@ def test_health_conditions_get_a_caution_for_the_model(curated: None) -> None:  
     assert body.json()["status"] == "reply"
     assert "check with their doctor" in provider.calls[-1].instructions
     assert "pregnant" not in provider.calls[-1].message  # structured: never the words
+    # The model may ignore the instruction (Groq did, 2026-10-25): the note is guaranteed.
+    assert body.json()["reply"]["text"].endswith(CAUTION_NOTES["health"][0])
+
+
+def test_low_mood_gets_a_professional_pointer_once(curated: None) -> None:  # noqa: F811
+    c, _, _ = make("structured")
+    body = ask(c, "I feel depressed lately. What can I do day to day?", "emotional").json()
+    assert body["status"] == "reply"
+    assert body["reply"]["text"].endswith(CAUTION_NOTES["low_mood"][0])
+    arabic = ask(c, "حاسس إني مكتئب ومش عارف أعمل إيه في يومي", "emotional").json()
+    if arabic["status"] == "reply":
+        assert arabic["reply"]["text"].endswith(CAUTION_NOTES["low_mood"][1])
+
+
+class ProfessionalProvider(SituationProvider):
+    def generate(self, permit: Any, request: Any) -> Any:
+        result = super().generate(permit, request)
+        return dataclasses.replace(result, text=result.text + " A professional can help.")
+
+
+def test_the_low_mood_note_is_not_repeated_when_the_reply_has_one(curated: None) -> None:  # noqa: F811
+    c, _, _ = make("structured", provider=ProfessionalProvider())
+    body = ask(c, "I feel depressed lately. What can I do day to day?", "emotional").json()
+    assert CAUTION_NOTES["low_mood"][0] not in body["reply"]["text"]
 
 
 def test_switching_assistant_never_reveals_another_assistants_history(curated: None) -> None:  # noqa: F811
