@@ -48,7 +48,24 @@ async function layoutIssues(page: Page) {
       .map((el) => ({ el, r: el.getBoundingClientRect() }))
       .filter(({ r }) => r.width > 0 && (r.width < 24 || r.height < 24))
       .map(({ el, r }) => `${el.tagName.toLowerCase()} "${(el.innerText || el.getAttribute("aria-label") || el.getAttribute("name") || "").trim().slice(0, 30)}" ${Math.round(r.width)}x${Math.round(r.height)}`);
-    return { overflow: doc.scrollWidth > doc.clientWidth + 1 ? doc.scrollWidth - doc.clientWidth : 0, small };
+    // Content cut off by an overflow-hidden ancestor never widens the page, so the scroll
+    // width alone misses it: also flag visible text and controls that leave the viewport,
+    // except inside intentional horizontal scrollers (chip rows) and decoration.
+    const w = doc.clientWidth;
+    const inScroller = (el: Element) => {
+      for (let p = el.parentElement; p; p = p.parentElement) {
+        const x = getComputedStyle(p).overflowX;
+        if (x === "auto" || x === "scroll") return true;
+      }
+      return false;
+    };
+    const clipped = [...document.querySelectorAll<HTMLElement>("h1, h2, h3, p, a, button, input, label")]
+      .filter((el) => el.offsetParent !== null && !el.closest("[aria-hidden='true'], .sr-only") && !inScroller(el))
+      .map((el) => ({ el, r: el.getBoundingClientRect() }))
+      .filter(({ r }) => r.width > 0 && (r.right > w + 1 || r.left < -1))
+      .slice(0, 5)
+      .map(({ el, r }) => `${el.tagName.toLowerCase()} "${(el.innerText || "").trim().slice(0, 30)}" [${Math.round(r.left)}..${Math.round(r.right)}]`);
+    return { overflow: doc.scrollWidth > doc.clientWidth + 1 ? doc.scrollWidth - doc.clientWidth : 0, small, clipped };
   });
 }
 
@@ -65,8 +82,9 @@ for (const locale of ["en", "ar"] as const) {
         await axe(page, `${path} ${locale} ${theme}`);
         for (const width of WIDTHS) {
           await page.setViewportSize({ width, height: 900 });
-          const { overflow, small } = await layoutIssues(page);
+          const { overflow, small, clipped } = await layoutIssues(page);
           expect(overflow, `horizontal overflow on ${path} @${width}`).toBe(0);
+          expect(clipped, `content cut off on ${path} @${width}`).toEqual([]);
           expect(small, `touch targets < 24px on ${path} @${width}`).toEqual([]);
           if (width === 375 || width === 1280) {
             await page.screenshot({ path: `${SHOTS}/${locale}-${theme}-${width}${path.replace(/\//g, "_") || "_home"}.png`, fullPage: true });
@@ -86,8 +104,9 @@ for (const locale of ["en", "ar"] as const) {
         await axe(page, `${path} ${locale} ${theme}`);
         for (const width of WIDTHS) {
           await page.setViewportSize({ width, height: 900 });
-          const { overflow, small } = await layoutIssues(page);
+          const { overflow, small, clipped } = await layoutIssues(page);
           expect(overflow, `horizontal overflow on ${path} @${width}`).toBe(0);
+          expect(clipped, `content cut off on ${path} @${width}`).toEqual([]);
           expect(small, `touch targets < 24px on ${path} @${width}`).toEqual([]);
           if (width === 375 || width === 1280) {
             await page.screenshot({ path: `${SHOTS}/${locale}-${theme}-${width}${path.replace(/[/?=]/g, "_")}.png`, fullPage: true });

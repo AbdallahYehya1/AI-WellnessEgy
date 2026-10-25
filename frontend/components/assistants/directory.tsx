@@ -96,7 +96,7 @@ export function AssistantDirectory({ items, copy }: { items: DirectoryItem[]; co
         </div>
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[1fr_22rem]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_22rem]">
         {shown.length === 0 ? (
           <p role="status" className="rounded-3xl border border-dashed border-line-strong/50 p-6 text-ink-muted">
             {copy.noMatch}

@@ -42,7 +42,7 @@ export default async function HomePage() {
           </div>
           <div className="dot-grid absolute inset-0" />
         </div>
-        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pb-16 pt-10 sm:px-6 sm:pb-24 sm:pt-16 lg:grid-cols-[1.05fr_1fr] lg:gap-14">
+        <div className="relative mx-auto grid grid-cols-1 max-w-6xl items-center gap-12 px-4 pb-16 pt-10 sm:px-6 sm:pb-24 sm:pt-16 lg:grid-cols-[1.05fr_1fr] lg:gap-14">
           <div className="space-y-7">
             <p className="enter inline-flex items-center gap-2 rounded-full border border-line bg-surface/70 px-3.5 py-1.5 text-sm font-semibold text-primary-strong backdrop-blur">
               <span aria-hidden className="relative flex h-2 w-2">
@@ -124,7 +124,7 @@ export default async function HomePage() {
       </section>
 
       {/* --- Knowledge ------------------------------------------------------------------ */}
-      <section aria-labelledby="knowledge" className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-2">
+      <section aria-labelledby="knowledge" className="relative mx-auto grid grid-cols-1 max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-2">
         <div className="reveal space-y-8">
           <SectionHeading id="knowledge" eyebrow={l.knowledgeEyebrow} title={l.knowledgeTitle} lead={l.knowledgeLead} />
           <dl className="grid grid-cols-3 gap-3">
@@ -176,7 +176,7 @@ export default async function HomePage() {
 
       {/* --- Daily Reflection ------------------------------------------------------------ */}
       <section aria-labelledby="reflection" className="relative overflow-hidden">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-2">
+        <div className="mx-auto grid grid-cols-1 max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-2">
           <div aria-hidden className="reveal order-last lg:order-first">
             <div className="glass mx-auto max-w-md space-y-5 rounded-[2rem] p-6 shadow-lifted">
               <p className="font-display text-lg font-semibold">{r.question}</p>
@@ -230,7 +230,7 @@ export default async function HomePage() {
               <span />
             </div>
           </div>
-          <div className="relative grid gap-12 lg:grid-cols-[1fr_1.4fr]">
+          <div className="relative grid grid-cols-1 gap-12 lg:grid-cols-[1fr_1.4fr]">
             <div className="reveal space-y-3">
               <p className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.14em] text-accent">
                 <span aria-hidden className="h-px w-6 bg-accent" />
@@ -260,7 +260,7 @@ export default async function HomePage() {
         <div className="reveal relative overflow-hidden rounded-[2.5rem] border border-line bg-surface p-8 shadow-lifted sm:p-12">
           <div aria-hidden className="pointer-events-none absolute -end-24 -top-24 h-72 w-72 rounded-full bg-accent/20 blur-3xl" />
           <div aria-hidden className="pointer-events-none absolute -bottom-24 -start-24 h-72 w-72 rounded-full bg-primary/20 blur-3xl" />
-          <div className="relative grid items-center gap-10 lg:grid-cols-[1.2fr_1fr]">
+          <div className="relative grid grid-cols-1 items-center gap-10 lg:grid-cols-[1.2fr_1fr]">
             <div className="space-y-6">
               <SectionHeading id="start" eyebrow={l.startEyebrow} title={l.startTitle} />
               <ol className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -287,7 +287,7 @@ export default async function HomePage() {
 
       {/* --- Limits and footer ----------------------------------------------------------- */}
       <footer className="border-t border-line bg-canvas-2/60">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_1.4fr]">
+        <div className="mx-auto grid grid-cols-1 max-w-6xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_1.4fr]">
           <div className="space-y-3">
             <Link href="/" className="inline-flex min-h-11 items-center gap-2.5">
               <LogoMark />

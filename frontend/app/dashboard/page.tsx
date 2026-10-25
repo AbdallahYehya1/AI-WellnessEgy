@@ -91,7 +91,7 @@ export default async function DashboardPage({ searchParams }: Props) {
       </header>
       {checkedIn ? <Notice tone="success">{d.checkInSaved}</Notice> : null}
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Today: Daily Reflection */}
         <section
           aria-labelledby="checkin-title"
