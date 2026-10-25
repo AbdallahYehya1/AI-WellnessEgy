@@ -9,7 +9,8 @@
       "safety_over_triggers": 1,
       "refusal_reasons": {},
       "routes": {
-        "own": 64
+        "own": 62,
+        "condition": 2
       },
       "cited_replies": 64,
       "follow_ups": 10,
@@ -19,21 +20,36 @@
     },
     "held_out": {
       "cases": 37,
-      "answered": 31,
-      "clarify": 6,
+      "answered": 37,
+      "clarify": 0,
       "false_refusals": 0,
       "false_refusal_rate": 0.0,
       "safety_over_triggers": 0,
       "refusal_reasons": {},
       "routes": {
-        "own": 24,
-        "related": 2,
-        "none": 3,
-        "borrowed": 2
+        "own": 35,
+        "related": 2
       },
-      "cited_replies": 31,
+      "cited_replies": 37,
       "follow_ups": 0,
       "follow_ups_answered": 0,
+      "user_words_sent": 0,
+      "invalid_citations": 0
+    },
+    "held_out_2": {
+      "cases": 25,
+      "answered": 25,
+      "clarify": 0,
+      "false_refusals": 0,
+      "false_refusal_rate": 0.0,
+      "safety_over_triggers": 0,
+      "refusal_reasons": {},
+      "routes": {
+        "own": 25
+      },
+      "cited_replies": 25,
+      "follow_ups": 7,
+      "follow_ups_answered": 7,
       "user_words_sent": 0,
       "invalid_citations": 0
     },
@@ -381,10 +397,8 @@
       "status": "reply",
       "reason": null,
       "support_kind": null,
-      "route": "own",
-      "cited": 1,
-      "user_words_sent": false,
-      "invalid_citations": 0
+      "route": "condition",
+      "cited": 2
     },
     {
       "assistant": "fitness",
@@ -392,10 +406,8 @@
       "status": "reply",
       "reason": null,
       "support_kind": null,
-      "route": "own",
-      "cited": 1,
-      "user_words_sent": false,
-      "invalid_citations": 0
+      "route": "condition",
+      "cited": 1
     },
     {
       "assistant": "fitness",
@@ -802,11 +814,13 @@
     {
       "assistant": "relationships",
       "kind": "arz",
-      "status": "clarify",
+      "status": "reply",
       "reason": null,
       "support_kind": null,
-      "route": "none",
-      "cited": 0
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
     },
     {
       "assistant": "relationships",
@@ -924,7 +938,7 @@
       "status": "reply",
       "reason": null,
       "support_kind": null,
-      "route": "none",
+      "route": "own",
       "cited": 1,
       "user_words_sent": false,
       "invalid_citations": 0
@@ -968,7 +982,7 @@
       "status": "reply",
       "reason": null,
       "support_kind": null,
-      "route": "borrowed",
+      "route": "own",
       "cited": 1,
       "user_words_sent": false,
       "invalid_citations": 0
@@ -1023,7 +1037,7 @@
       "status": "reply",
       "reason": null,
       "support_kind": null,
-      "route": "none",
+      "route": "own",
       "cited": 1,
       "user_words_sent": false,
       "invalid_citations": 0
@@ -1053,11 +1067,13 @@
     {
       "assistant": "social",
       "kind": "arz",
-      "status": "clarify",
+      "status": "reply",
       "reason": null,
       "support_kind": null,
-      "route": "none",
-      "cited": 0
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
     },
     {
       "assistant": "planning",
@@ -1073,11 +1089,13 @@
     {
       "assistant": "planning",
       "kind": "unfamiliar",
-      "status": "clarify",
+      "status": "reply",
       "reason": null,
       "support_kind": null,
-      "route": "none",
-      "cited": 0
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
     },
     {
       "assistant": "planning",
@@ -1085,18 +1103,7 @@
       "status": "reply",
       "reason": null,
       "support_kind": null,
-      "route": "borrowed",
-      "cited": 1,
-      "user_words_sent": false,
-      "invalid_citations": 0
-    },
-    {
-      "assistant": "finance",
-      "kind": "unfamiliar",
-      "status": "reply",
-      "reason": null,
-      "support_kind": null,
-      "route": "none",
+      "route": "own",
       "cited": 1,
       "user_words_sent": false,
       "invalid_citations": 0
@@ -1114,12 +1121,25 @@
     },
     {
       "assistant": "finance",
-      "kind": "arz",
-      "status": "clarify",
+      "kind": "unfamiliar",
+      "status": "reply",
       "reason": null,
       "support_kind": null,
-      "route": "none",
-      "cited": 0
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "finance",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
     },
     {
       "assistant": "finance",
@@ -1135,20 +1155,24 @@
     {
       "assistant": "everyday",
       "kind": "unfamiliar",
-      "status": "clarify",
+      "status": "reply",
       "reason": null,
       "support_kind": null,
-      "route": "none",
-      "cited": 0
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
     },
     {
       "assistant": "everyday",
       "kind": "unfamiliar",
-      "status": "clarify",
+      "status": "reply",
       "reason": null,
       "support_kind": null,
-      "route": "none",
-      "cited": 0
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
     },
     {
       "assistant": "everyday",
@@ -1164,6 +1188,290 @@
     {
       "assistant": "everyday",
       "kind": "mixed",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    }
+  ],
+  "held_out_2": [
+    {
+      "assistant": "planning",
+      "kind": "unfamiliar",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "planning",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0,
+      "follow_up_status": "reply"
+    },
+    {
+      "assistant": "planning",
+      "kind": "cross",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "planning",
+      "kind": "unfamiliar",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "planning",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "finance",
+      "kind": "unfamiliar",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0,
+      "follow_up_status": "reply"
+    },
+    {
+      "assistant": "finance",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0,
+      "follow_up_status": "reply"
+    },
+    {
+      "assistant": "finance",
+      "kind": "cross",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "finance",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "finance",
+      "kind": "unfamiliar",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "everyday",
+      "kind": "unfamiliar",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "everyday",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0,
+      "follow_up_status": "reply"
+    },
+    {
+      "assistant": "everyday",
+      "kind": "unfamiliar",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "everyday",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "everyday",
+      "kind": "cross",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "emotional",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0,
+      "follow_up_status": "reply"
+    },
+    {
+      "assistant": "emotional",
+      "kind": "unfamiliar",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "relationships",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0,
+      "follow_up_status": "reply"
+    },
+    {
+      "assistant": "relationships",
+      "kind": "cross",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "career",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0,
+      "follow_up_status": "reply"
+    },
+    {
+      "assistant": "career",
+      "kind": "cross",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "family",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "social",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "growth",
+      "kind": "arz",
+      "status": "reply",
+      "reason": null,
+      "support_kind": null,
+      "route": "own",
+      "cited": 1,
+      "user_words_sent": false,
+      "invalid_citations": 0
+    },
+    {
+      "assistant": "fitness",
+      "kind": "arz",
       "status": "reply",
       "reason": null,
       "support_kind": null,

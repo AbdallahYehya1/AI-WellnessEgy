@@ -7,7 +7,9 @@ Order, all before any limit, retrieval or model call:
    Personal details (contact data, links) are refused; diagnosis and medication are
    refused for every assistant; regulated advice (investment, tax, legal) is refused with
    a pointer to a professional; sexual content, substances and weapons are out of scope.
-   A health condition in Fitness, or low mood anywhere, is answered with a caution.
+   Pregnancy danger signs go to urgent care. In Fitness, pregnancy, type-2 diabetes and
+   high blood pressure get WHO's guidance built locally (D-63); injuries, pain and other
+   conditions go to a clinician. Low mood is answered with a pointer to a professional.
 2. **Routing, never gating (D-62)**: the assistant's lexicon finds up to three specific
    concerns; failing that, a follow-up, related wording, another assistant's lexicon (with
    a handoff suggestion) or an approved secondary domain. With nothing recognised the
@@ -27,6 +29,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Literal
 
+from app.assistants.conditions import Condition
 from app.assistants.lexicon import LEXICON, Subtopic
 from app.assistants.registry import ASSISTANTS, Assistant
 from app.conversations.intents import (
@@ -53,8 +56,8 @@ Outcome = Literal[
     "too_long",
 ]
 # How an accepted message was matched (logged; never the text).
-Route = Literal["own", "follow_up", "related", "borrowed", "none"]
-Caution = Literal["health", "low_mood"]
+Route = Literal["own", "follow_up", "related", "borrowed", "condition", "none"]
+Caution = Literal["low_mood"]
 MAX_SUBTOPICS = 3
 # Related-wording match: distinct content stems shared with a subtopic's description.
 _MIN_RELATED_OVERLAP = 2
@@ -210,15 +213,76 @@ _FITNESS_MEDICAL = (
     "supplement",
     "مكملات",
 )
-# Fitness: a health condition or injury alongside an ordinary activity question is
-# answered with a caution to check with a doctor first; on its own it is a medical
-# question and is refused.
-_HEALTH_CONDITION = re.compile(
-    r"\b(?:injur\w*|sprain\w*|fractur\w*|pain(?:s|ful)?|heart\s+condition|pregnan\w*|"
-    r"diabet\w*|blood\s+pressure|asthma|arthritis)\b",
+# Health conditions (D-63). Pregnancy and the chronic conditions WHO gives activity
+# guidance for (type-2 diabetes, high blood pressure) get that guidance, built locally in
+# Fitness: the condition is health data and never goes to the provider. Injuries, pain and
+# other conditions are questions for a clinician.
+_PREGNANCY = re.compile(
+    r"\b(?:pregnan\w*|postpartum|post-partum|after\s+giving\s+birth|gave\s+birth|"
+    r"expecting\s+a\s+baby)\b",
     re.IGNORECASE,
 )
-_HEALTH_CONDITION_AR = ("اصابه", "اتصابت", "وجع", " الم ", "حامل", "سكر", "ضغط الدم")
+_PREGNANCY_AR = ("حامل", "فتره الحمل", "اثناء الحمل", "في الحمل", "شهور الحمل", "بعد الولاده")
+# In pregnancy these mean urgent care, never guidance.
+_PREGNANCY_DANGER = re.compile(
+    r"\b(?:bleed\w*|spotting|contraction\w*|fluid|leak\w*|dizz\w*|faint\w*|headaches?|"
+    r"swelling|swollen|(?:baby|it)\s+(?:isn't|is\s+not|not|stopped)\s+moving|"
+    r"reduced\s+movements?)\b",
+    re.IGNORECASE,
+)
+_PREGNANCY_DANGER_AR = frozenset(
+    ("نزيف", "دم", "انقباضات", "طلق", "دوخه", "دايخه", "صداع", "تورم", "ورم")
+)
+_PREGNANCY_DANGER_AR_PHRASES = ("مش بيتحرك", "مبيتحركش", "نزول ميه", "بينزل ميه")
+_CHRONIC = re.compile(
+    r"\b(?:(?:type[\s-]*(?:2|two|ii)\s+)?diabet\w*|high\s+blood\s+pressure|hypertension)\b",
+    re.IGNORECASE,
+)
+_CHRONIC_AR = (
+    "السكري",
+    "مرض السكر",
+    "عندي سكر",
+    "مريض سكر",
+    "مريضه سكر",
+    "ضغط عالي",
+    "الضغط العالي",
+    "ضغط الدم",
+    "مريض ضغط",
+    "مريضه ضغط",
+    "عندي ضغط",
+)
+_OTHER_HEALTH = re.compile(
+    r"\b(?:injur\w*|sprain\w*|fractur\w*|pain(?:s|ful)?|heart\s+(?:condition|disease|problem)|"
+    r"asthma|arthritis|type[\s-]*(?:1|one|i)\s+diabet\w*|surgery|operation)\b",
+    re.IGNORECASE,
+)
+_OTHER_HEALTH_AR = ("اصابه", "اتصابت", "وجع", " الم ", "بيوجعني", "بتوجعني", "عمليه", "النوع الاول")
+_ACTIVITY = re.compile(
+    r"\b(?:walk\w*|exercis\w*|active|activity|activities|workouts?|work\s+out|gym|run\w*|"
+    r"jog\w*|swim\w*|yoga|pilates|train\w*|sports?|move|moving|fit|fitness|stretch\w*|"
+    r"strength|cardio|weights?)\b",
+    re.IGNORECASE,
+)
+_ACTIVITY_AR = frozenset(
+    (
+        "مشي",
+        "امشي",
+        "بمشي",
+        "رياضه",
+        "تمارين",
+        "تمرين",
+        "اتمرن",
+        "جيم",
+        "اجري",
+        "جري",
+        "نشاط",
+        "حركه",
+        "اتحرك",
+        "سباحه",
+        "يوجا",
+        "رياضي",
+    )
+)
 # Low mood mentioned: answered, with a pointer to a professional if it lasts.
 _LOW_MOOD = re.compile(r"\b(?:depressed|depression|depressing)\b", re.IGNORECASE)
 _LOW_MOOD_AR = ("اكتئاب", "مكتئب")
@@ -416,6 +480,28 @@ _ARABIC_CHAR = re.compile("[؀-ۿ]")
 _ARABIC_WORD = re.compile("[ء-يٱ-ۓ]+")
 _LATIN_WORD = re.compile(r"[a-z][a-z'-]*")
 _AR_PREFIXES = ("وبال", "وال", "بال", "لل", "فال", "كال", "ال", "و", "ب", "ل", "ف")
+# Egyptian present, future and negated verbs: "بتتجاهل" -> "تجاهل", "هيسافر" -> "سافر",
+# "مبتردش" -> "رد". The stem must keep at least three letters.
+_AR_VERB_PREFIXES = (
+    "مبيت",
+    "مبتت",
+    "بيت",
+    "بتت",
+    "بنت",
+    "هيت",
+    "هتت",
+    "مبي",
+    "مبت",
+    "مبن",
+    "بي",
+    "بت",
+    "بن",
+    "با",
+    "هي",
+    "هت",
+    "هن",
+    "ها",
+)
 _AR_SUFFIXES = ("هالي", "كوا", "ها", "هم", "نا", "ني", "لي", "ه", "ك", "ي", "ات")
 
 
@@ -433,6 +519,7 @@ class Understanding:
     route: Route = "none"
     caution: Caution | None = None  # an extra instruction for the model, never shown
     suggestions: tuple[Subtopic, ...] = ()  # with "clarify": closest concerns to offer
+    condition: Condition | None = None  # route "condition": WHO guidance built locally
 
     @property
     def search_en(self) -> str:
@@ -451,11 +538,23 @@ def _has(text: str, terms: tuple[str, ...]) -> bool:
     return any(t in text or normalize_arabic(t) in text for t in terms)
 
 
+def _has_word(text: str, words: frozenset[str]) -> bool:
+    """Whole Arabic words (with their prefixes and suffixes), not substrings: "دم" must
+    not match inside "خدمه"."""
+    folded = normalize_arabic(text.casefold())
+    return any(_ar_forms(w) & words for w in _ARABIC_WORD.findall(folded))
+
+
 def _ar_forms(word: str) -> set[str]:
     forms = {word}
     for p in _AR_PREFIXES:
         if word.startswith(p) and len(word) - len(p) >= 2:
             forms.add(word[len(p) :])
+    for p in _AR_VERB_PREFIXES:
+        if word.startswith(p) and len(word) - len(p) >= 3:
+            forms.add(word[len(p) :])
+    if word.endswith("ش") and len(word) >= 5:  # negation: "مبيسمعنيش"
+        forms |= {f[:-1] for f in list(forms) if f.endswith("ش")}
     for f in list(forms):
         for s in _AR_SUFFIXES:
             if f.endswith(s) and len(f) - len(s) >= 2:
@@ -666,6 +765,13 @@ def understand(assistant: Assistant, message: str, has_history: bool) -> Underst
         return Understanding("danger", aid, language)
     if _has(padded, _MEDICAL_EMERGENCY):
         return Understanding("medical", aid, language)
+    pregnancy = bool(_PREGNANCY.search(text)) or _has(padded, _PREGNANCY_AR)
+    if pregnancy and (
+        _PREGNANCY_DANGER.search(text)
+        or _has_word(text, _PREGNANCY_DANGER_AR)
+        or _has(padded, _PREGNANCY_DANGER_AR_PHRASES)
+    ):
+        return Understanding("medical", aid, language)
     if _has(padded, DISTRESS_SCREEN):
         return Understanding("crisis", aid, language)
     if _PERSONAL_DETAILS.search(lowered):
@@ -684,13 +790,22 @@ def understand(assistant: Assistant, message: str, has_history: bool) -> Underst
     )
     if sensitive or _INJECTION.search(text):
         return Understanding("sensitive", aid, language)
-    health = bool(_HEALTH_CONDITION.search(text)) or _has(padded, _HEALTH_CONDITION_AR)
+    if aid == "fitness":
+        chronic = bool(_CHRONIC.search(text)) or _has(padded, _CHRONIC_AR)
+        if _OTHER_HEALTH.search(text) or _has(padded, _OTHER_HEALTH_AR):
+            return Understanding("clinical", aid, language)
+        if pregnancy or chronic:
+            if not (_ACTIVITY.search(text) or _has_word(text, _ACTIVITY_AR)):
+                return Understanding("clinical", aid, language)  # diet, symptoms, medicines
+            return Understanding(
+                "accept",
+                aid,
+                language,
+                route="condition",
+                condition="pregnancy" if pregnancy else "chronic",
+            )
     caution: Caution | None = (
-        "health"
-        if health
-        else "low_mood"
-        if _LOW_MOOD.search(text) or _has(padded, _LOW_MOOD_AR)
-        else None
+        "low_mood" if _LOW_MOOD.search(text) or _has(padded, _LOW_MOOD_AR) else None
     )
 
     follow_tables = _FOLLOW_AR if is_arabic else _FOLLOW_EN
@@ -721,8 +836,6 @@ def understand(assistant: Assistant, message: str, has_history: bool) -> Underst
             borrowed_from, subtopics = borrowed
             route = "related" if borrowed_from == aid else "borrowed"
     if not subtopics:
-        if aid == "fitness" and health:  # a medical question on its own
-            return Understanding("clinical", aid, language)
         closest = tuple(s for s, _ in related_subtopics(aid, text)[:MAX_SUBTOPICS])
         return Understanding(
             "clarify", aid, language, handoff=handoff, suggestions=closest or LEXICON[aid][:3]
@@ -777,14 +890,9 @@ def evidence_overlap(message: str, passage: str) -> int:
     return en + sum(1 for forms in _ar_word_forms(message) if forms & passage_forms)
 
 
-# Extra instructions for the model when the message mentions a health condition or low
-# mood. Fixed text; nothing from the message is added.
+# Extra instructions for the model when the message mentions low mood. Fixed text;
+# nothing from the message is added.
 CAUTION_INSTRUCTIONS: dict[str, str] = {
-    "health": (
-        "The person mentioned a health condition, pregnancy or an injury. Keep the guidance "
-        "general, say clearly that they should check with their doctor before starting or "
-        "changing activity, and give no medical advice, diagnosis or treatment."
-    ),
     "low_mood": (
         "The person mentioned feeling depressed or low. Respond warmly and supportively, "
         "never diagnose, and gently suggest speaking to a doctor or mental-health "

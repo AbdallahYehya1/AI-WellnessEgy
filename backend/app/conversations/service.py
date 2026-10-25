@@ -42,6 +42,9 @@ from app.ai.provider.base import (
     Passage,
     ProviderError,
 )
+from app.assistants.conditions import LOCAL_REPLY_CHARS, Condition, compose_reply
+from app.assistants.conditions import sections as condition_sections
+from app.assistants.conditions import slug as condition_slug
 from app.assistants.context import (
     CONTEXT_CONSENT_VERSION,
     ContextMode,
@@ -92,6 +95,7 @@ from app.knowledge.retrieval import (
     retrieve,
     retrieve_hybrid,
     retrieve_safety_resources,
+    retrieve_sections,
     safety_exclusions,
 )
 from app.safety.assessor import SafetyAssessor, assess_safety_risk
@@ -156,14 +160,9 @@ CLARIFY_NOTICE_AR = (
     "عايز أتأكد إني بجاوب على اللي تقصده. ممكن تقول تفاصيل أكتر شوية، زي إيه اللي حصل أو "
     "إيه اللي عايز تغيره؟ أو اختار حاجة من دول:"
 )
-# Added to a reply when the message mentioned a health condition or low mood (D-62).
+# Added to a reply when the message mentioned low mood (D-62). Health conditions get
+# WHO's guidance built locally instead (D-63).
 CAUTION_NOTES: dict[str, tuple[str, str]] = {
-    "health": (
-        "Because you mentioned a health condition, pregnancy or an injury, please check with "
-        "your doctor before starting or changing any activity.",
-        "بما إنك ذكرت حالة صحية أو حمل أو إصابة، من فضلك اسأل دكتورك الأول قبل ما تبدأ أو "
-        "تغير أي نشاط.",
-    ),
     "low_mood": (
         "If the low mood lasts more than two weeks or makes daily life hard, talking to a doctor "
         "or a mental-health professional can help.",
@@ -353,6 +352,9 @@ class _Context:
     search_context: list[str] = field(default_factory=list)
     model_history: list[tuple[str, str]] = field(default_factory=list)
     crisis: bool = False
+    # A health condition mentioned earlier in this Fitness conversation (D-63): its turns
+    # never go to the provider, and later Fitness answers stay local too.
+    condition: Condition | None = None
 
 
 def _canonical(intent_id: str, language: str) -> str | None:
@@ -434,6 +436,10 @@ def _assistant_context(
             u = understand(assistant, text_, has_history=bool(context.model_history))
             if u.outcome in ("crisis", "relationship_safety", "medical", "danger"):
                 context.crisis = True
+            if u.condition is not None or context.condition is not None:
+                context.condition = context.condition or u.condition
+                keep = False  # answered locally; never part of the provider's history
+                continue
             keep = u.outcome == "accept" or u.outcome in _CONTEXTUAL_OK
             if keep and mode == "structured" and u.outcome in _CONTEXTUAL_OK:
                 # Answered earlier as a follow-up or from a matching passage (only answered
@@ -706,6 +712,8 @@ def handle_message(
     free_text = ""
     provider_context: str | None = None
     evidence_chunks: list[RetrievedChunk] | None = None
+    condition: Condition | None = None
+    later_condition = False
     if assistant_mode:
         mode = context_mode_for(runtime, user)
         context = _assistant_context(
@@ -772,7 +780,10 @@ def handle_message(
             refusal.handoff = u.handoff
             refusal.assistant_id = assistant.assistant_id
             return refusal
-        if u.outcome in _CONTEXTUAL_OK and not contextual:
+        if u.outcome in ("accept", *_CONTEXTUAL_OK):
+            condition = u.condition or context.condition
+            later_condition = context.condition is not None
+        if u.outcome in _CONTEXTUAL_OK and not contextual and condition is None:
             # Nothing recognised: look for a clearly matching public passage (local), else
             # ask for a little more. Neither is a refusal, and no quota is used to ask.
             evidence = _evidence(session, runtime, band.value, assistant, u, payload.message)
@@ -828,6 +839,10 @@ def handle_message(
             topic_question = u.question
         else:
             provider_context = free_text if mode == "minimized" else payload.message
+        if condition is not None:
+            # WHO guidance built locally (D-63): nothing about this turn reaches the provider.
+            message = model_question = ""
+            topic_question = provider_context = None
     elif runtime.demo_curated:
         gate = classify(payload.message, context.intents)
         if gate.outcome == "crisis" or context.crisis:
@@ -869,7 +884,7 @@ def handle_message(
         raise ApiError(
             429, "rate_limited", "Too many messages. Please wait a minute and try again."
         )
-    if getattr(runtime.provider, "kind", "scripted") == "model":
+    if condition is None and getattr(runtime.provider, "kind", "scripted") == "model":
         try:
             with session.begin_nested():
                 used = requests_last_day(session)
@@ -927,7 +942,16 @@ def handle_message(
 
     try:
         with session.begin_nested():
-            if evidence_chunks is not None:
+            if condition is not None:
+                headings = condition_sections(condition, language, later_condition)
+                chunks = retrieve_sections(
+                    session,
+                    slug=condition_slug(language),
+                    headings=headings,
+                    age_band=band.value,
+                    statuses=runtime.retrievable_statuses,
+                )
+            elif evidence_chunks is not None:
                 chunks = evidence_chunks  # already retrieved locally to route the message
             elif assistant_mode:
                 chunks = retrieve_hybrid(
@@ -961,36 +985,54 @@ def handle_message(
         logger.info("chat_no_evidence")
         _record(session, user, request_id, band.value, decision, "no_evidence")
         return _respond("no_evidence")
+    if condition is not None and len(chunks) != len(headings):
+        # The WHO sections aren't in the knowledge base: a clinician, never a guess.
+        logger.error("chat_condition_guidance_missing", extra={"condition": condition})
+        _record(session, user, request_id, band.value, decision, "out_of_scope")
+        refusal = _refuse("clinical")
+        refusal.assistant_id = assistant.assistant_id
+        return refusal
 
-    instructions = assistant.instructions if assistant_mode else band_config.instructions
-    if understanding is not None and understanding.caution:
-        instructions = f"{instructions} {CAUTION_INSTRUCTIONS[understanding.caution]}"
-    permit = runtime.gate.authorize(decision, str(request_id), model_question)
-    generation = GenerationRequest(
-        message=model_question,
-        history=context.model_history[-history_store.CONTEXT_TURNS * 2 :],
-        passages=[Passage(chunk_id=str(c.chunk_id), text=c.content) for c in chunks],
-        instructions=instructions,
-        max_chars=ASSISTANT_REPLY_CHARS if assistant_mode else band_config.max_reply_chars,
-        reply_language=language,
-        coaching=assistant_mode,
-    )
-    future = _PROVIDER_EXECUTOR.submit(
-        generate_with_permit,
-        runtime.gate,
-        runtime.provider,
-        permit,
-        str(request_id),
-        model_question,
-        generation,
-    )
-    try:
-        result = future.result(timeout=PROVIDER_TIMEOUT_SECONDS)
-    except Exception as error:  # timeout, provider error, permit error
-        future.cancel()
-        logger.error("chat_generation_failed", extra={"category": _failure_category(error)})
-        _record(session, user, request_id, band.value, decision, "unavailable")
-        return _respond("unavailable")
+    if condition is not None:
+        result = GenerationResult(
+            text=compose_reply(
+                condition,
+                language,
+                later_condition,
+                [(h, c.content) for h, c in zip(headings, chunks, strict=True)],
+            ),
+            cited_chunk_ids=[str(c.chunk_id) for c in chunks],
+        )
+    else:
+        instructions = assistant.instructions if assistant_mode else band_config.instructions
+        if understanding is not None and understanding.caution:
+            instructions = f"{instructions} {CAUTION_INSTRUCTIONS[understanding.caution]}"
+        permit = runtime.gate.authorize(decision, str(request_id), model_question)
+        generation = GenerationRequest(
+            message=model_question,
+            history=context.model_history[-history_store.CONTEXT_TURNS * 2 :],
+            passages=[Passage(chunk_id=str(c.chunk_id), text=c.content) for c in chunks],
+            instructions=instructions,
+            max_chars=ASSISTANT_REPLY_CHARS if assistant_mode else band_config.max_reply_chars,
+            reply_language=language,
+            coaching=assistant_mode,
+        )
+        future = _PROVIDER_EXECUTOR.submit(
+            generate_with_permit,
+            runtime.gate,
+            runtime.provider,
+            permit,
+            str(request_id),
+            model_question,
+            generation,
+        )
+        try:
+            result = future.result(timeout=PROVIDER_TIMEOUT_SECONDS)
+        except Exception as error:  # timeout, provider error, permit error
+            future.cancel()
+            logger.error("chat_generation_failed", extra={"category": _failure_category(error)})
+            _record(session, user, request_id, band.value, decision, "unavailable")
+            return _respond("unavailable")
 
     if result.total_tokens is not None:
         try:
@@ -1021,7 +1063,9 @@ def handle_message(
 
     retrieved = {str(c.chunk_id): c for c in chunks}
     max_chars = ASSISTANT_REPLY_CHARS if assistant_mode else band_config.max_reply_chars
-    if assistant_mode and isinstance(result, GenerationResult):
+    if condition is not None:
+        max_chars = LOCAL_REPLY_CHARS
+    elif assistant_mode and isinstance(result, GenerationResult):
         # Coaching replies: trim instead of discarding, and never show a citation of a
         # passage that wasn't retrieved (the reply is then labelled general guidance).
         unknown = [c for c in result.cited_chunk_ids if c not in retrieved]
@@ -1066,7 +1110,7 @@ def handle_message(
         )
         for cid in dict.fromkeys(result.cited_chunk_ids)
     ]
-    model_name = getattr(runtime.provider, "model_name", None)
+    model_name = None if condition is not None else getattr(runtime.provider, "model_name", None)
     response = ChatResponse(
         status="reply",
         reply=ChatReply(
@@ -1112,6 +1156,6 @@ def handle_message(
         citations=[c.model_dump(mode="json") for c in citations],
         model=model_name,
         client_message_id=payload.client_message_id,
-        query_text=model_question if assistant_mode else None,
+        query_text=model_question if assistant_mode and condition is None else None,
     )
     return _saved_response(runtime, user, conversation, question, answer, topic=response.topic)

@@ -1,7 +1,10 @@
 # Knowledge audit per assistant (D-61)
 
-Status on 2026-10-24: **64 sources and 598 passages**, 62 English and 2 official Arabic
-(WHO). All sources are **draft**: publisher guidance that hasn't been clinically or
+Status on 2026-10-25: **64 sources and 610 passages**, 62 English and 2 official Arabic
+(WHO). The WHO physical-activity guidelines (English and Arabic) gained six verbatim
+sections each, from the same licensed publication: recommendations, good practice, safety
+considerations and when to stop for pregnant and postpartum women, and recommendations
+and good practice for adults with chronic conditions (D-63). All sources are **draft**: publisher guidance that hasn't been clinically or
 professionally reviewed for this app. Each source's `domains` field decides which
 assistants may retrieve it, and retrieval enforces this in SQL. Every file records its
 publisher, URL, retrieval date, licence and permitted use. All text is verbatim, extracted

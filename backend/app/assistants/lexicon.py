@@ -92,7 +92,9 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         Subtopic(
             "trust",
             _t("trust* jealous* lie* lying cheat* betray* suspicious secret*"),
-            _t("ثقه غيره بيكدب كدب خيانه شك"),
+            _t(
+                "ثقه غيره بيكدب كدب خيانه شك بيغير_عليا بتغير_عليا بيغير_مني بتغير_مني غيران غيرانه"
+            ),
             "rebuild and protect trust",
             "تبنوا الثقة وتحافظوا عليها",
             "trust honest open respect",
@@ -110,13 +112,24 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         Subtopic(
             "connection",
             _t(
-                "distant connection closeness romance appreciat* lonely affection bored routine roommates drifted drifting apart spark intimacy"
+                "distant connection closeness romance appreciat* lonely affection bored routine roommates drifted drifting apart spark intimacy compar* comparing"
             ),
-            _t("بعاد بعيد قرب مشاعر تقدير ملل روتين حب"),
+            _t("بعاد بعيد قرب مشاعر تقدير ملل روتين حب قارن مقارنه"),
             "reconnect and show appreciation",
             "تقربوا من بعض وتعبروا عن التقدير",
             "connection appreciation support relationship",
             "علاقة دعم",
+        ),
+        Subtopic(
+            "in_laws",
+            _t(
+                "in-law* in_laws her_parents his_parents my_parents your_parents her_family his_family"
+            ),
+            _t("حماتي حمايا حماتها حماته اهلها اهله اهلي اهلك"),
+            "balance time and closeness with each other's families",
+            "توازنوا بين وقتكم وقربكم من أهل كل واحد فيكم",
+            "family boundaries in-laws parents balance time partner",
+            "أهل حدود",
         ),
     ),
     "family": (
@@ -325,7 +338,9 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
     "growth": (
         Subtopic(
             "habits",
-            _t("habit* routine* consisten* stick* quit* streak* change*"),
+            _t(
+                "habit* routine* consisten* stick* quit* streak* change* phone screen_time scroll* doomscroll*"
+            ),
             _t("عاده عادات روتين استمر ابطل اكمل التزم بطلت"),
             "build a new habit and keep it going",
             "تبني عادة جديدة وتستمر عليها",
@@ -413,7 +428,7 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
             _t(
                 "start* begin* beginner new never exercis* workout* train* gym active activity cardio aerobic"
             ),
-            _t("مبتدئ رياضه تمارين جيم اتمرن كارديو نشاط للمبتدئين"),
+            _t("مبتدئ رياضه تمارين جيم اتمرن كارديو نشاط للمبتدئين اجري جري"),
             "start getting active as a beginner",
             "تبدأ تتحرك وتتمرن كمبتدئ",
             "start small amounts gradually increase getting active",
@@ -597,6 +612,15 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
             "grounding breathing mindfulness present",
             "الارتكاز",
         ),
+        Subtopic(
+            "loss",
+            _t("grief griev* passed_away died death bereave* funeral mourning miss_her miss_him"),
+            _t("توفي اتوفى اتوفت وفاه مات ماتت فقدت فقدان عزا حزنان"),
+            "cope with grief after losing someone close",
+            "تتعامل مع الحزن بعد فقدان حد قريب",
+            "grief loss coping support self-care",
+            "حزن فقدان",
+        ),
     ),
     "social": (
         Subtopic(
@@ -631,7 +655,7 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
             _t(
                 "hurt offended argu* apolog* fight* cancel* ignor* avoid* distant borrowed lend lent owe* paid_back gossip* boundar*"
             ),
-            _t("زعلان زعلني اتخانقنا اصالح اعتذر"),
+            _t("زعلان زعلني اتخانقنا اصالح اعتذر تجاهل رسايل مبتردش مبيردش"),
             "talk honestly when a friend hurt you",
             "تتكلم بصراحة لما صاحبك يزعلك",
             "communication honest talk respect listen",
@@ -670,7 +694,7 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         Subtopic(
             "goals",
             _t("goal* plan* year resolution follow_through"),
-            _t("هدف اهداف خطه السنه"),
+            _t("هدف اهداف خطه السنه اخطط نخطط تخطيط"),
             "set goals and follow through",
             "تحط أهداف وتكمل فيها",
             "goals plan steps track progress",
@@ -696,8 +720,10 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "career_plan",
-            _t("career professional five_years future job"),
-            _t("مهني مستقبلي شغلي"),
+            _t(
+                "career professional five_years future job study studying degree master* university college course* education"
+            ),
+            _t("مهني مستقبلي شغلي دراسه ادرس ماجستير جامعه كورس"),
             "plan your career",
             "تخطط لمستقبلك المهني",
             "career development plan goals skills",
@@ -723,8 +749,8 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "decision",
-            _t("decide* decision* choose choice* between options compare"),
-            _t("قرار اقرر اختار بين"),
+            _t("decide* decision* choose choice* between options compare unsure hesitant torn"),
+            _t("قرار اقرر اختار بين متردد محتار"),
             "think through a decision",
             "تفكر في قرار",
             "decision options plan goals",
@@ -750,6 +776,15 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
             "وقت",
             signal=False,
         ),
+        Subtopic(
+            "move_abroad",
+            _t("abroad emigrat* immigrat* relocat* another_country overseas hometown move_back"),
+            _t("اسافر سفر بره الخارج اهاجر هجره غربه"),
+            "weigh up a big move, such as working abroad or moving cities",
+            "توازن قرار نقلة كبيرة زي الشغل بره أو تغيير المدينة",
+            "decision move abroad relocate pros cons plan change",
+            "قرار سفر انتقال",
+        ),
     ),
     "finance": (
         Subtopic(
@@ -772,8 +807,8 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "saving",
-            _t("sav* emergency fund cushion"),
-            _t("احوش ادخار تحويش طوارئ"),
+            _t("sav* emergenc* fund cushion"),
+            _t("احوش ادخار تحويش طوارئ اوفر نوفر توفير"),
             "build savings and an emergency fund",
             "تحوش وتعمل صندوق طوارئ",
             "emergency fund savings goal automatic",
@@ -810,8 +845,8 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "short_month",
-            _t("runs_out run_out end_of_month paycheck"),
-            _t("يخلص اخر_الشهر"),
+            _t("runs_out run_out end_of_month paycheck prices expensive inflation cost_of_living"),
+            _t("يخلص اخر_الشهر الاسعار غليت غلا غلاء"),
             "make your money last the month",
             "تخلي فلوسك تكفي الشهر",
             "budget expenses spending plan cut",
@@ -862,8 +897,10 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "organise",
-            _t("too_many organi* overwhelm* tasks errands list where_to_start"),
-            _t("كتير تنظيم مهام ابدا_منين"),
+            _t(
+                "too_many organi* overwhelm* tasks errands list where_to_start tidy clutter mess* housework forget* forgetting remember* remind* reminder* appointment* birthday* calendar"
+            ),
+            _t("كتير تنظيم مهام ابدا_منين ترتيب نضافه انسي بنسي مواعيد"),
             "organise a busy week",
             "تنظم أسبوع مزحوم",
             "manage stress planning ahead priorities",
@@ -889,8 +926,8 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "routine",
-            _t("routine daily healthy day"),
-            _t("روتين يومي"),
+            _t("routine daily healthy day morning* chaotic rush* rushing"),
+            _t("روتين يومي الصبح صباحي"),
             "build a healthy daily routine",
             "تعمل روتين يومي صحي",
             "healthy living routine stress planning ahead",
@@ -925,8 +962,8 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "balance",
-            _t("balance areas life juggl*"),
-            _t("توازن حياتي"),
+            _t("balance areas life juggl* work_and_home home_and_work"),
+            _t("توازن حياتي اوفق التوفيق الشغل_والبيت"),
             "balance different areas of life",
             "توازن بين جوانب حياتك المختلفة",
             "balance priorities stress",
