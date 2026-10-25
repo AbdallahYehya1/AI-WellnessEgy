@@ -111,7 +111,7 @@ export default async function HomePage() {
               <li key={step.title} className="reveal relative space-y-3 text-center">
                 <span className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-line bg-surface text-primary-strong shadow-soft [&>svg]:h-6 [&>svg]:w-6">
                   {stepIcons[i]}
-                  <span className="absolute -end-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-white">
+                  <span className="absolute -end-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-surface">
                     {i + 1}
                   </span>
                 </span>

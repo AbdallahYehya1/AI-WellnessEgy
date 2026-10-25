@@ -149,13 +149,13 @@ export const SignOutIcon = (p: IconProps) => (
   </Icon>
 );
 
-/** Brand mark: a sun rising over the Nile, in the teal → apricot brand gradient. */
+/** Brand mark: a sun rising over the Nile, in the brand gradient. */
 export function LogoMark({ className = "h-8 w-8" }: IconProps) {
   return (
     <span
       aria-hidden
       className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[30%] shadow-soft ${className}`}
-      style={{ background: "linear-gradient(135deg, var(--primary) 0%, #1f8f7d 45%, var(--accent) 100%)" }}
+      style={{ background: "linear-gradient(135deg, var(--primary-strong) 0%, var(--primary) 55%, var(--secondary) 100%)" }}
     >
       <svg viewBox="0 0 32 32" className="h-[78%] w-[78%]" fill="none" stroke="#fff" strokeWidth={2.2} strokeLinecap="round">
         <circle cx="16" cy="14" r="4.6" fill="#fff" stroke="none" opacity={0.95} />

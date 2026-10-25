@@ -1,110 +1,110 @@
 @import "tailwindcss";
 
 /*
- * Design system v2 — "Nile at dawn" (2026-10-25).
- * Deep Nile teal for trust and calm, warm apricot for energy and growth, on warm paper
- * (light) or deep ink (dark). Text pairs are >= 4.5:1, control borders and focus >= 3:1,
+ * Design system v2 (2026-10-25) with the original v1 colour palette: calm purple with
+ * the v1 teal-green as accent, on warm white (light) or deep indigo (dark). Text pairs
+ * are >= 4.5:1, control borders and focus >= 3:1,
  * in both themes. Use the semantic utilities (bg-surface, text-ink, border-line-strong…).
  * Token names from v1 are kept so every component keeps working.
  */
 :root {
-  --canvas: #f6f4ef;
-  --canvas-2: #eeebe3;
+  --canvas: #faf9f7;
+  --canvas-2: #f3f1ec;
   --surface: #ffffff;
-  --surface-muted: #f1eee7;
-  --ink: #14181c;
-  --ink-muted: #545b61;
-  --primary: #0f6e62;
-  --primary-strong: #0a5249;
+  --surface-muted: #f3f0ff;
+  --ink: #24243a;
+  --ink-muted: #5d6070;
+  --primary: #7061d8;
+  --primary-strong: #5144b3;
   --on-primary: #ffffff;
-  --secondary: #2f7d70;
-  --accent: #d9612a;
-  --accent-ink: #a8461a;
-  --accent-soft: #fbe8dc;
-  --line: #e3ddd2;
-  --line-strong: #8a9094;
-  --focus: #0f6e62;
-  --success-bg: #e2f2ec;
-  --success-ink: #1d5443;
-  --warning-bg: #fcf0dc;
+  --secondary: #3f7465;
+  --accent: #3f7465;
+  --accent-ink: #245446;
+  --accent-soft: #e7f2ee;
+  --line: #e4e1ee;
+  --line-strong: #8a84b8;
+  --focus: #5144b3;
+  --success-bg: #e7f2ee;
+  --success-ink: #245446;
+  --warning-bg: #fdf3e1;
   --warning-ink: #7a4a06;
-  --danger-bg: #fcebea;
+  --danger-bg: #fdecec;
   --danger-ink: #9b1c1c;
-  --info-bg: #e3f1ee;
-  --info-ink: #0a5249;
-  --chart-series: #0f6e62;
-  --shadow-color: 30 25% 20%;
-  --glow-a: #1aa38f;
-  --glow-b: #f08a4b;
-  --glow-c: #f3d27a;
+  --info-bg: #f3f0ff;
+  --info-ink: #4337a0;
+  --chart-series: #7061d8;
+  --shadow-color: 250 30% 25%;
+  --glow-a: #9d91ec;
+  --glow-b: #8cc5b3;
+  --glow-c: #d6cff9;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] {
-    --canvas: #0b0f12;
-    --canvas-2: #0f1418;
-    --surface: #12181c;
-    --surface-muted: #1a2227;
-    --ink: #edf0ec;
-    --ink-muted: #a3acb0;
-    --primary: #46c9ad;
-    --primary-strong: #84dec9;
-    --on-primary: #05221d;
-    --secondary: #6fcfba;
-    --accent: #f2925d;
-    --accent-ink: #f6b089;
-    --accent-soft: #3a2216;
-    --line: #243036;
-    --line-strong: #63727a;
-    --focus: #84dec9;
-    --success-bg: #11342b;
-    --success-ink: #9ee2c8;
-    --warning-bg: #3a2a10;
-    --warning-ink: #f3cc8a;
-    --danger-bg: #43191e;
-    --danger-ink: #f6b2ba;
-    --info-bg: #102a26;
-    --info-ink: #a5e3d4;
-    --chart-series: #46c9ad;
-    --shadow-color: 200 40% 2%;
-    --glow-a: #127a6a;
-    --glow-b: #a24a1f;
-    --glow-c: #6b5418;
+    --canvas: #171824;
+    --canvas-2: #1c1d2c;
+    --surface: #202233;
+    --surface-muted: #2a2c42;
+    --ink: #f3f0ff;
+    --ink-muted: #b5b7c6;
+    --primary: #a99df0;
+    --primary-strong: #c3baf6;
+    --on-primary: #171824;
+    --secondary: #8cc5b3;
+    --accent: #8cc5b3;
+    --accent-ink: #a9dccb;
+    --accent-soft: #1d3a32;
+    --line: #34364d;
+    --line-strong: #7d78a8;
+    --focus: #c3baf6;
+    --success-bg: #1d3a32;
+    --success-ink: #a9dccb;
+    --warning-bg: #3d2e12;
+    --warning-ink: #f5cf8e;
+    --danger-bg: #4a1d24;
+    --danger-ink: #f7b4bc;
+    --info-bg: #2a2c42;
+    --info-ink: #cfc7fa;
+    --chart-series: #8a7ae5;
+    --shadow-color: 240 40% 3%;
+    --glow-a: #4b3fa8;
+    --glow-b: #2e5d50;
+    --glow-c: #3a3466;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --canvas: #0b0f12;
-  --canvas-2: #0f1418;
-  --surface: #12181c;
-  --surface-muted: #1a2227;
-  --ink: #edf0ec;
-  --ink-muted: #a3acb0;
-  --primary: #46c9ad;
-  --primary-strong: #84dec9;
-  --on-primary: #05221d;
-  --secondary: #6fcfba;
-  --accent: #f2925d;
-  --accent-ink: #f6b089;
-  --accent-soft: #3a2216;
-  --line: #243036;
-  --line-strong: #63727a;
-  --focus: #84dec9;
-  --success-bg: #11342b;
-  --success-ink: #9ee2c8;
-  --warning-bg: #3a2a10;
-  --warning-ink: #f3cc8a;
-  --danger-bg: #43191e;
-  --danger-ink: #f6b2ba;
-  --info-bg: #102a26;
-  --info-ink: #a5e3d4;
-  --chart-series: #46c9ad;
-  --shadow-color: 200 40% 2%;
-  --glow-a: #127a6a;
-  --glow-b: #a24a1f;
-  --glow-c: #6b5418;
+  --canvas: #171824;
+  --canvas-2: #1c1d2c;
+  --surface: #202233;
+  --surface-muted: #2a2c42;
+  --ink: #f3f0ff;
+  --ink-muted: #b5b7c6;
+  --primary: #a99df0;
+  --primary-strong: #c3baf6;
+  --on-primary: #171824;
+  --secondary: #8cc5b3;
+  --accent: #8cc5b3;
+  --accent-ink: #a9dccb;
+  --accent-soft: #1d3a32;
+  --line: #34364d;
+  --line-strong: #7d78a8;
+  --focus: #c3baf6;
+  --success-bg: #1d3a32;
+  --success-ink: #a9dccb;
+  --warning-bg: #3d2e12;
+  --warning-ink: #f5cf8e;
+  --danger-bg: #4a1d24;
+  --danger-ink: #f7b4bc;
+  --info-bg: #2a2c42;
+  --info-ink: #cfc7fa;
+  --chart-series: #8a7ae5;
+  --shadow-color: 240 40% 3%;
+  --glow-a: #4b3fa8;
+  --glow-b: #2e5d50;
+  --glow-c: #3a3466;
   color-scheme: dark;
 }
 
