@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { AssistantIcon } from "@/components/assistants/icons";
+import { AssistantDirectory, type DirectoryItem } from "@/components/assistants/directory";
 import { ServiceUnavailable } from "@/components/onboarding/service-unavailable";
 import { AppShell } from "@/components/shell/app-shell";
 import { ButtonLink, PageHeader } from "@/components/ui/primitives";
 import { fetchChatConfig, fetchMyConsent } from "@/lib/api/backend";
+import { BY_ID, identity } from "@/lib/assistants/catalog";
 import { getVerifiedSession } from "@/lib/auth/session";
 import { getMessages } from "@/lib/i18n/server";
 import { requiredOnboardingStep } from "@/lib/onboarding/steps";
@@ -33,16 +33,33 @@ export default async function AssistantsPage() {
     return <ServiceUnavailable t={t} />;
   }
   const a = t.assistants;
+  const d = t.v2.directory;
   const enabled = config.data.enabled;
   // Ready assistants first so the ones that can be opened aren't buried on a phone.
   const assistants = enabled
-    ? [...(config.data.assistants ?? [])].sort((a, b) => Number(b.status === "ready") - Number(a.status === "ready"))
+    ? [...(config.data.assistants ?? [])].sort((x, y) => Number(y.status === "ready") - Number(x.status === "ready"))
     : [];
+  // Live names, descriptions and starters from the server; identity (colour, group) from the catalog.
+  const items: DirectoryItem[] = assistants.map((x) => {
+    const id = identity(x.assistant_id);
+    return {
+      id: x.assistant_id,
+      icon: x.icon,
+      name: locale === "ar" ? x.name_ar : x.name_en,
+      description: locale === "ar" ? x.description_ar : x.description_en,
+      starters: (locale === "ar" ? x.starters_ar : x.starters_en).slice(0, 3),
+      uses: BY_ID[x.assistant_id]?.uses[locale] ?? [],
+      hue: id.hue,
+      chroma: id.chroma,
+      group: id.group,
+      ready: x.status === "ready",
+    };
+  });
 
   return (
-    <AppShell current="chat" locale={locale} t={t} chatEnabled={enabled}>
-      <PageHeader title={a.title} intro={a.intro} />
-      {assistants.length === 0 ? (
+    <AppShell current="chat" locale={locale} t={t} chatEnabled={enabled} wide>
+      <PageHeader eyebrow={d.eyebrow} title={a.title} intro={a.intro} />
+      {items.length === 0 ? (
         <div className="space-y-4">
           <p role="status" className="text-ink-muted">
             {t.chat.unavailableYet}
@@ -52,62 +69,21 @@ export default async function AssistantsPage() {
           </ButtonLink>
         </div>
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2">
-          {assistants.map((assistant) => {
-            const name = locale === "ar" ? assistant.name_ar : assistant.name_en;
-            const description = locale === "ar" ? assistant.description_ar : assistant.description_en;
-            const starters = (locale === "ar" ? assistant.starters_ar : assistant.starters_en).slice(0, 2);
-            const ready = assistant.status === "ready";
-            const body = (
-              <>
-                <div className="flex items-start gap-3">
-                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${ready ? "bg-secondary/40 text-primary-strong" : "bg-surface-muted text-ink-muted"}`}>
-                    <AssistantIcon name={assistant.icon} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="font-bold text-ink">{name}</h2>
-                    <p className="text-sm text-ink-muted">{description}</p>
-                  </div>
-                  {!ready ? (
-                    <span className="shrink-0 rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-ink-muted">
-                      {a.comingSoon}
-                    </span>
-                  ) : null}
-                </div>
-                {ready ? (
-                  <div className="mt-3 space-y-1">
-                    <p className="text-xs font-semibold text-ink-muted">{a.examples}</p>
-                    <ul className="space-y-1 text-sm text-ink" dir="auto">
-                      {starters.map((s) => (
-                        <li key={s} className="truncate">
-                          “{s}”
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <p className="mt-3 text-xs text-ink-muted">{a.comingSoonBody}</p>
-                )}
-              </>
-            );
-            return (
-              <li key={assistant.assistant_id} className="min-w-0">
-                {ready ? (
-                  <Link
-                    href={`/chat?assistant=${assistant.assistant_id}`}
-                    className="block h-full rounded-3xl border border-line bg-surface p-5 shadow-sm transition-colors hover:border-primary hover:bg-surface-muted"
-                  >
-                    {body}
-                  </Link>
-                ) : (
-                  <div aria-disabled="true" className="h-full rounded-3xl border border-dashed border-line bg-surface p-5 opacity-80">
-                    {body}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <AssistantDirectory
+          items={items}
+          copy={{
+            filterLabel: d.filterLabel,
+            searchLabel: d.searchLabel,
+            searchPlaceholder: d.searchPlaceholder,
+            noMatch: d.noMatch,
+            goodFor: d.goodFor,
+            tryAsking: d.tryAsking,
+            startChat: t.v2.common.startChat,
+            comingSoon: a.comingSoon,
+            comingSoonBody: a.comingSoonBody,
+            groups: t.v2.landing.groups,
+          }}
+        />
       )}
     </AppShell>
   );

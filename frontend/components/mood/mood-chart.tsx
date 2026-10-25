@@ -31,7 +31,7 @@ export function MoodChart({ checkins, locale = "en" }: { checkins: MoodCheckin[]
   return (
     <figure className="space-y-2">
       <figcaption>
-        <h2 id="chart-title" className="text-lg font-bold">
+        <h2 id="chart-title" className="text-lg font-semibold">
           {t.chartTitle}
         </h2>
         <p id="chart-desc" className="text-sm text-ink-muted">

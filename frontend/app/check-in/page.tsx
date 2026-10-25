@@ -46,14 +46,14 @@ export default async function CheckInPage() {
   return (
     <AppShell current="check-in" locale={locale} t={t} chatEnabled={chatEnabled}>
       <PageHeader title={r.title} />
-      <Card>
+      <Card className="enter enter-1 glass shadow-lifted">
         <ReflectionForm action={submitReflection} locale={locale} assistantNames={assistantNames} />
         <TextLink href="/dashboard" className="mt-4">
           {t.checkIn.skip}
         </TextLink>
       </Card>
       <Card aria-labelledby="recent-title">
-        <h2 id="recent-title" className="mb-2 text-lg font-bold">
+        <h2 id="recent-title" className="mb-2 text-lg font-semibold">
           {r.recentTitle}
         </h2>
         {history.ok ? (

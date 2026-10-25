@@ -26,3 +26,17 @@ export const EMOJI: Record<(typeof EMOTIONS)[number], string> = {
   tired: "😴",
   excited: "🤩",
 };
+
+/** A colour family per feeling (oklch hue), for selection feedback and charts only:
+ * labels always carry the meaning. */
+export const EMOTION_HUE: Record<(typeof EMOTIONS)[number], number> = {
+  happy: 85,
+  calm: 178,
+  good: 140,
+  okay: 240,
+  anxious: 300,
+  sad: 250,
+  frustrated: 25,
+  tired: 275,
+  excited: 50,
+};

@@ -8,6 +8,9 @@ import { HistoryConsent } from "@/components/chat/history-consent";
 import { AssistantIcon } from "@/components/assistants/icons";
 import { MessageEntry } from "@/components/chat/messages";
 import { Sidebar } from "@/components/chat/sidebar";
+import { ArrowIcon, MenuIcon, SidebarIcon } from "@/components/shell/icons";
+import { toneStyle } from "@/components/ui/primitives";
+import { BY_ID as CATALOG_BY_ID, identity } from "@/lib/assistants/catalog";
 import type { Entry, Suggestion } from "@/components/chat/types";
 import type {
   ChatResponse,
@@ -134,6 +137,8 @@ export function ChatWorkspace({
 }: Props) {
   const t = messages[locale].chat;
   const at = messages[locale].assistants;
+  const v = messages[locale].v2.chat;
+  const tone = identity(assistant?.id ?? "emotional");
   const assistantId = assistant?.id;
   const [history, setHistory] = useState<HistorySettings | null>(initialHistory);
   const [conversations, setConversations] = useState<ConversationSummary[]>(initialConversations?.conversations ?? []);
@@ -490,32 +495,39 @@ export function ChatWorkspace({
   );
 
   return (
-    <div className="flex min-h-0 flex-1">
-      {/* Desktop sidebar */}
-      {!collapsed ? (
-        <aside aria-label={t.chats} className="hidden w-72 shrink-0 border-e border-line bg-surface lg:flex lg:flex-col">
-          {sidebar(false)}
-        </aside>
-      ) : null}
+    <div className="tone relative flex min-h-0 flex-1" style={toneStyle(tone.hue, tone.chroma)}>
+      {/* Desktop sidebar: slides closed; inert while collapsed so nothing in it can be reached. */}
+      <aside
+        aria-label={t.chats}
+        inert={collapsed}
+        className={`hidden shrink-0 overflow-hidden border-line bg-surface/80 backdrop-blur transition-[width] duration-300 ease-[var(--ease-out-soft)] lg:flex lg:flex-col ${collapsed ? "w-0" : "w-[19rem] border-e"}`}
+      >
+        <div className="flex h-full w-[19rem] flex-col">{sidebar(false)}</div>
+      </aside>
 
       {/* Mobile drawer */}
       {drawerOpen ? (
         <div className="fixed inset-0 z-40 lg:hidden" onKeyDown={onDrawerKeyDown}>
-          <button type="button" aria-label={t.closeChats} className="absolute inset-0 bg-ink/40" onClick={() => setDrawerOpen(false)} />
+          <button
+            type="button"
+            aria-label={t.closeChats}
+            className="absolute inset-0 bg-ink/45 backdrop-blur-[2px] motion-safe:animate-[scrim_250ms_ease-out]"
+            onClick={() => setDrawerOpen(false)}
+          />
           <div
             ref={drawerRef}
             role="dialog"
             aria-modal="true"
             aria-label={t.chats}
-            className="absolute inset-y-0 start-0 flex w-[85%] max-w-xs flex-col bg-surface pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-xl"
+            className="absolute inset-y-0 start-0 flex w-[86%] max-w-[20rem] flex-col rounded-e-[1.75rem] bg-surface pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-lifted motion-safe:animate-[drawer-ltr_320ms_var(--ease-out-soft)] rtl:motion-safe:animate-[drawer-rtl_320ms_var(--ease-out-soft)]"
           >
             {sidebar(true)}
           </div>
         </div>
       ) : null}
 
-      <section aria-label={t.conversationLabel} className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-14 items-center gap-2 border-b border-line px-3 sm:px-4">
+      <section aria-label={t.conversationLabel} className="relative flex min-w-0 flex-1 flex-col">
+        <header className="glass relative z-10 flex min-h-16 items-center gap-2 border-x-0 border-t-0 px-3 sm:px-5">
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
@@ -523,9 +535,7 @@ export function ChatWorkspace({
             aria-expanded={drawerOpen}
             className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-ink-muted hover:bg-surface-muted lg:hidden"
           >
-            <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
+            <MenuIcon />
           </button>
           {collapsed ? (
             <button
@@ -535,14 +545,11 @@ export function ChatWorkspace({
               title={t.showSidebar}
               className="hidden h-10 w-10 items-center justify-center rounded-xl text-ink-muted hover:bg-surface-muted lg:inline-flex"
             >
-              <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5 rtl:-scale-x-100" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="4" width="18" height="16" rx="3" />
-                <path d="M9 4v16M13 10l2 2-2 2" />
-              </svg>
+              <SidebarIcon open={false} />
             </button>
           ) : null}
           {assistant ? (
-            <span aria-hidden className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary/40 text-primary-strong sm:flex">
+            <span aria-hidden className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--tone-bg)] text-[var(--tone-ink)] ring-1 ring-[var(--tone-line)] sm:flex">
               <AssistantIcon name={assistant.icon} className="h-5 w-5" />
             </span>
           ) : null}
@@ -556,34 +563,105 @@ export function ChatWorkspace({
               </p>
             ) : null}
           </div>
-          <a href="/assistants" className="hidden shrink-0 rounded-full px-3 py-1 text-xs font-semibold text-primary-strong underline-offset-4 hover:underline sm:inline">
-            {at.all}
-          </a>
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${savedNow ? "bg-success-bg text-success-ink" : "bg-surface-muted text-ink-muted"}`}>
+          {Object.keys(assistantNames).length > 1 ? (
+            <details className="group/switch relative hidden shrink-0 md:block">
+              <summary className="inline-flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-full border border-line bg-surface/70 px-3 text-xs font-semibold text-ink-muted transition-colors hover:text-ink">
+                {at.switchLabel}
+                <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5 transition-transform group-open/switch:rotate-180" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </summary>
+              <ul className="absolute end-0 top-11 z-30 w-72 space-y-0.5 rounded-2xl border border-line bg-surface p-1.5 shadow-lifted motion-safe:animate-[fade-in_180ms_ease-out]">
+                {Object.entries(assistantNames).map(([id, name]) => {
+                  const other = identity(id);
+                  return (
+                    <li key={id}>
+                      <a
+                        href={`/chat?assistant=${id}`}
+                        aria-current={id === assistantId ? "page" : undefined}
+                        className="tone flex min-h-11 items-center gap-3 rounded-xl px-2.5 text-sm text-ink transition-colors hover:bg-surface-muted aria-[current=page]:bg-[var(--tone-bg)] aria-[current=page]:font-semibold"
+                        style={toneStyle(other.hue, other.chroma)}
+                        dir="auto"
+                      >
+                        <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--tone-bg)] text-[var(--tone-ink)]">
+                          <AssistantIcon name={CATALOG_BY_ID[id]?.icon ?? "sparkles"} className="h-4 w-4" />
+                        </span>
+                        <span className="truncate">{name}</span>
+                      </a>
+                    </li>
+                  );
+                })}
+                <li className="border-t border-line pt-1">
+                  <a href="/assistants" className="flex min-h-10 items-center gap-2 rounded-xl px-2.5 text-xs font-semibold text-primary-strong hover:bg-surface-muted">
+                    {at.all}
+                    <ArrowIcon className="h-3.5 w-3.5" />
+                  </a>
+                </li>
+              </ul>
+            </details>
+          ) : (
+            <a href="/assistants" className="hidden shrink-0 rounded-full px-3 py-1 text-xs font-semibold text-primary-strong underline-offset-4 hover:underline sm:inline">
+              {at.all}
+            </a>
+          )}
+          <span
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${savedNow ? "bg-success-bg text-success-ink" : "bg-surface-muted text-ink-muted"}`}
+          >
+            <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${savedNow ? "bg-success-ink" : "bg-line-strong"}`} />
             {savedNow ? t.savedBadge : t.notSavedBadge}
           </span>
-          <span className="hidden shrink-0 rounded-full bg-warning-bg px-2.5 py-1 text-xs font-semibold text-warning-ink sm:inline">
+          <span className="hidden shrink-0 rounded-full border border-warning-ink/25 px-2.5 py-1 text-xs font-semibold text-warning-ink xl:inline">
             {t.prototype}
           </span>
         </header>
 
-        <div ref={logRef} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+        <div ref={logRef} onScroll={onScroll} className="scroll-quiet relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-72 opacity-70" style={{ background: "radial-gradient(60% 100% at 50% 0%, var(--tone-bg), transparent 70%)" }} />
+          <div className="relative mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
             {loadingConversation ? (
-              <p role="status" className="py-10 text-center text-sm text-ink-muted">
-                {t.loading}
-              </p>
+              <div role="status" className="space-y-6 py-6">
+                <span className="sr-only">{t.loading}</span>
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className={`flex gap-3 ${i % 2 ? "justify-end" : ""}`}>
+                    <span aria-hidden className={`skeleton block h-16 rounded-3xl ${i % 2 ? "w-1/2" : "w-3/4"}`} />
+                  </div>
+                ))}
+              </div>
             ) : entries.length === 0 ? (
-              <div className="space-y-6 py-4 sm:py-10">
-                <div className="space-y-2 text-center">
+              <div className="space-y-7 py-4 sm:py-10">
+                <div className="enter space-y-3 text-center">
                   {assistant ? (
-                    <span aria-hidden className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-secondary/40 text-primary-strong">
-                      <AssistantIcon name={assistant.icon} className="h-7 w-7" />
+                    <span aria-hidden className="relative mx-auto flex h-20 w-20 items-center justify-center">
+                      <span className="absolute inset-0 rounded-[1.75rem] bg-[var(--tone-bg-strong)] opacity-70 blur-xl motion-safe:animate-[breathe_5s_ease-in-out_infinite]" />
+                      <span className="relative flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[var(--tone-bg)] text-[var(--tone-ink)] shadow-soft ring-1 ring-[var(--tone-line)]">
+                        <AssistantIcon name={assistant.icon} className="h-8 w-8" />
+                      </span>
                     </span>
                   ) : null}
-                  <h2 className="text-2xl font-bold text-ink">{assistant && !showTopics ? assistant.name : t.welcomeTitle}</h2>
-                  <p className="text-ink-muted">{assistant && !showTopics ? assistant.description : t.welcomeBody}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--tone-ink)]">{v.emptyEyebrow}</p>
+                  <h2 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{assistant && !showTopics ? assistant.name : t.welcomeTitle}</h2>
+                  <p className="mx-auto max-w-lg text-ink-muted">{assistant && !showTopics ? assistant.description : t.welcomeBody}</p>
                 </div>
+                {visibleSuggestions.length > 0 && !pending ? (
+                  <div className="enter enter-1 space-y-2">
+                    <p className="text-center text-sm font-semibold text-ink-muted">{v.startersTitle}</p>
+                    <ul aria-label={t.suggestionsLabel} className="grid gap-2 sm:grid-cols-2">
+                      {visibleSuggestions.map((s) => (
+                        <li key={s.id}>
+                          <button
+                            type="button"
+                            onClick={() => send(s.text)}
+                            dir="auto"
+                            className="lift group flex min-h-14 w-full items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 text-start text-sm text-ink shadow-soft hover:border-[var(--tone-line)] hover:shadow-lifted"
+                          >
+                            <span className="flex-1">{s.text}</span>
+                            <ArrowIcon className="h-4 w-4 shrink-0 text-[var(--tone-ink)] opacity-60 transition-all group-hover:translate-x-0.5 group-hover:opacity-100 rtl:group-hover:-translate-x-0.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 {showTopics ? (
                 <div className="rounded-3xl border border-line bg-surface p-4 sm:p-5">
                   <h3 className="text-sm font-semibold text-ink">{t.topicsTitle}</h3>
@@ -596,13 +674,14 @@ export function ChatWorkspace({
                   </ul>
                   <p className="mt-3 text-xs text-ink-muted">{t.cannotDo}</p>
                 </div>
-                ) : (
-                  <p className="text-center text-xs text-ink-muted">{t.cannotDo}</p>
-                )}
-                <p className="text-xs leading-5 text-ink-muted">{assistant && !showTopics ? at.scope : t.scope}</p>
-                {(context?.enabled ? (modeNoteShared ?? modeNote) : modeNote) ? (
-                  <p className="text-xs leading-5 text-ink-muted">{context?.enabled ? (modeNoteShared ?? modeNote) : modeNote}</p>
                 ) : null}
+                <div className="enter enter-2 space-y-2 rounded-3xl border border-line bg-surface/60 p-4 text-xs leading-5 text-ink-muted">
+                  {!showTopics ? <p className="font-semibold text-ink">{t.cannotDo}</p> : null}
+                  <p>{assistant && !showTopics ? at.scope : t.scope}</p>
+                  {(context?.enabled ? (modeNoteShared ?? modeNote) : modeNote) ? (
+                    <p>{context?.enabled ? (modeNoteShared ?? modeNote) : modeNote}</p>
+                  ) : null}
+                </div>
               </div>
             ) : (
               <>
@@ -613,10 +692,10 @@ export function ChatWorkspace({
                     </button>
                   </div>
                 ) : null}
-                <ol aria-label={t.conversationLabel} aria-live="polite" className="space-y-6">
+                <ol aria-label={t.conversationLabel} aria-live="polite" className="space-y-7">
                   {entries.map((entry) => (
-                    <li key={entry.id} className="motion-safe:animate-[fade-in_160ms_ease-out]">
-                      <MessageEntry entry={entry} t={t} locale={locale} />
+                    <li key={entry.id} className="motion-safe:animate-[rise_380ms_var(--ease-out-soft)]">
+                      <MessageEntry entry={entry} t={t} locale={locale} icon={assistant?.icon ?? "leaf"} />
                       {entry.kind === "notice" && entry.suggestions && entry.suggestions.length > 0 ? (
                         <ul className="mt-2 flex flex-wrap gap-2" aria-label={t.clarifyOptions}>
                           {entry.suggestions.map((s) => (
@@ -626,7 +705,7 @@ export function ChatWorkspace({
                                 disabled={pending}
                                 onClick={() => send(s)}
                                 dir="auto"
-                                className="min-h-11 rounded-full border border-line bg-surface px-4 py-2 text-start text-sm text-ink hover:border-primary hover:bg-surface-muted disabled:opacity-60"
+                                className="min-h-11 rounded-full border border-[var(--tone-line)] bg-surface px-4 py-2 text-start text-sm text-ink transition-all hover:-translate-y-0.5 hover:bg-[var(--tone-bg)] disabled:opacity-60"
                               >
                                 {s}
                               </button>
@@ -635,10 +714,15 @@ export function ChatWorkspace({
                         </ul>
                       ) : null}
                       {entry.kind !== "user" && entry.handoff ? (
-                        <p className="mt-2 text-sm text-ink" dir="auto">
-                          {at.handoff.replace("{assistant}", assistantNames[entry.handoff] ?? entry.handoff)}{" "}
-                          <a href={`/chat?assistant=${entry.handoff}`} className="font-semibold text-primary-strong underline underline-offset-4">
+                        <p
+                          className="tone mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl border border-[var(--tone-line)] bg-[var(--tone-bg)] px-4 py-3 text-sm text-ink sm:ms-12"
+                          style={toneStyle(identity(entry.handoff).hue, identity(entry.handoff).chroma)}
+                          dir="auto"
+                        >
+                          <span>{at.handoff.replace("{assistant}", assistantNames[entry.handoff] ?? entry.handoff)}</span>
+                          <a href={`/chat?assistant=${entry.handoff}`} className="inline-flex items-center gap-1 font-semibold text-[var(--tone-ink)] underline underline-offset-4">
                             {at.handoffAction.replace("{assistant}", assistantNames[entry.handoff] ?? entry.handoff)}
+                            <ArrowIcon className="h-3.5 w-3.5" />
                           </a>
                         </p>
                       ) : null}
@@ -648,24 +732,34 @@ export function ChatWorkspace({
               </>
             )}
             {pending ? (
-              <p role="status" className="mt-6 flex items-center gap-2 text-sm text-ink-muted">
-                <span aria-hidden className="flex gap-1">
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-primary [animation-delay:-0.2s]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-primary [animation-delay:-0.1s]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-primary" />
+              // Honest progress: the reply arrives in one piece (no streaming), so this says
+              // what is happening instead of imitating typing.
+              <div role="status" className="mt-7 flex gap-3 motion-safe:animate-[rise_300ms_var(--ease-out-soft)]">
+                <span aria-hidden className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--tone-bg)] text-[var(--tone-ink)] ring-1 ring-[var(--tone-line)] sm:flex">
+                  <AssistantIcon name={assistant?.icon ?? "leaf"} className="h-5 w-5" />
                 </span>
-                {t.replying}
-              </p>
+                <div className="space-y-2.5 rounded-3xl border border-line bg-surface/80 px-4 py-3 shadow-soft">
+                  <p className="flex items-center gap-2.5 text-sm font-medium text-ink">
+                    <span aria-hidden className="flex gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[var(--tone-solid)] motion-safe:animate-[breathe_1.2s_ease-in-out_infinite]" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-[var(--tone-solid)] motion-safe:animate-[breathe_1.2s_ease-in-out_0.2s_infinite]" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-[var(--tone-solid)] motion-safe:animate-[breathe_1.2s_ease-in-out_0.4s_infinite]" />
+                    </span>
+                    {v.thinking}
+                  </p>
+                  <p className="text-xs text-ink-muted">{v.thinkingNote}</p>
+                </div>
+              </div>
             ) : null}
           </div>
         </div>
 
-        <div className="relative border-t border-line bg-canvas">
+        <div className="relative bg-gradient-to-t from-canvas via-canvas to-canvas/0 pt-2">
           {unseen ? (
             <button
               type="button"
               onClick={jumpToLatest}
-              className="absolute -top-14 start-1/2 z-10 inline-flex min-h-10 -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-surface px-4 text-sm font-semibold text-ink shadow-md rtl:translate-x-1/2"
+              className="glass absolute -top-12 start-1/2 z-10 inline-flex min-h-10 -translate-x-1/2 items-center gap-2 rounded-full px-4 text-sm font-semibold text-ink shadow-lifted motion-safe:animate-[rise_250ms_var(--ease-out-soft)] rtl:translate-x-1/2"
             >
               <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
                 <path d="M12 5v14M6 13l6 6 6-6" />
@@ -698,15 +792,15 @@ export function ChatWorkspace({
                 {notice}
               </p>
             ) : null}
-            {visibleSuggestions.length > 0 && !pending ? (
-              <ul aria-label={answered ? t.followUpsLabel : t.suggestionsLabel} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+            {visibleSuggestions.length > 0 && !pending && entries.length > 0 ? (
+              <ul aria-label={answered ? t.followUpsLabel : t.suggestionsLabel} className="scroll-quiet -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
                 {visibleSuggestions.map((s) => (
                   <li key={s.id} className="shrink-0">
                     <button
                       type="button"
                       onClick={() => send(s.text)}
                       dir="auto"
-                      className="min-h-10 max-w-72 truncate rounded-full border border-line-strong bg-surface px-4 text-sm text-ink hover:border-primary hover:bg-surface-muted"
+                      className="min-h-10 max-w-72 truncate rounded-full border border-[var(--tone-line)] bg-surface/90 px-4 text-sm text-ink transition-all hover:-translate-y-0.5 hover:bg-[var(--tone-bg)]"
                     >
                       {s.text}
                     </button>

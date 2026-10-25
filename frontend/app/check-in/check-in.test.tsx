@@ -198,7 +198,8 @@ describe("ReflectionForm", () => {
       for (const cls of ["has-focus-visible:outline-2", "has-focus-visible:outline-offset-2", "has-focus-visible:outline-focus"]) {
         expect(label?.classList.contains(cls)).toBe(true);
       }
-      expect(label?.classList.contains("has-checked:bg-surface-muted")).toBe(true);
+      // A selected choice has its own background, distinct from the focus outline.
+      expect([...(label?.classList ?? [])].some((cls) => cls.startsWith("has-checked:bg-"))).toBe(true);
     }
   });
 

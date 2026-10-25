@@ -17,7 +17,7 @@ import { updateDisplayName } from "@/lib/settings/actions";
 export const metadata: Metadata = { title: "Settings · AI Wellness Egypt" };
 
 const selectClasses =
-  "block min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base text-ink sm:w-64";
+  "block min-h-12 w-full rounded-2xl border border-line-strong/60 bg-surface px-4 py-2.5 text-base text-ink shadow-soft transition-colors hover:border-line-strong sm:w-64";
 
 /**
  * Only settings the backend supports today. Unsupported account actions
@@ -52,14 +52,14 @@ export default async function SettingsPage() {
       <PageHeader title={s.title} />
 
       <Card aria-labelledby="profile-title">
-        <h2 id="profile-title" className="mb-4 text-lg font-bold">
+        <h2 id="profile-title" className="mb-4 text-lg font-semibold">
           {s.profileTitle}
         </h2>
         <DisplayNameForm action={updateDisplayName} initialDisplayName={profile.data.display_name} locale={locale} />
       </Card>
 
       <Card aria-labelledby="appearance-title">
-        <h2 id="appearance-title" className="mb-4 text-lg font-bold">
+        <h2 id="appearance-title" className="mb-4 text-lg font-semibold">
           {s.appearanceTitle}
         </h2>
         <div className="space-y-5">
@@ -101,7 +101,7 @@ export default async function SettingsPage() {
       </Card>
 
       <Card aria-labelledby="consent-title">
-        <h2 id="consent-title" className="mb-2 text-lg font-bold">
+        <h2 id="consent-title" className="mb-2 text-lg font-semibold">
           {s.consentTitle}
         </h2>
         <p className="text-sm">
@@ -116,14 +116,14 @@ export default async function SettingsPage() {
       </Card>
 
       <Card aria-labelledby="privacy-title">
-        <h2 id="privacy-title" className="mb-2 text-lg font-bold">
+        <h2 id="privacy-title" className="mb-2 text-lg font-semibold">
           {s.privacyTitle}
         </h2>
         <p className="text-sm text-ink-muted">{s.privacyBody}</p>
       </Card>
 
       <Card aria-labelledby="account-title">
-        <h2 id="account-title" className="mb-2 text-lg font-bold">
+        <h2 id="account-title" className="mb-2 text-lg font-semibold">
           {s.accountTitle}
         </h2>
         {me.status === "ok" && me.me.email ? (

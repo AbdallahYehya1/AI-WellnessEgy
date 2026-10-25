@@ -7,6 +7,7 @@ import { MoodChart } from "@/components/mood/mood-chart";
 import { formatCheckinTime, MoodHistory } from "@/components/mood/mood-history";
 import { ServiceUnavailable } from "@/components/onboarding/service-unavailable";
 import { AppShell } from "@/components/shell/app-shell";
+import { ChartIcon } from "@/components/shell/icons";
 import { ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui/primitives";
 import { fetchChatConfig, fetchMoodHistory, fetchMoodInsights, fetchMyConsent } from "@/lib/api/backend";
 import { getVerifiedSession } from "@/lib/auth/session";
@@ -46,7 +47,7 @@ export default async function HistoryPage({ searchParams }: Props = {}) {
   const legacy = history.ok ? history.data.checkins.filter((c) => c.mood_score !== null && c.kind !== "reflection") : [];
 
   return (
-    <AppShell current="history" locale={locale} t={t} chatEnabled={Boolean(chat?.ok && chat.data.enabled)}>
+    <AppShell current="history" locale={locale} t={t} chatEnabled={Boolean(chat?.ok && chat.data.enabled)} wide>
       <PageHeader title={i.title} intro={i.intro} />
       {!history.ok ? (
         <Card>
@@ -55,17 +56,17 @@ export default async function HistoryPage({ searchParams }: Props = {}) {
           </p>
         </Card>
       ) : history.data.checkins.length === 0 ? (
-        <EmptyState title={i.empty} action={<ButtonLink href="/check-in">{i.emptyAction}</ButtonLink>} />
+        <EmptyState title={i.empty} icon={<ChartIcon className="h-6 w-6" />} action={<ButtonLink href="/check-in">{i.emptyAction}</ButtonLink>} />
       ) : (
         <>
           <Card>
-            <nav aria-label={i.periodLabel} className="mb-5 flex gap-2">
+            <nav aria-label={i.periodLabel} className="mb-7 inline-flex gap-1 rounded-full border border-line bg-surface-muted/70 p-1">
               {(["week", "month"] as const).map((p) => (
                 <Link
                   key={p}
                   href={`/history?period=${p}`}
                   aria-current={p === period ? "page" : undefined}
-                  className="inline-flex min-h-10 items-center rounded-full border border-line-strong px-4 text-sm font-semibold text-ink-muted aria-[current=page]:border-primary aria-[current=page]:bg-surface-muted aria-[current=page]:text-primary-strong"
+                  className="inline-flex min-h-10 items-center rounded-full px-5 text-sm font-semibold text-ink-muted transition-all duration-200 hover:text-ink aria-[current=page]:bg-surface aria-[current=page]:text-primary-strong aria-[current=page]:shadow-soft"
                 >
                   {p === "week" ? i.week : i.month}
                 </Link>
@@ -110,7 +111,7 @@ export default async function HistoryPage({ searchParams }: Props = {}) {
             </Card>
           ) : null}
           <Card aria-labelledby="entries-title">
-            <h2 id="entries-title" className="mb-2 text-lg font-bold">
+            <h2 id="entries-title" className="mb-2 text-lg font-semibold">
               {i.entriesTitle}
             </h2>
             <MoodHistory checkins={history.data.checkins} locale={locale} />

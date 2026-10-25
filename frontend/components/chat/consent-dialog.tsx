@@ -54,7 +54,7 @@ export function ConsentDialog({ id, title, points, agreeLabel, declineLabel, bus
         aria-labelledby={`${id}-title`}
         className="max-h-[90dvh] w-full max-w-lg space-y-4 overflow-y-auto rounded-3xl bg-surface p-6 shadow-xl"
       >
-        <h2 id={`${id}-title`} className="text-lg font-bold text-ink">
+        <h2 id={`${id}-title`} className="text-lg font-semibold text-ink">
           {title}
         </h2>
         <ul className="list-disc space-y-2 ps-5 text-sm leading-6 text-ink">
