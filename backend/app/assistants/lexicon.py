@@ -39,11 +39,11 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
             "communication",
             _t(
                 "communicat* talk* talking listen* listening understand* open* honest* express* "
-                "interrupt* hear heard ignor* bring_up defensive silent_treatment not_speaking raise"
+                "interrupt* hear heard ignor* bring_up defensive silent_treatment not_speaking raise quiet shuts_down"
             ),
             _t(
                 "كلام نتكلم اتكلم تواصل نتواصل التواصل نتفاهم تفاهم افهم يفهم تسمع يسمع اسمع "
-                "بيسمعني بسمعها بسمعه بتسمعني بيسمعها بتسمعه مبيسمعنيش مبتسمعنيش صراحه حوار نتحاور"
+                "بيسمعني بسمعها بسمعه بتسمعني بيسمعها بتسمعه مبيسمعنيش مبتسمعنيش صراحه حوار نتحاور ساكت ساكته بيحكيلي بتحكيلي بيحكي"
             ),
             "communicate openly and listen to each other",
             "تتكلموا بصراحة وتسمعوا بعض",
@@ -109,7 +109,9 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "connection",
-            _t("distant connection closeness romance appreciat* lonely affection bored routine"),
+            _t(
+                "distant connection closeness romance appreciat* lonely affection bored routine roommates drifted drifting apart spark intimacy"
+            ),
             _t("بعاد بعيد قرب مشاعر تقدير ملل روتين حب"),
             "reconnect and show appreciation",
             "تقربوا من بعض وتعبروا عن التقدير",
@@ -150,7 +152,9 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "talking",
-            _t("talk* listen* open_up opens communicat* conversation teen* teenager adolescen*"),
+            _t(
+                "talk* listen* open_up opens communicat* conversation teen* teenager adolescen* explain explaining"
+            ),
             _t(
                 "بيكلمني يكلمني بيتكلم كلام اتكلم اكلمه مراهق مراهقه ابني بنتي ولادي عيالي طفل اطفال"
             ),
@@ -236,6 +240,15 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
     ),
     "career": (
         Subtopic(
+            "pay",
+            _t("raise salary pay paid underpaid promotion* negotiat* bonus"),
+            _t("مرتب مرتبي زياده علاوه ترقيه"),
+            "ask for a raise or a promotion with confidence",
+            "تطلب زيادة أو ترقية بثقة",
+            "salary negotiation raise promotion ask manager pay",
+            "زيادة مرتب ترقية",
+        ),
+        Subtopic(
             "stuck",
             _t(
                 "stuck progress* promotion* grow* growth advance* plateau bored* career mentor* coach* skill* develop*"
@@ -257,7 +270,9 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "change_jobs",
-            _t("change switch quit resign leave new offer opportunit* interview* apply"),
+            _t(
+                "change switch quit resign leave new offer opportunit* interview* apply quitting resign* abroad relocat*"
+            ),
             _t("اغير اسيب استقاله عرض فرصه مقابله وظيفه_جديده اقدم"),
             "decide whether to change jobs or build skills where you are",
             "تقرر تغير شغلك ولا تطور مهاراتك مكانك",
@@ -319,7 +334,9 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "setbacks",
-            _t("motivat* setback* slip* relapse* give_up old discourag* fail*"),
+            _t(
+                "motivat* setback* slip* relapse* give_up old discourag* fail* giving_up keep_quitting"
+            ),
             _t("حافز دافع ارجع استسلم احبطت احباط فشلت"),
             "stay motivated and recover from setbacks",
             "تفضل متحمس وترجع بعد التعثر",
@@ -393,8 +410,10 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "start",
-            _t("start* begin* beginner new never exercis* workout* train* gym"),
-            _t("مبتدئ رياضه تمارين جيم اتمرن"),
+            _t(
+                "start* begin* beginner new never exercis* workout* train* gym active activity cardio aerobic"
+            ),
+            _t("مبتدئ رياضه تمارين جيم اتمرن كارديو نشاط للمبتدئين"),
             "start getting active as a beginner",
             "تبدأ تتحرك وتتمرن كمبتدئ",
             "start small amounts gradually increase getting active",
@@ -485,7 +504,7 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
     "emotional": (
         Subtopic(
             "stress",
-            _t("stress* overwhelm* pressure* tense nervous anxious worr* frazzled"),
+            _t("stress* overwhelm* pressure* tense nervous anxious worr* frazzled dread*"),
             _t("ضغط مضغوط متوتر توتر قلق قلقان مخنوق مرهق"),
             "manage stress in healthy ways",
             "تتعامل مع الضغط بطرق صحية",
@@ -530,8 +549,10 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "feelings",
-            _t("feel* feelings emotion* sad* angry anger frustrat* upset"),
-            _t("مشاعر احساس حزين زعلان غضب متضايق"),
+            _t(
+                "feel* feelings emotion* sad* angry anger frustrat* upset low unmotivated depressed depression unhappy"
+            ),
+            _t("مشاعر احساس حزين زعلان غضب متضايق مبسوط مضايق مكتئب اكتئاب"),
             "make room for difficult feelings",
             "تدي مساحة للمشاعر الصعبة",
             "difficult feelings emotions making room noticing",
@@ -607,7 +628,9 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "friend_conflict",
-            _t("hurt offended argu* apolog* fight* cancel* ignor* avoid* distant"),
+            _t(
+                "hurt offended argu* apolog* fight* cancel* ignor* avoid* distant borrowed lend lent owe* paid_back gossip* boundar*"
+            ),
             _t("زعلان زعلني اتخانقنا اصالح اعتذر"),
             "talk honestly when a friend hurt you",
             "تتكلم بصراحة لما صاحبك يزعلك",
@@ -767,7 +790,9 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
         Subtopic(
             "impulse",
-            _t("impulse sale discount shopping wants needs buy*"),
+            _t(
+                "impulse sale discount shopping wants needs buy* overspend* splurg* delivery takeaway"
+            ),
             _t("عروض خصم اشتري"),
             "avoid impulse buying",
             "تبعد عن الشرا العشوائي",
@@ -814,6 +839,18 @@ LEXICON: dict[str, tuple[Subtopic, ...]] = {
         ),
     ),
     "everyday": (
+        Subtopic(
+            "neighbours_services",
+            _t(
+                "neighbour* neighbor* noise noisy bark* complain* complaint* company "
+                "customer_service refund polite"
+            ),
+            _t("جار جيران جاري ازعاج مزعج دوشه شكوي اشتكي"),
+            "deal politely and firmly with a neighbour or a company about a problem",
+            "تتعامل بأدب وحزم مع جار أو شركة بخصوص مشكلة",
+            "polite assertive complaint neighbour noise conversation calm",
+            "شكوى جار هدوء",
+        ),
         Subtopic(
             "conversation",
             _t("flatmate roommate neighbor neighbour bring_up conversation clean* say tell"),

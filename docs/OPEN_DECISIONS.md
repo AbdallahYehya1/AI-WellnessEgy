@@ -980,3 +980,76 @@ future"). The answers were generic.
 - **Not measured yet:** answer faithfulness and citation support with the real model, and
   multi-turn quality with Groq. These need production smoke tests after deployment.
 
+
+### D-62. Routing, not gating: no "out of context" refusals — DECIDED (engineering, 2026-10-25)
+
+**The problem.** In structured mode (production), `understand()` returned `needs_detail`
+whenever none of the assistant's lexicon words appeared in the message, and the service
+turned that into `status="out_of_scope"`, shown as "Outside what I can answer". Substring
+screens also refused ordinary wording: "do i have" (clinical), "depressed" (clinical),
+"invest more time" and "shares everything" (regulated), "pregnant" and "diabetes"
+(fitness). On the 66-question regression set, 22 ordinary questions (33%) were refused.
+On a 37-question held-out set, 13 (35%) were refused. Three risky messages also missed
+safety handling: "don't want to be alive", "thinking about ending my life", and "hits my
+little brother with a belt".
+
+**The decision.** An assistant's specialisation decides where knowledge comes from, not
+whether a question may be asked.
+
+1. **Safety first, independent of topic.** Crisis, abuse, danger and medical emergencies
+   are screened before any routing, and the routing cannot skip them. The crisis and
+   violence patterns gained the missing phrases.
+2. **Refusals only for harmful or professional-only requests.** These are diagnosis,
+   medication, specific investment, tax or legal advice, sexual content, substances,
+   weapons, injection attempts, identifying details and overlong messages. The screens
+   are now word-bounded, so "taxi", "courtesy", "invest time" and "revenge bedtime
+   procrastination" no longer match.
+3. **Answered with a boundary.** In Fitness, a health condition, pregnancy or injury
+   alongside an ordinary activity question is answered. A fixed instruction tells the
+   model to say "check with your doctor first" and to give no medical advice; on its own,
+   such a question is still refused. "Depressed" or "low" is answered supportively, with
+   a fixed instruction to suggest a professional if it lasts. These instructions never
+   contain the user's words.
+4. **Routing chain.** The chain tries, in order:
+   1. the assistant's own lexicon;
+   2. a follow-up to the earlier turn;
+   3. related wording (shared content stems with a subtopic's own description);
+   4. another assistant's lexicon (at least two trigger words, asked in this assistant's
+      frame; its sources are searched only if its domain is an approved secondary domain,
+      otherwise a handoff link is shown with the answer);
+   5. related wording in approved secondary domains;
+   6. the evidence step: local retrieval with the redacted words. When a passage shares
+      at least two content words with the message, the model gets that public passage and
+      a fixed question ("…apply the guidance in the provided passages…").
+5. **Otherwise, ask.** The response has `status="clarify"`: "Tell me a bit more", with the
+   closest concerns as tappable suggestions. It is not a refusal, uses no provider call or
+   quota, and keeps the handoff suggestion.
+6. **Privacy unchanged.** Structured mode still never sends the user's words to the
+   provider. The regression test checks this for every case. Minimized mode remains
+   opt-in and off in production until the operator sets `CHAT_CONTEXT_MODE`.
+7. **Citations.** Only passages the model was given can be cited; anything else is
+   dropped. Replies without citations are labelled "General guidance".
+
+**Results** (`docs/evaluation/routing-regression.json`; the baseline is in
+`routing-regression-baseline.json`):
+
+| Set | False refusals before | After | Answered | Asked to clarify | Safety over-triggers |
+|---|---|---|---|---|---|
+| Regression (66, tuned) | 22 (33.3%) | 0 | 64 | 1 | 1 ("hate myself for it") |
+| Held-out (37) | 13 (35.1%) | 0 | 31 | 6 | 0 |
+| Risky (12) | 3 missed | 0 missed | — | — | — |
+
+The regression set was used to fill vocabulary gaps (a career "pay" subtopic, an
+everyday "neighbours and services" subtopic, and extra terms), so its numbers are
+optimistic. The held-out set was written after the routing change, and its result above
+comes from the first run after two structural fixes: borrowing needs two trigger words,
+and related wording is limited to approved domains. No vocabulary was tuned on it.
+
+**Kept deliberately.** "I hate myself for it" still goes to support (distress screen).
+That is conservative but supportive, and is reported as an over-trigger rather than
+loosened. Changing the distress screen needs a clinical decision (D-52/D-60).
+
+**Not solved by this.** In structured mode, a question that matches no lexicon entry and
+no passage is asked for more detail instead of answered (6 of 37 held-out questions).
+Answering those from the user's own words needs minimized mode, which is opt-in and off
+in production (D-59).

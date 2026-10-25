@@ -257,6 +257,9 @@ const en = {
     draftUse: "Use this message",
     draftDismiss: "Dismiss",
     generalGuidance: "General guidance. No source was cited for this reply.",
+    clarify:
+      "I want to make sure I answer the right thing. Could you say a little more, for example what happened or what you'd like to change? Or pick one of these:",
+    clarifyOptions: "Things I can help with",
     context: {
       offLine: "Answers are based on the topic of your question only. For answers about your actual situation, you can choose to share more detail.",
       offAction: "Share more detail",
@@ -301,6 +304,7 @@ const en = {
     },
     noticeTitles: {
       support: "Support",
+      clarify: "Tell me a bit more",
       out_of_scope: "Outside what I can answer",
       no_evidence: "No reviewed information",
       unable_to_answer: "No safe answer",
@@ -678,6 +682,9 @@ const ar: Messages = {
     draftUse: "استخدم الرسالة دي",
     draftDismiss: "تجاهل",
     generalGuidance: "إرشاد عام. مفيش مصدر متذكر للرد ده.",
+    clarify:
+      "عايز أتأكد إني بجاوب على اللي تقصده. ممكن تقول تفاصيل أكتر شوية، زي إيه اللي حصل أو إيه اللي عايز تغيره؟ أو اختار حاجة من دول:",
+    clarifyOptions: "حاجات أقدر أساعد فيها",
     context: {
       offLine: "الردود مبنية على موضوع سؤالك بس. لو عايز رد على موقفك بالتفصيل، ممكن تختار تشارك تفاصيل أكتر.",
       offAction: "شارك تفاصيل أكتر",
@@ -722,6 +729,7 @@ const ar: Messages = {
     },
     noticeTitles: {
       support: "دعم",
+      clarify: "قولّي تفاصيل أكتر شوية",
       out_of_scope: "خارج اللي أقدر أرد عليه",
       no_evidence: "مفيش معلومات متراجعة",
       unable_to_answer: "مفيش إجابة آمنة",

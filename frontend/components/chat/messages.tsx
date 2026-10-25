@@ -55,6 +55,7 @@ export function uniqueSources(citations: ChatCitation[]): ChatCitation[] {
 const NOTICE_TONE: Record<ChatStatus, string> = {
   reply: "border-line bg-surface-muted text-ink",
   support: "border-info-ink/20 bg-info-bg text-info-ink",
+  clarify: "border-line bg-surface-muted text-ink",
   out_of_scope: "border-info-ink/20 bg-info-bg text-info-ink",
   no_evidence: "border-line bg-surface-muted text-ink",
   unable_to_answer: "border-warning-ink/20 bg-warning-bg text-warning-ink",
@@ -129,7 +130,9 @@ export function MessageEntry({ entry, t, locale }: { entry: Entry; t: ChatText; 
   const body =
     entry.status === "out_of_scope" && entry.reason
       ? t.refusals[entry.reason]
-      : entry.supportKind
+      : entry.status === "clarify"
+        ? t.clarify
+        : entry.supportKind
         ? t.support[entry.supportKind]
         : entry.reason === "daily_limit" || entry.reason === "shared_limit"
           ? t.refusals[entry.reason]

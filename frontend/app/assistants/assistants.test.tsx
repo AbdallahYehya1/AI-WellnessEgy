@@ -207,4 +207,37 @@ describe("workspace handoff", () => {
     await screen.findByRole("note");
     expect(screen.queryByRole("link", { name: /Open / })).toBeNull();
   });
+
+  it("an answer can carry a handoff suggestion too", async () => {
+    const answered: ChatResponse = {
+      status: "reply",
+      reply: { text: "Some practical steps.", signature: "sig", citations: [] },
+      notice: null,
+      prototype: true,
+      assistant_id: "relationships",
+      handoff: "career",
+    };
+    await send(actions(answered), { career: "Career & Work" });
+    await screen.findByText("Some practical steps.");
+    expect(screen.getByRole("link", { name: "Open Career & Work" }).getAttribute("href")).toBe("/chat?assistant=career");
+  });
+
+  it("asks for more instead of refusing, and a suggestion can be sent", async () => {
+    const clarify: ChatResponse = {
+      status: "clarify",
+      reply: null,
+      notice: "server text",
+      prototype: true,
+      assistant_id: "relationships",
+      suggestions: ["Communicate openly and listen to each other"],
+    };
+    const a = actions(clarify);
+    await send(a, {});
+    const note = await screen.findByRole("note");
+    expect(note.getAttribute("data-status")).toBe("clarify");
+    expect(note.textContent).toContain("Tell me a bit more");
+    expect(note.textContent).not.toContain("Outside what I can answer");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Communicate openly and listen to each other" }));
+    expect(vi.mocked(a.send).mock.calls[1]?.[0].message).toBe("Communicate openly and listen to each other");
+  });
 });

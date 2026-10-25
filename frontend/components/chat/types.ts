@@ -17,6 +17,8 @@ export type Entry =
       signature: string;
       citations: ChatCitation[];
       createdAt: string;
+      /** A better-suited assistant, suggested alongside the answer. */
+      handoff?: string | null;
     }
   | {
       id: string;
@@ -31,6 +33,8 @@ export type Entry =
       supportKind?: SupportKind | null;
       /** Vetted sources shown with a safety notice. */
       resources?: ChatCitation[];
+      /** With "clarify": concerns to pick from; picking one sends it. */
+      suggestions?: string[];
     };
 
 export type Suggestion = { id: string; text: string; followUp: boolean };
