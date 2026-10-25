@@ -250,6 +250,7 @@ export function ChatWorkspace({
             signature: response.reply.signature,
             citations: response.reply.citations,
             createdAt: response.created_at ?? now,
+            handoff: response.handoff && assistantNames[response.handoff] ? response.handoff : null,
           }
         : {
             id: newId(),
@@ -261,6 +262,7 @@ export function ChatWorkspace({
             handoff: response.handoff && assistantNames[response.handoff] ? response.handoff : null,
             supportKind: response.status === "support" ? (response.support_kind ?? null) : null,
             resources: response.resources ?? [],
+            suggestions: response.status === "clarify" ? (response.suggestions ?? []) : [],
           };
     setEntries((current) => [
             ...current.map((e) =>
@@ -615,7 +617,24 @@ export function ChatWorkspace({
                   {entries.map((entry) => (
                     <li key={entry.id} className="motion-safe:animate-[fade-in_160ms_ease-out]">
                       <MessageEntry entry={entry} t={t} locale={locale} />
-                      {entry.kind === "notice" && entry.handoff ? (
+                      {entry.kind === "notice" && entry.suggestions && entry.suggestions.length > 0 ? (
+                        <ul className="mt-2 flex flex-wrap gap-2" aria-label={t.clarifyOptions}>
+                          {entry.suggestions.map((s) => (
+                            <li key={s}>
+                              <button
+                                type="button"
+                                disabled={pending}
+                                onClick={() => send(s)}
+                                dir="auto"
+                                className="min-h-11 rounded-full border border-line bg-surface px-4 py-2 text-start text-sm text-ink hover:border-primary hover:bg-surface-muted disabled:opacity-60"
+                              >
+                                {s}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {entry.kind !== "user" && entry.handoff ? (
                         <p className="mt-2 text-sm text-ink" dir="auto">
                           {at.handoff.replace("{assistant}", assistantNames[entry.handoff] ?? entry.handoff)}{" "}
                           <a href={`/chat?assistant=${entry.handoff}`} className="font-semibold text-primary-strong underline underline-offset-4">

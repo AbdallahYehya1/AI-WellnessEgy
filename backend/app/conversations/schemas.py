@@ -35,7 +35,13 @@ RefusalReason = Literal[
 SupportKind = Literal["crisis", "relationship_safety", "medical", "danger"]
 
 ChatStatus = Literal[
-    "reply", "support", "out_of_scope", "no_evidence", "unable_to_answer", "unavailable"
+    "reply",
+    "support",
+    "clarify",  # nothing recognised yet: ask for a little more (never a refusal)
+    "out_of_scope",
+    "no_evidence",
+    "unable_to_answer",
+    "unavailable",
 ]
 
 
@@ -130,6 +136,8 @@ class ChatResponse(BaseModel):
     # A better-suited assistant for this message, suggested only; nothing is shared.
     handoff: str | None = None
     support_kind: SupportKind | None = None
+    # With "clarify": the closest concerns this assistant can answer, in the user's language.
+    suggestions: list[str] = Field(default_factory=list)
     # What the provider received about the situation when the user opted in to provider
     # context (identifiers removed), shown back for transparency (D-59).
     provider_context: str | None = None

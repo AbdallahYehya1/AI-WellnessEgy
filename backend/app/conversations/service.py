@@ -50,7 +50,15 @@ from app.assistants.context import (
 )
 from app.assistants.registry import BY_ID as ASSISTANTS_BY_ID
 from app.assistants.registry import LEGACY_ASSISTANT, Assistant
-from app.assistants.understanding import Understanding, understand
+from app.assistants.understanding import (
+    CAUTION_INSTRUCTIONS,
+    MIN_EVIDENCE_OVERLAP,
+    Understanding,
+    evidence_overlap,
+    evidence_question,
+    refers_back,
+    understand,
+)
 from app.common.errors import ApiError
 from app.common.ratelimit import (
     allow_request,
@@ -80,6 +88,7 @@ from app.conversations.schemas import (
 )
 from app.core.logging import get_logger
 from app.knowledge.retrieval import (
+    RetrievedChunk,
     retrieve,
     retrieve_hybrid,
     retrieve_safety_resources,
@@ -137,6 +146,15 @@ ASSISTANT_REPLY_CHARS = 1600
 STRUCTURED_FOLLOW_UP = (
     "(A follow-up from the same person about this situation: add a few more specific, "
     "practical next steps without repeating the earlier answer. Keep it brief.)"
+)
+# Nothing recognised and no passage clearly matches (P0, 2026-10-25): ask, never refuse.
+CLARIFY_NOTICE = (
+    "I want to make sure I answer the right thing. Could you say a little more, for example "
+    "what happened or what you'd like to change? Or pick one of these:"
+)
+CLARIFY_NOTICE_AR = (
+    "عايز أتأكد إني بجاوب على اللي تقصده. ممكن تقول تفاصيل أكتر شوية، زي إيه اللي حصل أو "
+    "إيه اللي عايز تغيره؟ أو اختار حاجة من دول:"
 )
 _SENTENCE_END = re.compile(r"[.!?؟]\s")
 
@@ -280,13 +298,11 @@ _ASSISTANT_REFUSALS: dict[str, RefusalReason] = {
     "clinical": "clinical",
     "regulated": "regulated",
     "sensitive": "sensitive",
-    "needs_detail": "needs_detail",
-    "needs_context": "needs_context",
     "too_long": "too_long",
 }
 # Without a recognised subtopic, a message can still be answered from its own words
 # when the user opted in to provider context (D-59): a follow-up, or a real description.
-_CONTEXTUAL_OK = ("needs_detail", "needs_context")
+_CONTEXTUAL_OK = ("clarify",)
 _MIN_SITUATION_WORDS = 5
 # The model's risk flag (second layer, D-59) -> support response.
 _MODEL_RISK_SUPPORT: dict[str, SupportKind] = {
@@ -402,8 +418,23 @@ def _assistant_context(
             u = understand(assistant, text_, has_history=bool(context.model_history))
             if u.outcome in ("crisis", "relationship_safety", "medical", "danger"):
                 context.crisis = True
-            keep = u.outcome == "accept" or (mode != "structured" and u.outcome in _CONTEXTUAL_OK)
-            if keep:
+            keep = u.outcome == "accept" or u.outcome in _CONTEXTUAL_OK
+            if keep and mode == "structured" and u.outcome in _CONTEXTUAL_OK:
+                # Answered earlier as a follow-up or from a matching passage (only answered
+                # turns are kept): re-expressed the same way, never in the user's words.
+                previous = next(
+                    (t for r, t in reversed(context.model_history) if r == "user"), None
+                )
+                context.search_context.append(text_)
+                context.model_history.append(
+                    (
+                        "user",
+                        _follow_up_of(previous)
+                        if previous and refers_back(text_)
+                        else evidence_question(assistant, u.language),
+                    )
+                )
+            elif keep:
                 context.search_context.append(text_)
                 context.model_history.append(("user", provider_message(assistant, u, text_, mode)))
         elif keep:
@@ -525,6 +556,46 @@ def _saved_response(
     )
 
 
+def _follow_up_of(previous_question: str) -> str:
+    """A structured follow-up: the previous composed question plus a fixed instruction
+    (once, however long the chain of follow-ups)."""
+    return f"{previous_question.removesuffix(f' {STRUCTURED_FOLLOW_UP}')} {STRUCTURED_FOLLOW_UP}"
+
+
+def _sentence(phrase: str) -> str:
+    return phrase[:1].upper() + phrase[1:]
+
+
+def _evidence(
+    session: Session,
+    runtime: ChatRuntime,
+    band: str,
+    assistant: Assistant,
+    u: Understanding,
+    message: str,
+) -> list[RetrievedChunk]:
+    """Passages in the assistant's own and approved secondary domains that clearly match
+    the (redacted) message. Local only; nothing is sent anywhere. Failure means none."""
+    free_text = redact(message).text
+    try:
+        with session.begin_nested():
+            chunks = retrieve_hybrid(
+                session,
+                english="",
+                arabic="",
+                free_text=free_text,
+                language=u.language,
+                age_band=band,
+                statuses=runtime.retrievable_statuses,
+                domains=(assistant.domain, *assistant.secondary_domains),
+                exclude=safety_exclusions(message),
+            )
+    except Exception as error:
+        logger.error("chat_evidence_unavailable", extra={"category": _failure_category(error)})
+        return []
+    return [c for c in chunks if evidence_overlap(free_text, c.content) >= MIN_EVIDENCE_OVERLAP]
+
+
 def _refuse(reason: RefusalReason) -> ChatResponse:
     return ChatResponse(
         status="out_of_scope", notice=REFUSAL_NOTICES[reason], refusal_reason=reason
@@ -608,6 +679,7 @@ def handle_message(
     mode: ContextMode = "structured"
     free_text = ""
     provider_context: str | None = None
+    evidence_chunks: list[RetrievedChunk] | None = None
     if assistant_mode:
         mode = context_mode_for(runtime, user)
         context = _assistant_context(
@@ -652,7 +724,10 @@ def handle_message(
         # structured mode it is re-expressed from the previous composed question, so the
         # user's words still never reach the provider.
         structured_follow_up = (
-            mode == "structured" and u.outcome in _CONTEXTUAL_OK and bool(context.model_history)
+            mode == "structured"
+            and u.outcome in _CONTEXTUAL_OK
+            and bool(context.model_history)
+            and refers_back(payload.message)
         )
         contextual = structured_follow_up or (
             mode != "structured"
@@ -661,12 +736,41 @@ def handle_message(
                 bool(context.model_history) or len(payload.message.split()) >= _MIN_SITUATION_WORDS
             )
         )
-        if u.outcome != "accept" and not contextual:
-            logger.info("chat_input_refused", extra={"reason": u.outcome})
-            refusal = _refuse(_ASSISTANT_REFUSALS.get(u.outcome, "needs_detail"))
+        if u.outcome not in ("accept", *_CONTEXTUAL_OK):
+            # A harmful or professional-only request (or a long or identifying message):
+            # the only refusals left in assistant mode. Topic never refuses (P0).
+            logger.info(
+                "chat_input_refused", extra={"reason": u.outcome, "assistant": assistant_id}
+            )
+            refusal = _refuse(_ASSISTANT_REFUSALS.get(u.outcome, "sensitive"))
             refusal.handoff = u.handoff
             refusal.assistant_id = assistant.assistant_id
             return refusal
+        if u.outcome in _CONTEXTUAL_OK and not contextual:
+            # Nothing recognised: look for a clearly matching public passage (local), else
+            # ask for a little more. Neither is a refusal, and no quota is used to ask.
+            evidence = _evidence(session, runtime, band.value, assistant, u, payload.message)
+            if not evidence:
+                logger.info("chat_route", extra={"route": "clarify", "assistant": assistant_id})
+                return ChatResponse(
+                    status="clarify",
+                    notice=CLARIFY_NOTICE_AR if u.language == "ar" else CLARIFY_NOTICE,
+                    assistant_id=assistant.assistant_id,
+                    handoff=u.handoff,
+                    suggestions=[
+                        _sentence(s.phrase_ar if u.language == "ar" else s.phrase_en)
+                        for s in u.suggestions
+                    ],
+                )
+            evidence_chunks = evidence
+        logger.info(
+            "chat_route",
+            extra={
+                "route": "evidence" if evidence_chunks is not None else u.route,
+                "assistant": assistant_id,
+                "caution": u.caution,
+            },
+        )
         understanding = u
         language = u.language
         if (u.follow_up or not u.subtopics) and context.search_context:
@@ -683,9 +787,17 @@ def handle_message(
         free_text = redact(payload.message).text
         if structured_follow_up:
             previous_question = next(t for r, t in reversed(context.model_history) if r == "user")
-            message = model_question = topic_question = (
-                f"{previous_question} {STRUCTURED_FOLLOW_UP}"
+            message = model_question = topic_question = _follow_up_of(previous_question)
+        elif evidence_chunks is not None:
+            message = model_question = evidence_question(assistant, language)
+            topic_question = (
+                f"إرشادات عامة من: {evidence_chunks[0].title}"
+                if language == "ar"
+                else f"General guidance from: {evidence_chunks[0].title}"
             )
+            if mode != "structured":
+                provider_context = free_text if mode == "minimized" else payload.message
+                message = model_question = provider_message(assistant, u, payload.message, mode)
         elif mode == "structured":
             topic_question = u.question
         else:
@@ -789,7 +901,9 @@ def handle_message(
 
     try:
         with session.begin_nested():
-            if assistant_mode:
+            if evidence_chunks is not None:
+                chunks = evidence_chunks  # already retrieved locally to route the message
+            elif assistant_mode:
                 chunks = retrieve_hybrid(
                     session,
                     english=search_en,
@@ -822,12 +936,15 @@ def handle_message(
         _record(session, user, request_id, band.value, decision, "no_evidence")
         return _respond("no_evidence")
 
+    instructions = assistant.instructions if assistant_mode else band_config.instructions
+    if understanding is not None and understanding.caution:
+        instructions = f"{instructions} {CAUTION_INSTRUCTIONS[understanding.caution]}"
     permit = runtime.gate.authorize(decision, str(request_id), model_question)
     generation = GenerationRequest(
         message=model_question,
         history=context.model_history[-history_store.CONTEXT_TURNS * 2 :],
         passages=[Passage(chunk_id=str(c.chunk_id), text=c.content) for c in chunks],
-        instructions=assistant.instructions if assistant_mode else band_config.instructions,
+        instructions=instructions,
         max_chars=ASSISTANT_REPLY_CHARS if assistant_mode else band_config.max_reply_chars,
         reply_language=language,
         coaching=assistant_mode,

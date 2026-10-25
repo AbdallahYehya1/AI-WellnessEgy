@@ -202,6 +202,8 @@ export function fetchMoodHistory(token: string, limit: number) {
 export type ChatStatus =
   | "reply"
   | "support"
+  /** Nothing recognised yet: the assistant asks for a little more (never a refusal). */
+  | "clarify"
   | "out_of_scope"
   | "no_evidence"
   | "unable_to_answer"
@@ -259,6 +261,8 @@ export type ChatResponse = {
   /** A better-suited assistant, suggested only; nothing is shared with it. */
   handoff?: string | null;
   support_kind?: SupportKind | null;
+  /** With "clarify": the closest concerns this assistant can answer, in the user's language. */
+  suggestions?: string[];
   /** What the AI provider received about the situation (identifiers removed), when opted in. */
   provider_context?: string | null;
   /** With a relationship-safety notice: vetted sources about abuse and getting help. */

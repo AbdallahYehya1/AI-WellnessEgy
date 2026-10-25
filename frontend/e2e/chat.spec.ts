@@ -50,9 +50,13 @@ test.describe("chat workspace", () => {
     await expect(log(page).getByText(/^Sources \(\d\)$/).first()).toBeVisible();
     await expect(page.getByText("Not saved", { exact: true })).toBeVisible();
 
-    // Something the assistant can't place gets a request for more detail.
+    // Something the assistant can't place (and that doesn't refer back to the earlier
+    // question) gets a request for more detail, never a refusal.
     await ask(page, "What is the capital of France?");
-    await expect(log(page).getByRole("note").last()).toContainText("tell me a little more");
+    const clarify = log(page).getByRole("note").last();
+    await expect(clarify).toHaveAttribute("data-status", "clarify");
+    await expect(clarify).toContainText("Tell me a bit more");
+    await expect(clarify).not.toContainText("Outside what I can answer");
 
     // Opt in, with the storage notice.
     await sidebar(page).getByRole("button", { name: "Turn on saved chats" }).click();

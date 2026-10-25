@@ -2,18 +2,20 @@
 
 Order, all before any limit, retrieval or model call:
 
-1. **Risk screens**: crisis and distress go to support; in relationship and family
-   assistants, signs of abuse, threats or control go to a safety-focused support response.
+1. **Risk screens**, independent of topic: crisis and distress go to support; signs of
+   abuse, threats or control go to a safety-focused support response in every assistant.
    Personal details (contact data, links) are refused; diagnosis and medication are
-   refused for every assistant; regulated advice (investment, tax, legal) and, for
-   fitness, injuries and medical conditions are refused with a pointer to a professional;
-   sexual content, substances and weapons are out of scope.
-2. **Subtopics**: the assistant's lexicon finds up to three specific concerns. Unknown
-   words are ignored. If the message fits another assistant much better, a handoff is
-   suggested; nothing is shared with that assistant.
+   refused for every assistant; regulated advice (investment, tax, legal) is refused with
+   a pointer to a professional; sexual content, substances and weapons are out of scope.
+   A health condition in Fitness, or low mood anywhere, is answered with a caution.
+2. **Routing, never gating (D-62)**: the assistant's lexicon finds up to three specific
+   concerns; failing that, a follow-up, related wording, another assistant's lexicon (with
+   a handoff suggestion) or an approved secondary domain. With nothing recognised the
+   outcome is "clarify": the service looks for a clearly matching passage and otherwise
+   asks for a little more. Topic alone never refuses.
 3. **Composed question**: "In a marriage ..., what are practical ways to <concern 1>,
    <concern 2> and <concern 3>?" plus allow-listed context labels. This, never the user's
-   own sentence, is what retrieval and the model see. Personal details are dropped.
+   own sentence, is what the model sees in structured mode. Personal details are dropped.
 
 Engineering keyword screens: they miss indirect wording and are not a clinical
 assessment (see OPEN_DECISIONS D-52/D-56).
@@ -47,11 +49,15 @@ Outcome = Literal[
     "clinical",
     "regulated",
     "sensitive",
-    "needs_detail",
-    "needs_context",
+    "clarify",  # nothing recognisable yet: ask, never refuse (P0, 2026-10-25)
     "too_long",
 ]
+# How an accepted message was matched (logged; never the text).
+Route = Literal["own", "follow_up", "related", "borrowed", "none"]
+Caution = Literal["health", "low_mood"]
 MAX_SUBTOPICS = 3
+# Related-wording match: distinct content stems shared with a subtopic's description.
+_MIN_RELATED_OVERLAP = 2
 
 _HARM_IN_RELATIONSHIPS = (
     "abuse",
@@ -89,6 +95,11 @@ _HARM_IN_RELATIONSHIPS = (
     "throws things at me",
     "threw things at me",
     "burned me",
+    "with a belt",
+    "with his belt",
+    "with her belt",
+    "بالحزام",
+    "بالخرزانه",
     "doesn't allow me to leave",
     "doesnt allow me to leave",
     "won't allow me",
@@ -140,13 +151,13 @@ _HARM_IN_RELATIONSHIPS = (
     "تحرش",
     "اعتداء",
 )
+# Diagnosis and medication: refused in every assistant. Mood words ("depressed", "low")
+# are not here: feeling low is answered supportively, with a pointer to a professional
+# if it lasts (see _LOW_MOOD), and a request for a diagnosis is caught by _CONDITION_CHECK.
 _CLINICAL = (
     "diagnose",
     "diagnosis",
-    "do i have",
     "disorder",
-    "depression",
-    "depressed",
     "bipolar",
     "sociopath",
     "psychopath",
@@ -172,7 +183,6 @@ _CLINICAL = (
     "prescri",
     "تشخيص",
     "شخصني",
-    "اكتئاب",
     "اضطراب",
     "ثنائي القطب",
     "فصام",
@@ -185,54 +195,46 @@ _CLINICAL = (
     "منوم",
     "روشته",
 )
+_CONDITION_CHECK = re.compile(
+    r"\b(?:do|could|might|may)\s+i\s+have\s+(?:an?\s+)?(?:\w+\s+)?(?:disorder|syndrome|condition|"
+    r"illness|anxiety|depression|adhd|ocd|ptsd|autism|bipolar)\b|"
+    r"\bam\s+i\s+(?:clinically\s+)?(?:depressed|bipolar|autistic|mentally\s+ill)\b",
+    re.IGNORECASE,
+)
+# Fitness: products and conditions that need a clinician, never general guidance.
 _FITNESS_MEDICAL = (
-    "injur",
-    "sprain",
-    "fracture",
-    "chest pain",
-    "pain",
-    "heart condition",
-    "pregnan",
-    "diabet",
-    "blood pressure",
     "eating disorder",
     "anorexi",
     "bulimi",
     "steroid",
     "supplement",
-    "اصابه",
-    "اتصابت",
-    "وجع",
-    "الم ",
-    "حامل",
-    "سكر",
-    "ضغط الدم",
     "مكملات",
 )
-_REGULATED = (
-    "invest",
-    "stocks",
-    "shares",
-    "crypto",
-    "bitcoin",
-    "trading",
-    " tax",
-    "lawyer",
-    "lawsuit",
-    " court",
-    "custody",
-    "legal",
-    " sue ",
-    " sue my",
-    "suing",
-    "labour law",
-    "labor law",
-    "egyptian law",
-    "under the law",
-    "the law say",
-    "alimony",
-    "inheritance",
-    "property split",
+# Fitness: a health condition or injury alongside an ordinary activity question is
+# answered with a caution to check with a doctor first; on its own it is a medical
+# question and is refused.
+_HEALTH_CONDITION = re.compile(
+    r"\b(?:injur\w*|sprain\w*|fractur\w*|pain(?:s|ful)?|heart\s+condition|pregnan\w*|"
+    r"diabet\w*|blood\s+pressure|asthma|arthritis)\b",
+    re.IGNORECASE,
+)
+_HEALTH_CONDITION_AR = ("اصابه", "اتصابت", "وجع", " الم ", "حامل", "سكر", "ضغط الدم")
+# Low mood mentioned: answered, with a pointer to a professional if it lasts.
+_LOW_MOOD = re.compile(r"\b(?:depressed|depression|depressing)\b", re.IGNORECASE)
+_LOW_MOOD_AR = ("اكتئاب", "مكتئب")
+# Word-bounded so "invest more time", "shares everything", "taxi" or "courtesy" are not
+# read as investment, tax or legal questions.
+_REGULATED = re.compile(
+    r"\binvest(?:ing|ment|ments|or|ors|ed)?\b(?!\s+(?:more\s+|some\s+|a\s+lot\s+of\s+|my\s+|our\s+)?"
+    r"(?:time|energy|effort|myself|yourself|ourselves|in\s+(?:myself|yourself|ourselves|my\s+self|"
+    r"my\s+(?:health|relationship|marriage|family|skills|career|friendships?|future|growth))))|"
+    r"\b(?:stocks|stock\s+market|buy\s+shares|sell\s+shares|shares\s+in|crypto\w*|bitcoin|forex|"
+    r"day\s+trading|trading\s+(?:account|platform|app)|tax|taxes|lawyer|attorney|lawsuit|court|"
+    r"custody|legal|legally|sue|suing|labou?r\s+law|egyptian\s+law|under\s+the\s+law|"
+    r"the\s+law\s+says?|alimony|inheritance|property\s+split)\b",
+    re.IGNORECASE,
+)
+_REGULATED_AR = (
     "قانون العمل",
     "القانون",
     "نفقه",
@@ -249,17 +251,12 @@ _REGULATED = (
     "محكمه",
     "حضانه",
 )
-_SENSITIVE = (
-    " sex",
-    "porn",
-    "drugs",
-    " weed",
-    "cocaine",
-    "hashish",
-    "gambl",
-    "weapon",
-    " gun",
-    "revenge",
+_SENSITIVE = re.compile(
+    r"\b(?:sex|sexual|sexually|porn\w*|drugs|weed|cocaine|hashish|gambl\w*|weapons?|guns?|"
+    r"revenge(?!\s+(?:bedtime\s+)?procrastination))\b",
+    re.IGNORECASE,
+)
+_SENSITIVE_AR = (
     "مخدرات",
     "حشيش",
     "سلاح",
@@ -273,7 +270,8 @@ _VIOLENCE = re.compile(
     r"\b(?:hit|hits|hitting|beat|beats|beating|slap(?:s|ped|ping)?|punch(?:es|ed|ing)?|"
     r"kick(?:s|ed|ing)?|chok(?:e|es|ed|ing)|strangl(?:e|es|ed|ing)|burn(?:s|ed|t)|"
     r"bit|bites|shov(?:e|es|ed)|threaten(?:s|ed|ing)?|rap(?:e|es|ed|ing))\s+"
-    r"(?:me|us|my\s+(?:kids?|children|son|daughter|baby|mother|mum|mom|sister))\b"
+    r"(?:me|us|my\s+(?:(?:little|younger|older|baby|big)\s+)?"
+    r"(?:kids?|children|son|daughter|baby|mother|mum|mom|sister|brother|wife|husband))\b"
     r"(?!\s+(?:at|in|on|out\s+of\s+(?:the|a)\s+(?:game|match|meeting|team|group)))",
     re.IGNORECASE,
 )
@@ -282,6 +280,8 @@ _SEXUAL_VIOLENCE = (
     "rape me",
     "sexual assault",
     "sexually assaulted",
+    "sexual harassment",
+    "sexually harass",
     "forced me to have sex",
     "forces me to have sex",
     "touched me without",
@@ -430,6 +430,9 @@ class Understanding:
     follow_up: str | None = None
     handoff: str | None = None  # a better-suited assistant, suggested to the user
     secondary_domains: tuple[str, ...] = field(default=())
+    route: Route = "none"
+    caution: Caution | None = None  # an extra instruction for the model, never shown
+    suggestions: tuple[Subtopic, ...] = ()  # with "clarify": closest concerns to offer
 
     @property
     def search_en(self) -> str:
@@ -521,6 +524,78 @@ def compose(
     return f"{question} (Context: {', '.join(context)})" if context else question
 
 
+# --- Related wording (P0, 2026-10-25) ----------------------------------------------------
+# A message with none of a subtopic's trigger words can still share its meaning: content
+# words are compared, stem to stem, with each subtopic's own description and search terms.
+def _words(text: str) -> frozenset[str]:
+    return frozenset(text.split())
+
+
+_STOPWORDS = _words(
+    "the and for are was were been have has had not but too also because than then its "
+    "how what can could would should will get got make made does did doing help way ways "
+    "feel feeling feels want wants need needs really lot lots thing things about with without "
+    "every always never more less better best good bad people someone still just like know "
+    "think try trying keep stop start practical each other their they them this that these "
+    "those there when where which while from into over after before again very much many "
+    "some any all one our your you his her him she and lately anymore even ever since "
+    "whether who why yes okay any idea ideas tips advice tell please able something anything"
+)
+_STOPWORDS_AR = _words(
+    "انا انت انتي احنا هو هي هم عايز عاوز عايزه ازاي ايه ليه مش في من علي عن مع كل بس ده "
+    "دي اللي لما كان يكون حاجه او لو كيف ماذا هل ان الي هذا هذه التي الذي جدا اوي خالص كده "
+    "برضه بقي ممكن اعمل نعمل عشان علشان لان حد طب يعني"
+)
+_EN_SUFFIXES = ("ation", "tion", "ment", "ness", "ing", "ers", "er", "ed", "es", "ly", "s", "e")
+
+
+def _stem(word: str) -> str:
+    for suffix in _EN_SUFFIXES:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            word = word[: -len(suffix)]
+            break
+    return word[:6]
+
+
+def _en_stems(text: str) -> set[str]:
+    return {
+        _stem(w)
+        for w in _LATIN_WORD.findall(text.casefold().replace("*", "").replace("_", " "))
+        if len(w) >= 3 and w not in _STOPWORDS
+    }
+
+
+def _ar_word_forms(text: str) -> list[set[str]]:
+    folded = normalize_arabic(text.casefold().replace("_", " "))
+    return [_ar_forms(w) for w in _ARABIC_WORD.findall(folded) if w not in _STOPWORDS_AR]
+
+
+def _bag(sub: Subtopic) -> tuple[set[str], set[str]]:
+    en = _en_stems(" ".join((sub.phrase_en, sub.search_en, *sub.en)))
+    ar: set[str] = set()
+    for forms in _ar_word_forms(" ".join((sub.phrase_ar, sub.search_ar, *sub.ar))):
+        ar |= forms
+    return en, ar
+
+
+_BAGS: dict[str, tuple[tuple[Subtopic, set[str], set[str]], ...]] = {
+    domain: tuple((sub, *_bag(sub)) for sub in subs) for domain, subs in LEXICON.items()
+}
+
+
+def related_subtopics(assistant_id: str, text: str) -> list[tuple[Subtopic, int]]:
+    """Subtopics whose description shares content words with the message, best first."""
+    en = _en_stems(text)
+    ar = _ar_word_forms(text)
+    scored = []
+    for sub, bag_en, bag_ar in _BAGS.get(assistant_id, ()):
+        n = len(en & bag_en) + sum(1 for forms in ar if forms & bag_ar)
+        if n:
+            scored.append((sub, n))
+    scored.sort(key=lambda pair: -pair[1])
+    return scored
+
+
 def _best_other(assistant: Assistant, text: str, own_score: int) -> str | None:
     best, best_score = None, own_score
     for other in ASSISTANTS:
@@ -530,6 +605,39 @@ def _best_other(assistant: Assistant, text: str, own_score: int) -> str | None:
         if score >= best_score + 2:  # clearly a better fit, not a tie
             best, best_score = other.assistant_id, score
     return best
+
+
+def _borrow(assistant: Assistant, text: str) -> tuple[str, list[Subtopic]] | None:
+    """Another assistant's lexicon recognises the concern: its specific (signal) subtopics,
+    asked in this assistant's frame. A single trigger word ("month", "money") is too weak
+    a reason to change the topic, so at least two are needed. Approved secondary domains
+    win ties."""
+    best: tuple[int, bool, str, list[Subtopic]] | None = None
+    for other in ASSISTANTS:
+        if other.assistant_id == assistant.assistant_id:
+            continue
+        scored = [(s, n) for s, n in score_subtopics(other.assistant_id, text) if s.signal]
+        approved = other.assistant_id in assistant.secondary_domains
+        if sum(n for _, n in scored) < 2:
+            continue
+        rank = (sum(n for _, n in scored), approved)
+        if best is None or rank > best[:2]:
+            best = (*rank, other.assistant_id, [s for s, _ in scored])
+    return (best[2], best[3]) if best else None
+
+
+def _related_secondary(assistant: Assistant, text: str) -> tuple[str, list[Subtopic]] | None:
+    """Related wording in the approved secondary domains. Not in other assistants: shared
+    words alone are too weak there, and asking beats answering the wrong question."""
+    for domain in assistant.secondary_domains:
+        related = [
+            (s, n)
+            for s, n in related_subtopics(domain, text)
+            if n >= _MIN_RELATED_OVERLAP and s.signal
+        ]
+        if related:
+            return domain, [s for s, _ in related]
+    return None
 
 
 def understand(assistant: Assistant, message: str, has_history: bool) -> Understanding:
@@ -542,6 +650,7 @@ def understand(assistant: Assistant, message: str, has_history: bool) -> Underst
     lowered = text.casefold().replace("’", "'")
     padded = f" {normalize_arabic(lowered)} "
 
+    # --- 1. Safety, independent of topic: always first, never skipped by the routing ---
     if _has(padded, CRISIS_SCREEN):
         return Understanding("crisis", aid, language)
     # Being hurt, threatened or controlled: a safety-focused support response in every
@@ -561,45 +670,166 @@ def understand(assistant: Assistant, message: str, has_history: bool) -> Underst
         return Understanding("crisis", aid, language)
     if _PERSONAL_DETAILS.search(lowered):
         return Understanding("personal_details", aid, language)
-    if _has(padded, _CLINICAL) or (aid == "fitness" and _has(padded, _FITNESS_MEDICAL)):
+    # --- 2. Harmful or professional-only requests: refused with a pointer ---
+    if (
+        _has(padded, _CLINICAL)
+        or _CONDITION_CHECK.search(text)
+        or (aid == "fitness" and _has(padded, _FITNESS_MEDICAL))
+    ):
         return Understanding("clinical", aid, language)
-    if _has(padded, _REGULATED):
+    if _REGULATED.search(text) or _has(padded, _REGULATED_AR):
         return Understanding("regulated", aid, language)
-    sensitive = _has(padded, _SENSITIVE) and not (aid == "family" and _has(padded, _KIDS_TALK))
+    sensitive = (_SENSITIVE.search(text) is not None or _has(padded, _SENSITIVE_AR)) and not (
+        aid == "family" and _has(padded, _KIDS_TALK)
+    )
     if sensitive or _INJECTION.search(text):
         return Understanding("sensitive", aid, language)
+    health = bool(_HEALTH_CONDITION.search(text)) or _has(padded, _HEALTH_CONDITION_AR)
+    caution: Caution | None = (
+        "health"
+        if health
+        else "low_mood"
+        if _LOW_MOOD.search(text) or _has(padded, _LOW_MOOD_AR)
+        else None
+    )
 
     follow_tables = _FOLLOW_AR if is_arabic else _FOLLOW_EN
     follow = next((k for k, phrases in follow_tables.items() if _has(padded, phrases)), None)
     if follow == "in-arabic":
         language = "ar"
 
+    # --- 3. Routing: where the knowledge comes from, never whether to answer ---
     scored = score_subtopics(aid, text)
     own_score = sum(n for _, n in scored)
     handoff = _best_other(assistant, text, own_score)
-    if not scored:
+    route: Route = "own"
+    subtopics = [s for s, _ in scored]
+    borrowed_from: str | None = None
+    if not subtopics:
         if follow and has_history:
             question = _FOLLOW_QUESTION[follow][1 if language == "ar" else 0]
-            return Understanding("accept", aid, language, question=question, follow_up=follow)
-        if follow:
-            return Understanding("needs_context", aid, language)
-        return Understanding("needs_detail", aid, language, handoff=handoff)
+            return Understanding(
+                "accept", aid, language, question=question, follow_up=follow, route="follow_up"
+            )
+        related = [s for s, n in related_subtopics(aid, text) if n >= _MIN_RELATED_OVERLAP]
+        borrowed = (
+            None if related else _borrow(assistant, text) or _related_secondary(assistant, text)
+        )
+        if related:
+            route, subtopics = "related", related
+        elif borrowed is not None:
+            borrowed_from, subtopics = borrowed
+            route = "related" if borrowed_from == aid else "borrowed"
+    if not subtopics:
+        if aid == "fitness" and health:  # a medical question on its own
+            return Understanding("clinical", aid, language)
+        closest = tuple(s for s, _ in related_subtopics(aid, text)[:MAX_SUBTOPICS])
+        return Understanding(
+            "clarify", aid, language, handoff=handoff, suggestions=closest or LEXICON[aid][:3]
+        )
 
-    subtopics = tuple(s for s, _ in scored[:MAX_SUBTOPICS])
+    chosen = tuple(subtopics[:MAX_SUBTOPICS])
     context = _context_labels(text, is_arabic)
-    # Secondary domains are searched only when the message explicitly touches them.
+    # Secondary domains are searched only when the message explicitly touches them; a
+    # borrowed concern is searched in its own domain only if that domain is approved.
     secondary = tuple(
         d
         for d in assistant.secondary_domains
-        if any(sub.signal for sub, _ in score_subtopics(d, text))
+        if d == borrowed_from or any(sub.signal for sub, _ in score_subtopics(d, text))
     )
+    if borrowed_from and borrowed_from != aid and borrowed_from not in assistant.secondary_domains:
+        handoff = handoff or (borrowed_from if borrowed_from != "everyday" else None)
     return Understanding(
         "accept",
         aid,
         language,
-        subtopics=subtopics,
+        subtopics=chosen,
         context=context,
-        question=compose(assistant, subtopics, language, context),
+        question=compose(assistant, chosen, language, context),
         handoff=handoff,
         secondary_domains=secondary,
+        route=route,
+        caution=caution,
     )
+
+
+# --- Evidence route (P0): nothing recognised, but a public passage clearly matches -------
+# Local retrieval with the (redacted) words finds the passage; the provider then gets the
+# passage and this fixed question, never the user's words (structured mode).
+MIN_EVIDENCE_OVERLAP = 2
+
+
+def evidence_question(assistant: Assistant, language: str) -> str:
+    if language == "ar":
+        return f"{assistant.frame_ar} تطبق النصايح اللي في المصادر دي على موقف يومي؟"
+    return (
+        f"{assistant.frame_en} apply the guidance in the provided passages to an everyday "
+        "situation?"
+    )
+
+
+def evidence_overlap(message: str, passage: str) -> int:
+    """Distinct content words of the message that the passage also uses."""
+    en = len(_en_stems(message) & _en_stems(passage))
+    passage_forms: set[str] = set()
+    for forms in _ar_word_forms(passage):
+        passage_forms |= forms
+    return en + sum(1 for forms in _ar_word_forms(message) if forms & passage_forms)
+
+
+# Extra instructions for the model when the message mentions a health condition or low
+# mood. Fixed text; nothing from the message is added.
+CAUTION_INSTRUCTIONS: dict[str, str] = {
+    "health": (
+        "The person mentioned a health condition, pregnancy or an injury. Keep the guidance "
+        "general, say clearly that they should check with their doctor before starting or "
+        "changing activity, and give no medical advice, diagnosis or treatment."
+    ),
+    "low_mood": (
+        "The person mentioned feeling depressed or low. Respond warmly and supportively, "
+        "never diagnose, and gently suggest speaking to a doctor or mental-health "
+        "professional if the low mood lasts more than two weeks or makes daily life hard."
+    ),
+}
+
+
+# A message with nothing recognised continues the earlier situation (structured
+# follow-up) when it refers back to it or speaks about the person's own situation ("What
+# should I do when I miss a day?"). An impersonal question in the middle of a chat ("What
+# is the capital of France?") is not a follow-up: it gets the evidence step or "clarify".
+_REFERS_BACK_EN = re.compile(
+    r"\b(?:it|that|this|those|these|them|then|else|more|also|and|again|instead|first|next|"
+    r"which|one|step|steps|what\s+if|how\s+about|why|start|i|i'm|i've|me|my|we|we're|us|our)\b",
+    re.IGNORECASE,
+)
+_REFERS_BACK_AR = frozenset(
+    (
+        "ده",
+        "دي",
+        "دول",
+        "كده",
+        "طب",
+        "وبعدين",
+        "بعدين",
+        "كمان",
+        "تاني",
+        "لو",
+        "ليه",
+        "اول",
+        "ابدا",
+        "انا",
+        "احنا",
+        "عندي",
+        "اعمل",
+        "نعمل",
+    )
+)
+_SHORT_FOLLOW_UP_WORDS = 3
+
+
+def refers_back(message: str) -> bool:
+    text = " ".join(message.split())
+    if len(text.split()) <= _SHORT_FOLLOW_UP_WORDS or _REFERS_BACK_EN.search(text):
+        return True
+    words = _ARABIC_WORD.findall(normalize_arabic(text.casefold()))
+    return any(_ar_forms(w) & _REFERS_BACK_AR for w in words)
