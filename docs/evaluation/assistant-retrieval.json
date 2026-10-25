@@ -13,18 +13,18 @@
           "hit_at_4": 0.545,
           "top1": 0.364,
           "precision": 0.17,
-          "leakage": 0.42
+          "leakage": 0.409
         },
         "domain": {
-          "hit_at_4": 0.955,
+          "hit_at_4": 1.0,
           "top1": 0.636,
-          "precision": 0.375,
+          "precision": 0.386,
           "leakage": 0.0
         },
         "hybrid": {
           "hit_at_4": 0.955,
           "top1": 0.818,
-          "precision": 0.693,
+          "precision": 0.716,
           "leakage": 0.0
         }
       },
@@ -40,12 +40,12 @@
           "hit_at_4": 0.091,
           "top1": 0.0,
           "precision": 0.023,
-          "leakage": 0.841
+          "leakage": 0.818
         },
         "domain": {
-          "hit_at_4": 0.909,
+          "hit_at_4": 1.0,
           "top1": 0.545,
-          "precision": 0.432,
+          "precision": 0.455,
           "leakage": 0.0
         },
         "hybrid": {
@@ -121,12 +121,12 @@
           "hit_at_4": 0.0,
           "top1": 0.0,
           "precision": 0.0,
-          "leakage": 0.833
+          "leakage": 0.792
         },
         "domain": {
-          "hit_at_4": 0.833,
+          "hit_at_4": 1.0,
           "top1": 0.333,
-          "precision": 0.333,
+          "precision": 0.375,
           "leakage": 0.0
         },
         "hybrid": {
@@ -186,7 +186,7 @@
         "hybrid": {
           "hit_at_4": 1.0,
           "top1": 1.0,
-          "precision": 0.955,
+          "precision": 1.0,
           "leakage": 0.0
         }
       },
@@ -267,7 +267,7 @@
         "hybrid": {
           "hit_at_4": 1.0,
           "top1": 1.0,
-          "precision": 0.958,
+          "precision": 1.0,
           "leakage": 0.0
         }
       },
@@ -294,7 +294,7 @@
         "hybrid": {
           "hit_at_4": 1.0,
           "top1": 1.0,
-          "precision": 0.75,
+          "precision": 1.0,
           "leakage": 0.0
         }
       }
@@ -545,13 +545,13 @@
         "hybrid": {
           "hit": true,
           "top1": true,
-          "precision": 0.75,
+          "precision": 1.0,
           "leakage": 0.0,
           "found": [
             "cdc-healthy-communication-en",
             "cdc-healthy-communication-en",
             "cdc-healthy-communication-en",
-            "cfpb-emergency-fund-en"
+            "cdc-healthy-communication-en"
           ]
         }
       },
@@ -701,6 +701,7 @@
           "precision": 1.0,
           "leakage": 0.0,
           "found": [
+            "cdc-healthy-communication-en",
             "cdc-healthy-communication-en",
             "cdc-healthy-communication-en",
             "cdc-healthy-communication-en"
@@ -857,13 +858,13 @@
         "hybrid": {
           "hit": true,
           "top1": true,
-          "precision": 0.75,
+          "precision": 1.0,
           "leakage": 0.0,
           "found": [
             "cdc-healthy-communication-en",
             "cdc-healthy-communication-en",
             "cdc-healthy-communication-en",
-            "opm-work-life-en"
+            "cdc-healthy-communication-en"
           ]
         }
       },
@@ -887,21 +888,21 @@
           "leakage": 1.0,
           "found": [
             "cdc-healthy-communication-en",
+            "cfpb-emergency-fund-en",
             "odphp-relationship-violence-warning-signs-en",
-            "odphp-relationship-violence-warning-signs-en",
-            "cfpb-emergency-fund-en"
+            "odphp-relationship-violence-warning-signs-en"
           ]
         },
         "domain": {
-          "hit": false,
+          "hit": true,
           "top1": false,
-          "precision": 0.0,
+          "precision": 0.25,
           "leakage": 0.0,
           "found": [
             "opm-career-development-en",
             "opm-career-development-en",
             "opm-career-development-en",
-            "opm-performance-playbook-en"
+            "opm-individual-development-planning-en"
           ]
         },
         "hybrid": {
@@ -932,19 +933,19 @@
             "who-doing-what-matters-en",
             "owh-stress-and-your-health-en",
             "medlineplus-stress-en",
-            "cfpb-budgeting-en"
+            "cdc-parenting-routines-behavior-en"
           ]
         },
         "monolithic": {
           "hit": false,
           "top1": false,
           "precision": 0.0,
-          "leakage": 0.75,
+          "leakage": 0.5,
           "found": [
             "opm-work-life-en",
             "owh-leaving-an-abusive-relationship-en",
             "odphp-relationship-violence-warning-signs-en",
-            "owh-signs-of-abuse-en"
+            "opm-work-life-en"
           ]
         },
         "domain": {
@@ -953,8 +954,8 @@
           "precision": 0.25,
           "leakage": 0.0,
           "found": [
-            "opm-performance-playbook-en",
             "opm-performance-management-cycle-en",
+            "opm-performance-playbook-en",
             "niosh-stress-at-work-page-en",
             "opm-work-life-en"
           ]
@@ -967,8 +968,8 @@
           "found": [
             "niosh-stress-at-work-page-en",
             "opm-career-development-en",
-            "opm-performance-playbook-en",
-            "opm-performance-management-cycle-en"
+            "opm-performance-management-cycle-en",
+            "opm-performance-playbook-en"
           ]
         }
       },
@@ -1091,8 +1092,8 @@
           "precision": 0.0,
           "leakage": 0.75,
           "found": [
-            "opm-work-life-en",
             "odphp-relationship-violence-warning-signs-en",
+            "opm-work-life-en",
             "owh-leaving-an-abusive-relationship-en",
             "owh-leaving-an-abusive-relationship-en"
           ]
@@ -1106,7 +1107,7 @@
             "opm-performance-management-cycle-en",
             "niosh-stress-at-work-page-en",
             "opm-work-life-en",
-            "opm-performance-management-cycle-en"
+            "opm-career-development-en"
           ]
         },
         "hybrid": {
@@ -1191,10 +1192,10 @@
           "precision": 0.0,
           "leakage": 1.0,
           "found": [
-            "odphp-relationship-violence-warning-signs-en",
             "cfpb-emergency-fund-en",
-            "owh-signs-of-abuse-en",
-            "odphp-relationship-violence-warning-signs-en"
+            "odphp-relationship-violence-warning-signs-en",
+            "cdc-healthy-communication-en",
+            "cfpb-emergency-fund-en"
           ]
         },
         "domain": {
@@ -1284,10 +1285,10 @@
           "precision": 0.0,
           "leakage": 0.0,
           "found": [
-            "who-physical-activity-guidelines-ar",
             "who-doing-what-matters-ar",
             "who-physical-activity-guidelines-ar",
-            "who-doing-what-matters-ar"
+            "who-doing-what-matters-ar",
+            "who-physical-activity-guidelines-ar"
           ]
         },
         "monolithic": {
@@ -1297,8 +1298,8 @@
           "leakage": 1.0,
           "found": [
             "odphp-relationship-violence-warning-signs-en",
-            "odphp-relationship-violence-warning-signs-en",
             "cdc-intimate-partner-violence-about-en",
+            "odphp-relationship-violence-warning-signs-en",
             "owh-leaving-an-abusive-relationship-en"
           ]
         },
@@ -1404,7 +1405,7 @@
             "odphp-relationship-violence-warning-signs-en",
             "owh-leaving-an-abusive-relationship-en",
             "owh-leaving-an-abusive-relationship-en",
-            "odphp-relationship-violence-warning-signs-en"
+            "cfpb-emergency-fund-en"
           ]
         },
         "domain": {
@@ -1447,19 +1448,19 @@
         "monolithic": {
           "hit_at_4": 0.5,
           "top1": 0.25,
-          "precision": 0.188,
-          "leakage": 0.375
+          "precision": 0.208,
+          "leakage": 0.354
         },
         "domain": {
           "hit_at_4": 0.917,
           "top1": 0.583,
-          "precision": 0.396,
+          "precision": 0.417,
           "leakage": 0.0
         },
         "hybrid": {
           "hit_at_4": 0.917,
           "top1": 0.75,
-          "precision": 0.618,
+          "precision": 0.639,
           "leakage": 0.0
         }
       },
@@ -1475,7 +1476,7 @@
           "hit_at_4": 0.167,
           "top1": 0.0,
           "precision": 0.042,
-          "leakage": 0.75
+          "leakage": 0.708
         },
         "domain": {
           "hit_at_4": 1.0,
@@ -1486,7 +1487,7 @@
         "hybrid": {
           "hit_at_4": 1.0,
           "top1": 0.667,
-          "precision": 0.458,
+          "precision": 0.5,
           "leakage": 0.0
         }
       },
@@ -1529,7 +1530,7 @@
           "hit_at_4": 0.25,
           "top1": 0.0,
           "precision": 0.062,
-          "leakage": 0.625
+          "leakage": 0.562
         },
         "domain": {
           "hit_at_4": 1.0,
@@ -1540,7 +1541,7 @@
         "hybrid": {
           "hit_at_4": 1.0,
           "top1": 0.75,
-          "precision": 0.375,
+          "precision": 0.438,
           "leakage": 0.0
         }
       },
@@ -1555,13 +1556,13 @@
         "monolithic": {
           "hit_at_4": 0.833,
           "top1": 0.5,
-          "precision": 0.333,
+          "precision": 0.375,
           "leakage": 0.0
         },
         "domain": {
           "hit_at_4": 0.833,
           "top1": 0.5,
-          "precision": 0.333,
+          "precision": 0.375,
           "leakage": 0.0
         },
         "hybrid": {
@@ -1609,13 +1610,13 @@
         "monolithic": {
           "hit_at_4": 1.0,
           "top1": 0.5,
-          "precision": 0.375,
+          "precision": 0.438,
           "leakage": 0.0
         },
         "domain": {
           "hit_at_4": 1.0,
           "top1": 0.5,
-          "precision": 0.375,
+          "precision": 0.438,
           "leakage": 0.0
         },
         "hybrid": {
@@ -1773,7 +1774,7 @@
             "cdc-healthy-communication-en",
             "cdc-healthy-communication-en",
             "cdc-healthy-communication-en",
-            "cfpb-emergency-fund-en"
+            "cdc-healthy-communication-en"
           ]
         }
       },
@@ -1793,25 +1794,25 @@
         "monolithic": {
           "hit": true,
           "top1": false,
-          "precision": 0.25,
+          "precision": 0.5,
           "leakage": 0.0,
           "found": [
             "odphp-relationship-violence-warning-signs-en",
             "cdc-healthy-communication-en",
             "owh-leaving-an-abusive-relationship-en",
-            "owh-how-to-help-a-friend-en"
+            "cdc-healthy-communication-en"
           ]
         },
         "domain": {
           "hit": true,
           "top1": false,
-          "precision": 0.25,
+          "precision": 0.5,
           "leakage": 0.0,
           "found": [
             "odphp-relationship-violence-warning-signs-en",
             "cdc-healthy-communication-en",
             "owh-leaving-an-abusive-relationship-en",
-            "owh-how-to-help-a-friend-en"
+            "cdc-healthy-communication-en"
           ]
         },
         "hybrid": {
@@ -2038,12 +2039,12 @@
           "hit": false,
           "top1": false,
           "precision": 0.0,
-          "leakage": 0.75,
+          "leakage": 0.5,
           "found": [
             "opm-work-life-en",
             "owh-leaving-an-abusive-relationship-en",
             "odphp-relationship-violence-warning-signs-en",
-            "owh-signs-of-abuse-en"
+            "opm-work-life-en"
           ]
         },
         "domain": {
@@ -2090,10 +2091,10 @@
           "precision": 0.0,
           "leakage": 1.0,
           "found": [
-            "odphp-relationship-violence-warning-signs-en",
             "cfpb-emergency-fund-en",
-            "owh-signs-of-abuse-en",
-            "odphp-relationship-violence-warning-signs-en"
+            "odphp-relationship-violence-warning-signs-en",
+            "cdc-healthy-communication-en",
+            "cfpb-emergency-fund-en"
           ]
         },
         "domain": {
@@ -2111,13 +2112,13 @@
         "hybrid": {
           "hit": true,
           "top1": false,
-          "precision": 0.25,
+          "precision": 0.5,
           "leakage": 0.0,
           "found": [
             "opm-career-development-en",
             "opm-career-development-en",
             "opm-individual-development-planning-en",
-            "opm-career-development-en"
+            "opm-individual-development-planning-en"
           ]
         }
       },
@@ -2136,7 +2137,7 @@
             "who-doing-what-matters-ar",
             "who-doing-what-matters-ar",
             "who-doing-what-matters-ar",
-            "who-physical-activity-guidelines-ar"
+            "who-doing-what-matters-ar"
           ]
         },
         "monolithic": {

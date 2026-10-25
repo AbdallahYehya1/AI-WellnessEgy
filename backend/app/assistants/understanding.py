@@ -451,12 +451,14 @@ _FOLLOW_EN = {
     "continue": ("tell me more", "more detail", "continue", "elaborate", "go on", "explain more"),
     "summary": ("summary", "summarize", "summarise", "sum up", "recap", "in short"),
     "next": ("what next", "next step", "what should i do first", "how do i start"),
+    "example": ("example", "for instance", "sample", "show me how"),
 }
 _FOLLOW_AR = {
     "in-arabic": ("بالعاميه", "بالمصري", "بالعربي", "ترجم"),
     "continue": ("كمل", "نكمل", "اكتر", "تفاصيل", "وضح"),
     "summary": ("ملخص", "لخص", "باختصار"),
     "next": ("اعمل ايه الاول", "ابدا منين", "الخطوه الجايه"),
+    "example": ("مثال", "امثله"),
 }
 _FOLLOW_QUESTION = {
     "in-arabic": (
@@ -474,6 +476,12 @@ _FOLLOW_QUESTION = {
     "next": (
         "What is a good first step from the previous answer?",
         "إيه أول خطوة كويسة من الإجابة اللي فاتت؟",
+    ),
+    # "Can you give me a short example?" (production, 2026-10-25): the generic follow-up
+    # instruction answered with more steps instead of an example.
+    "example": (
+        "Please give one short, concrete example based on the previous answer.",
+        "ممكن مثال قصير وعملي من الإجابة اللي فاتت؟",
     ),
 }
 _ARABIC_CHAR = re.compile("[؀-ۿ]")
