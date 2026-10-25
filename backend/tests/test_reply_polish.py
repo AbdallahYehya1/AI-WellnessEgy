@@ -29,12 +29,15 @@ def test_passage_ids_never_reach_the_reader() -> None:
     assert _parsed("Try step 3 from P4: name the feeling.") == "Try step 3: name the feeling."
     assert _parsed("جرّب الخطوة 3 من P4: بعد التسمية") == "جرّب الخطوة 3: بعد التسمية"
     assert _parsed("Plan your week (P1, P2).") == "Plan your week."
+    assert _parsed("salaries, benefits, etc. (P2).") == "salaries, benefits, etc."
+    assert _parsed("Wait... then try again.") == "Wait... then try again."
     # Ordinary words that only look like ids are kept.
     assert _parsed("A P2P transfer app works.") == "A P2P transfer app works."
 
 
 def test_the_model_is_told_the_audience_is_in_egypt() -> None:
     assert "Egypt" in COACHING_RULES and "Egyptian pounds" in COACHING_RULES
+    assert "say pounds, not dollars" in COACHING_RULES
     assert "Never write passage ids" in COACHING_RULES
 
 

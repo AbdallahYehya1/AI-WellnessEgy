@@ -47,6 +47,8 @@ _PROSE_PASSAGE_REFS = re.compile(
     re.IGNORECASE,
 )
 _SPACE_BEFORE_PUNCT = re.compile(r"[ \t]+([.,،:;!?؟])")
+# "etc. (P2)." leaves "etc.." once the id is removed; a real ellipsis "..." is kept.
+_DOUBLE_STOP = re.compile(r"(?<!\.)\.\.(?!\.)")
 _REPLY_LANGUAGE = {
     "en": "Write the whole reply in English.",
     "ar": "Write the whole reply in Egyptian Arabic, in Arabic script.",
@@ -86,7 +88,8 @@ Rules you must follow:
 - In Arabic, write every word in Arabic script: never mix in English words.
 - Never write passage ids (P1, P2, ...) in the reply text; list them only in "citations".
 - The person lives in Egypt: keep examples local (Egyptian pounds, local services and
-  customs). Do not name US-only products, currencies or bodies unless a passage does.
+  customs). Passages may come from US sources: keep their ideas but adapt the wording,
+  so say pounds, not dollars, and describe US-only services or bodies generally.
 - Set "risk" to "self_harm", "abuse", "medical_emergency" or "danger" if the message
   suggests thoughts of suicide or self-harm, being hurt, threatened or controlled by
   someone, a medical emergency, or a plan to harm others; otherwise "none".
@@ -278,7 +281,8 @@ class GroqProvider:
             for c in cited
         ]
         text = _PROSE_PASSAGE_REFS.sub("", _INLINE_PASSAGE_REFS.sub("", reply))
-        text = _SPACE_BEFORE_PUNCT.sub(r"\1", re.sub(r"[ \t]{2,}", " ", text)).strip()
+        text = _SPACE_BEFORE_PUNCT.sub(r"\1", re.sub(r"[ \t]{2,}", " ", text))
+        text = _DOUBLE_STOP.sub(".", text).strip()
         risk = data.get("risk") if isinstance(data, dict) else None
         return GenerationResult(
             text=text, cited_chunk_ids=chunk_ids, risk=risk if risk in _RISKS else "none"
