@@ -276,7 +276,7 @@ _SQL = text(
     """
     WITH matches AS (
       SELECT c.id, c.content, s.title, s.publisher, s.source_ref, s.version_label,
-             s.review_status, s.language, s.domains, s.slug,
+             s.review_status, s.language, s.domains, s.slug, c.chunk_index,
              (s.domains && CAST(:primary AS text[])) AS in_primary,
              ts_rank_cd(c.search_vector, q.topic) AS topic_rank,
              ts_rank_cd(c.search_vector, q.query) AS query_rank
@@ -297,12 +297,15 @@ _SQL = text(
         -- Assistant domains (D-56): enforced here, never left to the model.
         AND (CAST(:any_domain AS boolean) OR s.domains && CAST(:domains AS text[]))
     )
-    SELECT id, content, title, publisher, source_ref, version_label, review_status, domains, slug
+    SELECT id, content, title, publisher, source_ref, version_label, review_status, domains, slug,
+           chunk_index
     FROM matches
     -- The user's language wins only for passages that actually match the topic, so an
     -- unrelated passage in the user's language never outranks a relevant one.
+    -- Ties break on the source and passage order, never on random ids, so results are
+    -- reproducible across ingests.
     ORDER BY in_primary DESC, (language = :lang AND topic_rank > 0) DESC, topic_rank DESC,
-             query_rank DESC, id
+             query_rank DESC, slug, chunk_index
     LIMIT :limit
     """
 ).bindparams(bindparam("statuses", expanding=True))
@@ -320,6 +323,7 @@ class RetrievedChunk:
     review_status: str = "approved"
     domains: tuple[str, ...] = ()
     slug: str = ""
+    position: int = 0  # passage order within its source (stable tie-break)
 
 
 _SIMPLE_STOPWORDS = frozenset(
@@ -550,7 +554,7 @@ def retrieve_hybrid(
     primary = domains[0]
     ordered = sorted(
         chunks.values(),
-        key=lambda c: (primary not in c.domains, -scores[c.chunk_id], str(c.chunk_id)),
+        key=lambda c: (primary not in c.domains, -scores[c.chunk_id], c.slug, c.position),
     )
     return ordered[:limit]
 
@@ -599,6 +603,7 @@ def _run(
             review_status=row.review_status,
             domains=tuple(row.domains or ()),
             slug=row.slug,
+            position=row.chunk_index,
         )
         for row in rows
     ]
@@ -626,7 +631,7 @@ _SAFETY_SQL = text(
       AND CAST(:band AS text) = ANY (s.age_bands)
       AND s.review_status IN :statuses
       AND (s.expires_at IS NULL OR s.expires_at > now())
-    ORDER BY rank DESC, s.slug, c.id
+    ORDER BY rank DESC, s.slug, c.chunk_index
     LIMIT :limit
     """
 ).bindparams(bindparam("statuses", expanding=True))
